@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("member") // admin | member
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Production {
+  id          Int       @id @default(autoincrement())
+  name        String
+  type        String
+  venue       String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      String    @default("planning")
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  events      Event[]
+  budgetLines BudgetLine[]
+  crew        ProductionCrew[]
+  hotelBookings     HotelBooking[]
+  haulageMovements  HaulageMovement[]
+}
+
+
+model Event {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  title        String
+  type         String
+  startAt      DateTime
+  endAt        DateTime
+  location     String?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model BudgetLine {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  department   String
+  description  String
+  budgeted     Float
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  expenses     Expense[]
+}
+
+model HaulageMovement {
+  id               Int        @id @default(autoincrement())
+  productionId     Int
+  production       Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  haulageCompany   String
+  driverName       String?
+  vehicleInfo      String?
+  fromLocation     String
+  toLocation       String
+  departureAt      DateTime
+  arrivalAt        DateTime?
+  cargo            String?
+  notes            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model Hotel {
+  id        Int            @id @default(autoincrement())
+  name      String
+  city      String?
+  address   String?
+  phone     String?
+  email     String?
+  website   String?
+  notes     String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  bookings  HotelBooking[]
+}
+
+model HotelBooking {
+  id             Int        @id @default(autoincrement())
+  hotelId        Int
+  hotel          Hotel      @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  productionId   Int
+  production     Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  crewId         Int?
+  crew           Crew?      @relation(fields: [crewId], references: [id], onDelete: SetNull)
+  guestName      String?
+  roomType       String?
+  roomNumber     String?
+  checkIn        DateTime
+  checkOut       DateTime
+  ratePerNight   Float?
+  totalCost      Float?
+  confirmationNo String?
+  isPaid         Boolean    @default(false)
+  notes          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model Crew {
+  id                   Int              @id @default(autoincrement())
+  name                 String
+  discipline           String
+  phone                String?
+  email                String?
+  company              String?
+  isFreelance          Boolean          @default(true)
+  insuranceProvider    String?
+  insurancePolicyNo    String?
+  insuranceExpiry      DateTime?
+  insuranceCoverType   String?
+  notes                String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  productions          ProductionCrew[]
+  hotelBookings        HotelBooking[]
+}
+
+model ProductionCrew {
+  id           Int        @id @default(autoincrement())
+  crewId       Int
+  crew         Crew       @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  role         String?
+  startDate    DateTime?
+  endDate      DateTime?
+  dayRate      Float?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Expense {
+  id                Int        @id @default(autoincrement())
+  budgetLineId      Int
+  budgetLine        BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  phase             String     @default("pre-production") // pre-production, running, closing
+  description       String
+  estimated         Float      @default(0)
+  committed         Float      @default(0)
+  spent             Float      @default(0)
+  poNumber          String?
+  paymentDue        DateTime?
+  issuedForPayment  Boolean    @default(false)
+  vatExempt         Boolean    @default(false)
+  supplier          String?
+  notes             String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}

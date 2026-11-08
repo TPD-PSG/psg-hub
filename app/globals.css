@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
 :root {
+  --psg-blue: #3d44d4;
+  --psg-navy: #0d1266;
+  --psg-dark-bg: #080c3a;
+  --psg-card-bg: #0f1550;
+  --psg-card-border: #1e2680;
+  --psg-muted: #8891cc;
+  --psg-text: #e8eaff;
+}
+
+:root {
   --background: #ffffff;
   --foreground: #171717;
 }

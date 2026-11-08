@@ -13,6 +13,7 @@ model User {
   email        String   @unique
   passwordHash String
   role         String   @default("member") // admin | member
+  preferences  String?  // JSON: { widgets: string[] }
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -152,6 +153,60 @@ model ProductionCrew {
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+}
+
+model Client {
+  id            Int           @id @default(autoincrement())
+  name          String
+  type          String        // promoter | venue | council | broadcaster | corporate | other
+  website       String?
+  address       String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  contacts      Contact[]
+  opportunities Opportunity[]
+}
+
+model Contact {
+  id        Int      @id @default(autoincrement())
+  clientId  Int
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  email     String?
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Opportunity {
+  id          Int       @id @default(autoincrement())
+  title       String
+  type        String    // production | event | scenic | rental | acquisition | fb | other
+  stage       String    @default("lead") // lead | qualified | proposal | negotiating | won | lost
+  value       Float?
+  clientId    Int?
+  client      Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  description String?
+  closeDate   DateTime?
+  lostReason  String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tasks       BDTask[]
+}
+
+model BDTask {
+  id            Int         @id @default(autoincrement())
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  description   String
+  dueDate       DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 model Expense {

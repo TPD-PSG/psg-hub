@@ -5,8 +5,9 @@ export async function GET() {
   const productions = await prisma.production.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      _count: { select: { events: true, budgetLines: true } },
+      _count: { select: { events: true, budgetLines: true, crew: true } },
       budgetLines: { include: { expenses: true } },
+      events: { orderBy: { startAt: "asc" } },
     },
   });
   return NextResponse.json(productions);

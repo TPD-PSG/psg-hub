@@ -27,11 +27,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </span>
           <div className="flex-1" />
           <Link href="/" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Dashboard</Link>
+          <Link href="/bd" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Business Dev</Link>
           <Link href="/productions" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Productions</Link>
-          <Link href="/schedule" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Schedule</Link>
-          <Link href="/crew" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Crew</Link>
-          <Link href="/hotels" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Hotels</Link>
-          <Link href="/haulage" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Haulage</Link>
           <UserNav />
         </nav>
         <main className="max-w-7xl mx-auto px-4 py-8">

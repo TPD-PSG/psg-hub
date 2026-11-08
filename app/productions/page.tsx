@@ -3,14 +3,27 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+type TeamMember = { user: { id: number; name: string; email: string } };
 type Production = {
   id: number; name: string; type: string; venue: string | null; status: string;
+  announcementStatus?: string;
+  team?: TeamMember[];
 };
 
 const STATUS_COLORS: Record<string, string> = {
   planning: "bg-yellow-900/60 text-yellow-300",
   "in-production": "bg-green-900/60 text-green-300",
   closed: "bg-white/10 text-white/40",
+};
+
+const ANN_COLORS: Record<string, string> = {
+  nda: "bg-red-900/60 text-red-300",
+  not_announced: "bg-orange-900/60 text-orange-300",
+  on_sale: "bg-blue-900/60 text-blue-300",
+  open: "bg-green-900/60 text-green-300",
+};
+const ANN_LABELS: Record<string, string> = {
+  nda: "NDA", not_announced: "Not Announced", on_sale: "On Sale", open: "Open",
 };
 
 export default function ProductionsPage() {
@@ -43,14 +56,40 @@ export default function ProductionsPage() {
             className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-white/5"
             style={{ borderColor: "var(--psg-card-border)" }}
           >
-            <div className="flex-1">
-              <span className="font-medium text-white">{p.name}</span>
-              <span className="ml-2 text-sm" style={{ color: "var(--psg-muted)" }}>{p.type}</span>
-              {p.venue && <span className="ml-2 text-sm" style={{ color: "var(--psg-muted)" }}>· {p.venue}</span>}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-white">{p.name}</span>
+                <span className="text-sm" style={{ color: "var(--psg-muted)" }}>{p.type}</span>
+                {p.venue && <span className="text-sm" style={{ color: "var(--psg-muted)" }}>· {p.venue}</span>}
+              </div>
+              {p.team && p.team.length > 0 && (
+                <div className="flex items-center gap-1 mt-1.5">
+                  {p.team.map((m) => {
+                    const initials = m.user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+                    return (
+                      <span key={m.user.id} title={m.user.name}
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                        style={{ backgroundColor: "var(--psg-blue)" }}>
+                        {initials}
+                      </span>
+                    );
+                  })}
+                  <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>
+                    {p.team.map((m) => m.user.name.split(" ")[0]).join(", ")}
+                  </span>
+                </div>
+              )}
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status] ?? "bg-white/10 text-white/40"}`}>
-              {p.status}
-            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              {p.announcementStatus && p.announcementStatus !== "not_announced" && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ANN_COLORS[p.announcementStatus] ?? "bg-white/10 text-white/40"}`}>
+                  {ANN_LABELS[p.announcementStatus] ?? p.announcementStatus}
+                </span>
+              )}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status] ?? "bg-white/10 text-white/40"}`}>
+                {p.status}
+              </span>
+            </div>
           </Link>
         ))}
       </div>

@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
 
 export default function UserNav() {
@@ -29,8 +30,10 @@ export default function UserNav() {
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 text-sm text-white/75 hover:text-white transition-colors py-5"
       >
-        <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: "var(--psg-blue)" }}>
-          {initials}
+        <span className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold text-white shrink-0 relative" style={{ backgroundColor: "var(--psg-blue)" }}>
+          {(session.user as any).avatarUrl ? (
+            <Image src={(session.user as any).avatarUrl} alt={session.user.name ?? ""} fill className="object-cover" />
+          ) : initials}
         </span>
         <span className="hidden md:block">{session.user.name}</span>
       </button>
@@ -43,8 +46,11 @@ export default function UserNav() {
             <p className="text-xs font-medium text-white truncate">{session.user.name}</p>
             <p className="text-xs truncate" style={{ color: "var(--psg-muted)" }}>{session.user.email}</p>
           </div>
+          <Link href="/profile" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
+            My Profile
+          </Link>
           {(session.user as any).role === "admin" && (
-            <Link href="/settings/users" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
+            <Link href="/admin/users" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
               Manage Users
             </Link>
           )}

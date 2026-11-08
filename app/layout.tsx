@@ -4,6 +4,8 @@ import Image from "next/image";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
 import UserNav from "@/components/UserNav";
+import NotificationBell from "@/components/NotificationBell";
+import Sidebar from "@/components/Sidebar";
 
 export const metadata: Metadata = {
   title: "PSG Hub",
@@ -15,25 +17,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen" style={{ backgroundColor: "var(--psg-dark-bg)", color: "var(--psg-text)" }}>
         <AuthProvider>
-        <nav style={{ backgroundColor: "var(--psg-navy)" }} className="text-white px-6 py-0 flex items-center gap-8 shadow-lg">
-          <Link href="/" className="flex items-center py-2 shrink-0">
-            <div className="bg-white rounded px-2 py-1">
-              <Image src="/psg-logo.png" alt="Production Solutions Group" width={80} height={51} className="object-contain" priority />
-            </div>
-          </Link>
-          <div className="h-8 w-px bg-white/20" />
-          <span className="text-sm font-semibold tracking-widest uppercase text-white/60 hidden sm:block">
-            PSG Hub
-          </span>
-          <div className="flex-1" />
-          <Link href="/" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Dashboard</Link>
-          <Link href="/bd" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Business Dev</Link>
-          <Link href="/productions" className="text-sm text-white/75 hover:text-white py-5 px-1 border-b-2 border-transparent hover:border-white/50 transition-colors">Productions</Link>
-          <UserNav />
-        </nav>
-        <main className="max-w-7xl mx-auto px-4 py-8">
-          {children}
-        </main>
+          {/* Top bar */}
+          <header style={{ backgroundColor: "var(--psg-navy)" }} className="h-14 flex items-center px-4 gap-4 shadow-lg shrink-0 sticky top-0 z-40">
+            <Link href="/" className="flex items-center shrink-0">
+              <div className="bg-white rounded px-2 py-1">
+                <Image src="/psg-logo.png" alt="Production Solutions Group" width={70} height={45} className="object-contain" priority />
+              </div>
+            </Link>
+            <span className="text-xs font-semibold tracking-widest uppercase text-white/40 hidden sm:block">PSG Hub</span>
+            <div className="flex-1" />
+            <NotificationBell />
+            <UserNav />
+          </header>
+
+          {/* Body: sidebar + content */}
+          <div className="flex" style={{ minHeight: "calc(100vh - 56px)" }}>
+            <Sidebar />
+            <main className="flex-1 min-w-0 px-6 py-8">
+              {children}
+            </main>
+          </div>
         </AuthProvider>
       </body>
     </html>

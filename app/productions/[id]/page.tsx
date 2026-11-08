@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, use, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import ExportMenu from "@/components/ExportMenu";
-import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX } from "@/lib/exports";
+import TasksPanel from "@/components/TasksPanel";
+import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX } from "@/lib/exports";
 
 type Expense = {
   id: number;
@@ -84,21 +86,49 @@ type HaulageMovement = {
   cargo: string | null;
   notes: string | null;
 };
+type TeamMember = { user: { id: number; name: string; email: string; role: string } };
+type VenueRef = { id: number; name: string; city: string | null; capacity: number | null };
+type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; startDate: string | null; endDate: string | null; notes: string | null };
 type Production = {
   id: number;
   name: string;
+  logoUrl: string | null;
   type: string;
   venue: string | null;
+  venueId: number | null;
+  venueRef: VenueRef | null;
+  isTour: boolean;
   startDate: string | null;
   endDate: string | null;
   status: string;
+  announcementStatus: string;
   notes: string | null;
   events: Event[];
   budgetLines: BudgetLine[];
   crew: ProductionCrew[];
   hotelBookings: HotelBooking[];
   haulageMovements: HaulageMovement[];
+  team: TeamMember[];
 };
+
+type KeyDate = { id: number; type: string; label: string | null; startDate: string; endDate: string | null; notes: string | null };
+
+const KEY_DATE_TYPES: { value: string; label: string }[] = [
+  { value: "design_presentation", label: "Design Presentation" },
+  { value: "pre_production", label: "Pre-Production" },
+  { value: "first_rehearsal", label: "First Rehearsal" },
+  { value: "rehearsal_period", label: "Rehearsal Period" },
+  { value: "load_in", label: "Load In" },
+  { value: "fit_up", label: "Fit Up" },
+  { value: "technical_rehearsal", label: "Technical Rehearsal" },
+  { value: "dress_rehearsal", label: "Dress Rehearsal" },
+  { value: "preview", label: "Preview" },
+  { value: "press_night", label: "Press Night" },
+  { value: "performance", label: "Performance" },
+  { value: "get_out", label: "Get Out" },
+  { value: "other", label: "Other" },
+];
+const KEY_DATE_LABEL: Record<string, string> = Object.fromEntries(KEY_DATE_TYPES.map(t => [t.value, t.label]));
 
 const EVENT_TYPES = ["Rehearsal", "Tech", "Dress Rehearsal", "Performance", "Meeting", "Workshop", "Other"];
 const DEPARTMENTS = ["Scenery", "Props", "Wardrobe", "Wigs & Hair", "Makeup", "Sound Hires", "Sound Consumables", "Lighting Hires", "Lighting Consumables", "Rigging", "Instruments", "Video Hires", "Video Consumables", "Video Content", "Production Setup", "Transport", "Rehearsal", "Production Staffing", "Petty Cash", "Other"];
@@ -134,6 +164,17 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "bg-white/10 text-white/40",
 };
 
+const ANN_COLORS: Record<string, string> = {
+  nda: "bg-red-900/60 text-red-300",
+  not_announced: "bg-orange-900/50 text-orange-300",
+  on_sale: "bg-blue-900/60 text-blue-300",
+  open: "bg-green-900/60 text-green-300",
+};
+const ANN_LABELS: Record<string, string> = {
+  nda: "NDA", not_announced: "Not Announced", on_sale: "On Sale", open: "Open",
+};
+const ANN_OPTS = ["nda", "not_announced", "on_sale", "open"];
+
 const PHASE_COLORS: Record<string, string> = {
   "pre-production": "text-yellow-400",
   running: "text-green-400",
@@ -145,11 +186,19 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 
 const BLANK_EXPENSE = { phase: "pre-production", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "" };
 
-export default function ProductionPage({ params }: { params: Promise<{ id: string }> }) {
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "tasks" | "tour";
+
+function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [prod, setProd] = useState<Production | null>(null);
-  const [tab, setTab] = useState<"schedule" | "budget" | "crew" | "accommodation" | "haulage">("schedule");
+  const tab: TabKey = (searchParams.get("section") as TabKey) ?? "schedule";
+  const BLANK_KD = { type: "first_rehearsal", label: "", startDate: "", endDate: "", notes: "" };
+  const [keyDates, setKeyDates] = useState<KeyDate[]>([]);
+  const [showKdForm, setShowKdForm] = useState(false);
+  const [editKd, setEditKd] = useState<KeyDate | null>(null);
+  const [kdForm, setKdForm] = useState(BLANK_KD);
   const BLANK_MOVEMENT = { haulageCompany: "", driverName: "", vehicleInfo: "", fromLocation: "", toLocation: "", departureAt: "", arrivalAt: "", cargo: "", notes: "" };
   const [showMovementForm, setShowMovementForm] = useState(false);
   const [editMovement, setEditMovement] = useState<HaulageMovement | null>(null);
@@ -165,30 +214,174 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
   const [budgetView, setBudgetView] = useState<"summary" | "detail">("detail");
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
+  const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [showTeamPicker, setShowTeamPicker] = useState(false);
+  useEffect(() => { fetch("/api/users").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setAllUsers(d); }); }, []);
+
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  async function uploadLogo(file: File) {
+    setLogoUploading(true);
+    const fd = new FormData();
+    fd.append("logo", file);
+    const res = await fetch(`/api/productions/${id}/logo`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.logoUrl) setProd((p) => p ? { ...p, logoUrl: data.logoUrl } : p);
+    setLogoUploading(false);
+  }
+
+  async function removeLogo() {
+    await fetch(`/api/productions/${id}/logo`, { method: "DELETE" });
+    setProd((p) => p ? { ...p, logoUrl: null } : p);
+  }
+
+  // Tour stops
+  const [tourStops, setTourStops] = useState<TourStop[]>([]);
+  const [allVenues, setAllVenues] = useState<VenueRef[]>([]);
+  const [showTourForm, setShowTourForm] = useState(false);
+  const [editStop, setEditStop] = useState<TourStop | null>(null);
+  const BLANK_STOP = { venueId: "", startDate: "", endDate: "", notes: "" };
+  const [stopForm, setStopForm] = useState(BLANK_STOP);
+  const [venueSearch, setVenueSearch] = useState("");
+  useEffect(() => { fetch("/api/venues").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllVenues(d); }); }, []);
+
+  async function reloadTourStops() {
+    const data = await fetch(`/api/productions/${id}/tour-stops`).then(r => r.json());
+    if (Array.isArray(data)) setTourStops(data);
+  }
+
+  async function saveStop(e: React.FormEvent) {
+    e.preventDefault();
+    if (editStop) {
+      await fetch(`/api/tour-stops/${editStop.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(stopForm) });
+    } else {
+      await fetch(`/api/productions/${id}/tour-stops`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(stopForm) });
+    }
+    setShowTourForm(false);
+    setEditStop(null);
+    setStopForm(BLANK_STOP);
+    reloadTourStops();
+  }
+
+  async function deleteStop(stopId: number) {
+    if (!confirm("Remove this tour stop?")) return;
+    await fetch(`/api/tour-stops/${stopId}`, { method: "DELETE" });
+    reloadTourStops();
+  }
+
+  async function addTeamMember(userId: number) {
+    await fetch(`/api/productions/${id}/team`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId }) });
+    reload();
+  }
+  async function removeTeamMember(userId: number) {
+    await fetch(`/api/productions/${id}/team/${userId}`, { method: "DELETE" });
+    reload();
+  }
+
   const [showEventForm, setShowEventForm] = useState(false);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState<number | null>(null);
   const [editProd, setEditProd] = useState(false);
 
+  // Call sheets state
+  type CSEntry = { id: number; discipline: string; name: string | null; role: string | null; callTime: string | null; notes: string | null; sortOrder: number };
+  type CallSheet = { id: number; date: string; title: string | null; venue: string | null; generalNotes: string | null; entries: CSEntry[] };
+  const [callSheets, setCallSheets] = useState<CallSheet[]>([]);
+  const [activeSheet, setActiveSheet] = useState<CallSheet | null>(null);
+  const [showNewSheetForm, setShowNewSheetForm] = useState(false);
+  const BLANK_SHEET = { date: "", title: "", venue: "", generalNotes: "" };
+  const [sheetForm, setSheetForm] = useState(BLANK_SHEET);
+  const BLANK_ENTRY = { discipline: "", name: "", role: "", callTime: "", notes: "" };
+  const [entryForm, setEntryForm] = useState(BLANK_ENTRY);
+  const [showEntryForm, setShowEntryForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<CSEntry | null>(null);
+
   const [eventForm, setEventForm] = useState({ title: "", type: "Rehearsal", startAt: "", endAt: "", location: "", notes: "" });
   const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", budgeted: "", notes: "" });
   const [expenseForm, setExpenseForm] = useState<typeof BLANK_EXPENSE & { id?: number }>(BLANK_EXPENSE);
-  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", startDate: "", endDate: "", status: "", notes: "" });
+  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", notes: "" });
 
   useEffect(() => {
     reload();
     fetch("/api/crew").then((r) => r.json()).then(setAllCrew);
     fetch("/api/hotels").then((r) => r.json()).then(setAllHotels);
+    reloadCallSheets();
+    reloadKeyDates();
+    reloadTourStops();
   }, [id]);
+
+  async function reloadKeyDates() {
+    const data = await fetch(`/api/productions/${id}/key-dates`).then(r => r.json());
+    if (Array.isArray(data)) setKeyDates(data);
+  }
+
+  async function saveKd(e: React.FormEvent) {
+    e.preventDefault();
+    if (editKd) {
+      await fetch(`/api/key-dates/${editKd.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(kdForm) });
+    } else {
+      await fetch(`/api/productions/${id}/key-dates`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(kdForm) });
+    }
+    setShowKdForm(false);
+    setEditKd(null);
+    setKdForm(BLANK_KD);
+    reloadKeyDates();
+  }
+
+  async function deleteKd(kdId: number) {
+    await fetch(`/api/key-dates/${kdId}`, { method: "DELETE" });
+    reloadKeyDates();
+  }
+
+  async function reloadCallSheets() {
+    const data = await fetch(`/api/productions/${id}/call-sheets`).then((r) => r.json());
+    setCallSheets(data);
+    setActiveSheet((prev) => prev ? (data.find((s: CallSheet) => s.id === prev.id) ?? data[0] ?? null) : (data[0] ?? null));
+  }
+
+  async function saveNewSheet(e: React.FormEvent) {
+    e.preventDefault();
+    await fetch(`/api/productions/${id}/call-sheets`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sheetForm) });
+    setSheetForm(BLANK_SHEET);
+    setShowNewSheetForm(false);
+    await reloadCallSheets();
+  }
+
+  async function deleteSheet(sheetId: number) {
+    await fetch(`/api/call-sheets/${sheetId}`, { method: "DELETE" });
+    setActiveSheet(null);
+    await reloadCallSheets();
+  }
+
+  async function saveEntry(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeSheet) return;
+    if (editingEntry) {
+      await fetch(`/api/call-sheet-entries/${editingEntry.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entryForm) });
+    } else {
+      await fetch(`/api/call-sheets/${activeSheet.id}/entries`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entryForm) });
+    }
+    setEntryForm(BLANK_ENTRY);
+    setShowEntryForm(false);
+    setEditingEntry(null);
+    await reloadCallSheets();
+  }
+
+  async function deleteEntry(entryId: number) {
+    await fetch(`/api/call-sheet-entries/${entryId}`, { method: "DELETE" });
+    await reloadCallSheets();
+  }
 
   async function reload() {
     const data = await fetch(`/api/productions/${id}`).then((r) => r.json());
     setProd(data);
     setProdForm({
       name: data.name, type: data.type, venue: data.venue ?? "",
+      venueId: data.venueId ? String(data.venueId) : "",
+      isTour: data.isTour ?? false,
       startDate: data.startDate ? data.startDate.slice(0, 10) : "",
       endDate: data.endDate ? data.endDate.slice(0, 10) : "",
-      status: data.status, notes: data.notes ?? "",
+      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", notes: data.notes ?? "",
     });
   }
 
@@ -371,18 +564,81 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          {/* Production logo */}
+          <label
+            className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center cursor-pointer border border-dashed hover:border-white/40 transition-colors group"
+            style={{ borderColor: prod.logoUrl ? "transparent" : "var(--psg-card-border)", backgroundColor: prod.logoUrl ? "transparent" : "var(--psg-card-bg)" }}
+            title="Click to upload production logo"
+          >
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }} />
+            {prod.logoUrl ? (
+              <>
+                <Image src={prod.logoUrl} alt={prod.name} fill className="object-contain p-1" />
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); removeLogo(); }}
+                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs"
+                >Remove</button>
+              </>
+            ) : logoUploading ? (
+              <span className="text-xs" style={{ color: "var(--psg-muted)" }}>…</span>
+            ) : (
+              <span className="text-xs text-center leading-tight px-1" style={{ color: "var(--psg-muted)" }}>+ Logo</span>
+            )}
+          </label>
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold text-white">{prod.name}</h1>
             <span className="text-sm" style={{ color: "var(--psg-muted)" }}>{prod.type}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[prod.status] ?? "bg-white/10 text-white/50"}`}>{prod.status}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ANN_COLORS[prod.announcementStatus] ?? "bg-white/10 text-white/50"}`}>{ANN_LABELS[prod.announcementStatus] ?? prod.announcementStatus}</span>
+            {prod.isTour && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-900/60 text-purple-300">Tour</span>}
           </div>
-          {prod.venue && <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{prod.venue}</p>}
+          {prod.venueRef && <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{prod.venueRef.name}{prod.venueRef.city ? ` · ${prod.venueRef.city}` : ""}</p>}
+          {!prod.venueRef && prod.venue && <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{prod.venue}</p>}
+          {prod.isTour && tourStops.length > 0 && <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{tourStops.length} tour {tourStops.length === 1 ? "stop" : "stops"}</p>}
           {(prod.startDate || prod.endDate) && (
             <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>
               {prod.startDate ? fmtDate(prod.startDate) : "?"} → {prod.endDate ? fmtDate(prod.endDate) : "?"}
             </p>
           )}
+          {/* Team */}
+          <div className="flex items-center gap-2 mt-2 relative">
+            {prod.team.map((m) => {
+              const initials = m.user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+              return (
+                <button key={m.user.id} title={`Remove ${m.user.name}`} onClick={() => removeTeamMember(m.user.id)}
+                  className="group relative w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white transition-opacity hover:opacity-70"
+                  style={{ backgroundColor: "var(--psg-blue)" }}>
+                  {initials}
+                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10">{m.user.name}</span>
+                </button>
+              );
+            })}
+            <div className="relative">
+              <button onClick={() => setShowTeamPicker((o) => !o)}
+                className="w-7 h-7 rounded-full border-2 border-dashed flex items-center justify-center text-sm transition-colors hover:bg-white/10"
+                style={{ borderColor: "var(--psg-muted)", color: "var(--psg-muted)" }} title="Add team member">+</button>
+              {showTeamPicker && (
+                <div className="absolute left-0 top-9 z-20 w-48 rounded-lg shadow-xl border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  {allUsers.filter((u) => !prod.team.some((m) => m.user.id === u.id)).map((u) => (
+                    <button key={u.id} onClick={() => { addTeamMember(u.id); setShowTeamPicker(false); }}
+                      className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-white/10">{u.name}</button>
+                  ))}
+                  {allUsers.filter((u) => !prod.team.some((m) => m.user.id === u.id)).length === 0 && (
+                    <div className="px-3 py-2 text-sm" style={{ color: "var(--psg-muted)" }}>All users added</div>
+                  )}
+                </div>
+              )}
+            </div>
+            {prod.team.length > 0 && (
+              <span className="text-xs" style={{ color: "var(--psg-muted)" }}>
+                {prod.team.map((m) => m.user.name.split(" ")[0]).join(", ")}
+              </span>
+            )}
+          </div>
+        </div>
         </div>
         <div className="flex gap-2 shrink-0">
           <button onClick={() => setEditProd(true)} className="border px-3 py-1.5 rounded text-sm hover:bg-white/5 transition-colors text-white" style={{ borderColor: "var(--psg-card-border)" }}>Edit</button>
@@ -405,52 +661,120 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-6 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-        {(["schedule", "budget", "crew", "accommodation", "haulage"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className="pb-2 text-sm font-medium capitalize border-b-2 transition-colors"
-            style={tab === t
-              ? { borderColor: "var(--psg-blue)", color: "var(--psg-text)" }
-              : { borderColor: "transparent", color: "var(--psg-muted)" }}
-          >
-            {t === "schedule" ? `Schedule (${prod.events.length})` : t === "budget" ? `Budget (${prod.budgetLines.length} lines)` : t === "crew" ? `Crew (${prod.crew.length})` : t === "accommodation" ? `Accommodation (${prod.hotelBookings.length})` : `Haulage (${prod.haulageMovements.length})`}
-          </button>
-        ))}
-      </div>
 
       {/* ── SCHEDULE TAB ── */}
       {tab === "schedule" && (
-        <div className="space-y-4">
-          <div className="flex justify-end gap-2">
-            <ExportMenu actions={[
-              { label: "Export PDF", onClick: () => exportSchedulePDF(prod.name, prod.events) },
-              { label: "Export Excel", onClick: () => exportScheduleXLSX(prod.name, prod.events) },
-            ]} />
-            <button onClick={() => setShowEventForm(true)} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
-              + Add Event
-            </button>
-          </div>
-          {prod.events.length === 0 && <p className="text-center py-10" style={{ color: "var(--psg-muted)" }}>No events yet.</p>}
-          <div className="space-y-2">
-            {prod.events.map((ev) => (
-              <div key={ev.id} className="rounded-lg border px-4 py-3 flex items-start justify-between gap-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm text-white">{ev.title}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${EVENT_COLORS[ev.type] ?? "bg-white/10 text-white/60"}`}>{ev.type}</span>
+        <div className="space-y-6">
+
+          {/* ── Key Dates ── */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">Key Dates</h3>
+              <button onClick={() => { setEditKd(null); setKdForm(BLANK_KD); setShowKdForm(true); }}
+                className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
+                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                + Add Key Date
+              </button>
+            </div>
+
+            {showKdForm && (
+              <form onSubmit={saveKd} className="rounded-lg border p-4 mb-3 space-y-3" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-dark-bg)" }}>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Type</label>
+                    <select required value={kdForm.type} onChange={e => setKdForm(f => ({ ...f, type: e.target.value }))} className={inp} style={inpStyle}>
+                      {KEY_DATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
                   </div>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
-                    {fmtDate(ev.startAt)} · {fmtTime(ev.startAt)}–{fmtTime(ev.endAt)}
-                    {ev.location && ` · ${ev.location}`}
-                  </p>
-                  {ev.notes && <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{ev.notes}</p>}
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Custom label <span style={{ color: "var(--psg-muted)" }}>(optional)</span></label>
+                    <input value={kdForm.label} onChange={e => setKdForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Press Night — Lyttelton" className={inp} style={inpStyle} />
+                  </div>
                 </div>
-                <button onClick={() => deleteEvent(ev.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0">Delete</button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Start date</label>
+                    <input required type="date" value={kdForm.startDate} onChange={e => setKdForm(f => ({ ...f, startDate: e.target.value }))} className={inp} style={inpStyle} />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>End date <span style={{ color: "var(--psg-muted)" }}>(optional)</span></label>
+                    <input type="date" value={kdForm.endDate} onChange={e => setKdForm(f => ({ ...f, endDate: e.target.value }))} className={inp} style={inpStyle} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Notes</label>
+                  <input value={kdForm.notes} onChange={e => setKdForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes" className={inp} style={inpStyle} />
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "var(--psg-blue)" }}>
+                    {editKd ? "Save" : "Add"}
+                  </button>
+                  <button type="button" onClick={() => { setShowKdForm(false); setEditKd(null); }} className="border px-4 py-2 rounded text-sm hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+                </div>
+              </form>
+            )}
+
+            {keyDates.length === 0 && !showKdForm && (
+              <p className="text-sm py-3" style={{ color: "var(--psg-muted)" }}>No key dates yet. Add milestones to show on the central calendar.</p>
+            )}
+            <div className="space-y-1.5">
+              {keyDates.map(kd => (
+                <div key={kd.id} className="rounded-lg border px-4 py-3 flex items-center gap-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-white">{kd.label || KEY_DATE_LABEL[kd.type] || kd.type}</span>
+                      {kd.label && <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/50">{KEY_DATE_LABEL[kd.type]}</span>}
+                    </div>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                      {fmtDate(kd.startDate)}
+                      {kd.endDate && kd.endDate.slice(0,10) !== kd.startDate.slice(0,10) && ` → ${fmtDate(kd.endDate)}`}
+                      {kd.notes && ` · ${kd.notes}`}
+                    </p>
+                  </div>
+                  <div className="flex gap-3 shrink-0">
+                    <button onClick={() => { setEditKd(kd); setKdForm({ type: kd.type, label: kd.label ?? "", startDate: kd.startDate.slice(0,10), endDate: kd.endDate?.slice(0,10) ?? "", notes: kd.notes ?? "" }); setShowKdForm(true); }}
+                      className="text-xs hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>Edit</button>
+                    <button onClick={() => deleteKd(kd.id)} className="text-xs text-red-400 hover:text-red-300 transition-colors">Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Daily Schedule ── */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">Daily Schedule</h3>
+              <div className="flex gap-2">
+                <ExportMenu actions={[
+                  { label: "Export PDF", onClick: () => exportSchedulePDF(prod.name, prod.events) },
+                  { label: "Export Excel", onClick: () => exportScheduleXLSX(prod.name, prod.events) },
+                ]} />
+                <button onClick={() => setShowEventForm(true)} className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
+                  style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                  + Add Event
+                </button>
               </div>
-            ))}
+            </div>
+            {prod.events.length === 0 && <p className="text-sm py-3" style={{ color: "var(--psg-muted)" }}>No events yet.</p>}
+            <div className="space-y-1.5">
+              {prod.events.map((ev) => (
+                <div key={ev.id} className="rounded-lg border px-4 py-3 flex items-start justify-between gap-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm text-white">{ev.title}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${EVENT_COLORS[ev.type] ?? "bg-white/10 text-white/60"}`}>{ev.type}</span>
+                    </div>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                      {fmtDate(ev.startAt)} · {fmtTime(ev.startAt)}–{fmtTime(ev.endAt)}
+                      {ev.location && ` · ${ev.location}`}
+                    </p>
+                    {ev.notes && <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{ev.notes}</p>}
+                  </div>
+                  <button onClick={() => deleteEvent(ev.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0">Delete</button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -839,6 +1163,146 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {/* ── CALL SHEETS TAB ── */}
+      {tab === "callsheets" && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-4">
+            {/* Sheet list sidebar */}
+            <div className="w-48 shrink-0 space-y-1">
+              {callSheets.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveSheet(s)}
+                  className="w-full text-left px-3 py-2 rounded text-sm transition-colors"
+                  style={activeSheet?.id === s.id
+                    ? { backgroundColor: "var(--psg-blue)", color: "#fff" }
+                    : { backgroundColor: "var(--psg-card-bg)", color: "var(--psg-text)", border: "1px solid var(--psg-card-border)" }}
+                >
+                  <div className="font-medium">{s.title || "Call Sheet"}</div>
+                  <div className="text-xs opacity-70">{new Date(s.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
+                </button>
+              ))}
+              <button
+                onClick={() => setShowNewSheetForm(true)}
+                className="w-full text-left px-3 py-2 rounded text-sm border border-dashed transition-colors hover:border-white/40"
+                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+              >
+                + New Call Sheet
+              </button>
+            </div>
+
+            {/* Active sheet */}
+            <div className="flex-1 min-w-0">
+              {activeSheet ? (
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold">{activeSheet.title || "Call Sheet"}</h3>
+                        <div className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                          {new Date(activeSheet.date).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                          {activeSheet.venue && ` · ${activeSheet.venue}`}
+                        </div>
+                        {activeSheet.generalNotes && <div className="text-sm mt-2" style={{ color: "var(--psg-muted)" }}>{activeSheet.generalNotes}</div>}
+                      </div>
+                      <button onClick={() => { if (confirm("Delete this call sheet?")) deleteSheet(activeSheet.id); }} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>
+                    </div>
+                  </div>
+
+                  {/* Entries table */}
+                  <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                    <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
+                      <span className="text-sm font-medium">Crew Calls</span>
+                      <button
+                        onClick={() => { setEditingEntry(null); setEntryForm(BLANK_ENTRY); setShowEntryForm(true); }}
+                        className="text-xs px-3 py-1 rounded font-medium text-white"
+                        style={{ backgroundColor: "var(--psg-blue)" }}
+                      >
+                        + Add Row
+                      </button>
+                    </div>
+
+                    {activeSheet.entries.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No crew calls yet — add a row to get started.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b text-left" style={{ borderColor: "var(--psg-card-border)" }}>
+                              <th className="px-4 py-2 font-medium text-xs uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Discipline</th>
+                              <th className="px-4 py-2 font-medium text-xs uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Name</th>
+                              <th className="px-4 py-2 font-medium text-xs uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Role</th>
+                              <th className="px-4 py-2 font-medium text-xs uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Call Time</th>
+                              <th className="px-4 py-2 font-medium text-xs uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Notes</th>
+                              <th className="px-4 py-2 w-16" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeSheet.entries.map((entry, i) => (
+                              <tr key={entry.id} className="border-b last:border-0" style={{ borderColor: "var(--psg-card-border)", backgroundColor: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
+                                <td className="px-4 py-2.5 font-medium">{entry.discipline}</td>
+                                <td className="px-4 py-2.5" style={{ color: "var(--psg-muted)" }}>{entry.name || "—"}</td>
+                                <td className="px-4 py-2.5" style={{ color: "var(--psg-muted)" }}>{entry.role || "—"}</td>
+                                <td className="px-4 py-2.5">
+                                  {entry.callTime ? (
+                                    <span className="font-mono font-semibold" style={{ color: "var(--psg-blue)" }}>{entry.callTime}</span>
+                                  ) : "—"}
+                                </td>
+                                <td className="px-4 py-2.5 text-xs" style={{ color: "var(--psg-muted)" }}>{entry.notes || ""}</td>
+                                <td className="px-4 py-2.5">
+                                  <div className="flex gap-1">
+                                    <button onClick={() => { setEditingEntry(entry); setEntryForm({ discipline: entry.discipline, name: entry.name ?? "", role: entry.role ?? "", callTime: entry.callTime ?? "", notes: entry.notes ?? "" }); setShowEntryForm(true); }} className="text-xs px-2 py-0.5 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
+                                    <button onClick={() => deleteEntry(entry.id)} className="text-xs px-2 py-0.5 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-16 text-center" style={{ color: "var(--psg-muted)" }}>
+                  {callSheets.length === 0 ? "No call sheets yet — create one to get started." : "Select a call sheet."}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: New Call Sheet */}
+      {showNewSheetForm && (
+        <Modal title="New Call Sheet" onClose={() => { setShowNewSheetForm(false); setSheetForm(BLANK_SHEET); }}>
+          <form onSubmit={saveNewSheet} className="space-y-3">
+            <F label="Date *"><input required type="date" className={inp} style={inpStyle} value={sheetForm.date} onChange={(e) => setSheetForm((f) => ({ ...f, date: e.target.value }))} /></F>
+            <F label="Title"><input className={inp} style={inpStyle} placeholder="e.g. Get In Day 1, Show Day" value={sheetForm.title} onChange={(e) => setSheetForm((f) => ({ ...f, title: e.target.value }))} /></F>
+            <F label="Venue"><input className={inp} style={inpStyle} value={sheetForm.venue} onChange={(e) => setSheetForm((f) => ({ ...f, venue: e.target.value }))} /></F>
+            <F label="General Notes"><textarea rows={2} className={inp} style={inpStyle} value={sheetForm.generalNotes} onChange={(e) => setSheetForm((f) => ({ ...f, generalNotes: e.target.value }))} /></F>
+            <Btns onCancel={() => { setShowNewSheetForm(false); setSheetForm(BLANK_SHEET); }} label="Create Call Sheet" />
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal: Add / Edit Call Sheet Entry */}
+      {showEntryForm && (
+        <Modal title={editingEntry ? "Edit Row" : "Add Crew Call"} onClose={() => { setShowEntryForm(false); setEditingEntry(null); setEntryForm(BLANK_ENTRY); }}>
+          <form onSubmit={saveEntry} className="space-y-3">
+            <F label="Discipline *"><input required className={inp} style={inpStyle} placeholder="e.g. Lighting, Sound, Staging" value={entryForm.discipline} onChange={(e) => setEntryForm((f) => ({ ...f, discipline: e.target.value }))} /></F>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Name"><input className={inp} style={inpStyle} placeholder="Leave blank for dept. call" value={entryForm.name} onChange={(e) => setEntryForm((f) => ({ ...f, name: e.target.value }))} /></F>
+              <F label="Role"><input className={inp} style={inpStyle} placeholder="e.g. Head of LX" value={entryForm.role} onChange={(e) => setEntryForm((f) => ({ ...f, role: e.target.value }))} /></F>
+            </div>
+            <F label="Call Time"><input className={inp} style={inpStyle} placeholder="e.g. 08:00" value={entryForm.callTime} onChange={(e) => setEntryForm((f) => ({ ...f, callTime: e.target.value }))} /></F>
+            <F label="Notes"><input className={inp} style={inpStyle} value={entryForm.notes} onChange={(e) => setEntryForm((f) => ({ ...f, notes: e.target.value }))} /></F>
+            <Btns onCancel={() => { setShowEntryForm(false); setEditingEntry(null); setEntryForm(BLANK_ENTRY); }} label={editingEntry ? "Save Changes" : "Add Row"} />
+          </form>
+        </Modal>
+      )}
+
       {/* Modal: Add / Edit Movement */}
       {showMovementForm && (
         <Modal title={editMovement ? "Edit Movement" : "Add Haulage Movement"} onClose={() => { setShowMovementForm(false); setEditMovement(null); setMovementForm(BLANK_MOVEMENT); }}>
@@ -999,6 +1463,130 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         </Modal>
       )}
 
+      {/* ── TOUR STOPS TAB ── */}
+      {tab === "tour" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Tour Schedule</h3>
+              <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{tourStops.length} {tourStops.length === 1 ? "stop" : "stops"}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {tourStops.length > 0 && (
+                <>
+                  <button
+                    onClick={() => exportTourSchedulePDF(prod.name, tourStops)}
+                    className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
+                    style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+                  >↓ PDF</button>
+                  <button
+                    onClick={() => exportTourScheduleXLSX(prod.name, tourStops)}
+                    className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
+                    style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+                  >↓ XLSX</button>
+                </>
+              )}
+              <button
+                onClick={() => { setEditStop(null); setStopForm(BLANK_STOP); setShowTourForm(true); }}
+                className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
+                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+              >+ Add Stop</button>
+            </div>
+          </div>
+
+          {showTourForm && (
+            <form onSubmit={saveStop} className="rounded-lg border p-4 space-y-3" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-dark-bg)" }}>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Venue *</label>
+                <input
+                  className={inp} style={inpStyle}
+                  placeholder="Search venues…"
+                  value={venueSearch}
+                  onChange={e => setVenueSearch(e.target.value)}
+                />
+                {venueSearch.length > 0 && (
+                  <div className="mt-1 rounded border overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+                    {allVenues.filter(v => `${v.name} ${v.city ?? ""}`.toLowerCase().includes(venueSearch.toLowerCase())).slice(0, 8).map(v => (
+                      <button key={v.id} type="button"
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-white/10 ${stopForm.venueId === String(v.id) ? "bg-white/10 text-white" : ""}`}
+                        style={{ color: stopForm.venueId === String(v.id) ? "white" : "var(--psg-muted)" }}
+                        onClick={() => { setStopForm(f => ({ ...f, venueId: String(v.id) })); setVenueSearch(`${v.name}${v.city ? " · " + v.city : ""}`); }}
+                      >
+                        {v.name}{v.city ? ` · ${v.city}` : ""}{v.capacity ? ` · ${v.capacity.toLocaleString()} cap` : ""}
+                      </button>
+                    ))}
+                    {allVenues.filter(v => `${v.name} ${v.city ?? ""}`.toLowerCase().includes(venueSearch.toLowerCase())).length === 0 && (
+                      <p className="px-3 py-2 text-xs" style={{ color: "var(--psg-muted)" }}>No venues match</p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Start date</label>
+                  <input type="date" className={inp} style={inpStyle} value={stopForm.startDate} onChange={e => setStopForm(f => ({ ...f, startDate: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>End date</label>
+                  <input type="date" className={inp} style={inpStyle} value={stopForm.endDate} onChange={e => setStopForm(f => ({ ...f, endDate: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Notes</label>
+                <input className={inp} style={inpStyle} value={stopForm.notes} onChange={e => setStopForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional" />
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="px-4 py-2 rounded text-sm text-white font-medium" style={{ backgroundColor: "var(--psg-blue)" }} disabled={!stopForm.venueId}>
+                  {editStop ? "Save Changes" : "Add Stop"}
+                </button>
+                <button type="button" onClick={() => { setShowTourForm(false); setEditStop(null); setStopForm(BLANK_STOP); setVenueSearch(""); }} className="px-4 py-2 rounded text-sm border hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+              </div>
+            </form>
+          )}
+
+          {tourStops.length === 0 && !showTourForm && (
+            <p className="text-sm py-6 text-center" style={{ color: "var(--psg-muted)" }}>No tour stops added yet.</p>
+          )}
+
+          <div className="space-y-2">
+            {tourStops.map((stop, i) => (
+              <div key={stop.id} className="flex items-start gap-4 rounded-lg border p-4" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white" style={{ backgroundColor: "var(--psg-blue)" }}>
+                  {stop.stopNumber}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white">{stop.venue.name}</p>
+                  <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
+                    {stop.venue.city ?? ""}
+                    {stop.venue.capacity ? ` · ${stop.venue.capacity.toLocaleString()} cap` : ""}
+                  </p>
+                  {(stop.startDate || stop.endDate) && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                      {stop.startDate ? fmtDate(stop.startDate) : "?"}{stop.endDate ? ` → ${fmtDate(stop.endDate)}` : ""}
+                    </p>
+                  )}
+                  {stop.notes && <p className="text-xs mt-0.5 italic" style={{ color: "var(--psg-muted)" }}>{stop.notes}</p>}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => {
+                    setEditStop(stop);
+                    setStopForm({ venueId: String(stop.venueId), startDate: stop.startDate ? stop.startDate.slice(0, 10) : "", endDate: stop.endDate ? stop.endDate.slice(0, 10) : "", notes: stop.notes ?? "" });
+                    setVenueSearch(`${stop.venue.name}${stop.venue.city ? " · " + stop.venue.city : ""}`);
+                    setShowTourForm(true);
+                  }} className="text-xs px-2 py-1 rounded border hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
+                  <button onClick={() => deleteStop(stop.id)} className="text-xs px-2 py-1 rounded border hover:bg-red-900/20 text-red-400" style={{ borderColor: "rgba(248,113,113,0.3)" }}>Remove</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── TASKS TAB ── */}
+      {tab === "tasks" && prod && (
+        <TasksPanel productionId={prod.id} />
+      )}
+
       {/* Modal: Edit Production */}
       {editProd && (
         <Modal title="Edit Production" onClose={() => setEditProd(false)}>
@@ -1007,8 +1595,19 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
             <div className="grid grid-cols-2 gap-3">
               <F label="Type"><input className={inp} style={inpStyle} value={prodForm.type} onChange={(e) => setProdForm((f) => ({ ...f, type: e.target.value }))} /></F>
               <F label="Status"><select className={inp} style={inpStyle} value={prodForm.status} onChange={(e) => setProdForm((f) => ({ ...f, status: e.target.value }))}>{STATUS_OPTS.map((s) => <option key={s}>{s}</option>)}</select></F>
+              <F label="Announcement"><select className={inp} style={inpStyle} value={prodForm.announcementStatus} onChange={(e) => setProdForm((f) => ({ ...f, announcementStatus: e.target.value }))}>{ANN_OPTS.map((s) => <option key={s} value={s}>{ANN_LABELS[s]}</option>)}</select></F>
             </div>
-            <F label="Venue"><input className={inp} style={inpStyle} value={prodForm.venue} onChange={(e) => setProdForm((f) => ({ ...f, venue: e.target.value }))} /></F>
+            <F label="Venue (from database)">
+              <select className={inp} style={inpStyle} value={prodForm.venueId} onChange={e => setProdForm(f => ({ ...f, venueId: e.target.value }))}>
+                <option value="">— none / freetext below —</option>
+                {allVenues.map(v => <option key={v.id} value={v.id}>{v.name}{v.city ? ` · ${v.city}` : ""}</option>)}
+              </select>
+            </F>
+            <F label="Venue (freetext override)"><input className={inp} style={inpStyle} value={prodForm.venue} onChange={(e) => setProdForm((f) => ({ ...f, venue: e.target.value }))} placeholder="Leave blank if using venue above" /></F>
+            <label className="flex items-center gap-2 text-sm text-white cursor-pointer">
+              <input type="checkbox" checked={prodForm.isTour} onChange={e => setProdForm(f => ({ ...f, isTour: e.target.checked }))} />
+              This is a touring production
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <F label="Start Date"><input type="date" className={inp} style={inpStyle} value={prodForm.startDate} onChange={(e) => setProdForm((f) => ({ ...f, startDate: e.target.value }))} /></F>
               <F label="End Date"><input type="date" className={inp} style={inpStyle} value={prodForm.endDate} onChange={(e) => setProdForm((f) => ({ ...f, endDate: e.target.value }))} /></F>
@@ -1019,6 +1618,14 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         </Modal>
       )}
     </div>
+  );
+}
+
+export default function ProductionPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense>
+      <ProductionPageInner params={params} />
+    </Suspense>
   );
 }
 

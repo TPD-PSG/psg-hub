@@ -14,14 +14,52 @@ function fmtDateTime(s: string) {
   return new Date(s).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function basePDF(title: string, subtitle?: string): jsPDF {
+type LogoAsset = { dataUrl: string; w: number; h: number } | null;
+
+async function fetchLogoAsset(): Promise<LogoAsset> {
+  try {
+    const res = await fetch("/psg-logo.png");
+    const blob = await res.blob();
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+    const { w, h } = await new Promise<{ w: number; h: number }>((resolve) => {
+      const img = new window.Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => resolve({ w: 1, h: 1 });
+      img.src = dataUrl;
+    });
+    return { dataUrl, w, h };
+  } catch {
+    return null;
+  }
+}
+
+function basePDF(title: string, subtitle?: string, logo?: LogoAsset): jsPDF {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   doc.setFillColor(10, 25, 65);
   doc.rect(0, 0, 297, 20, "F");
+
+  let textX = 10;
+  if (logo) {
+    // Fit logo into the 16mm tall space (2mm padding each side) preserving aspect ratio
+    const maxH = 16;
+    const maxW = 40;
+    const aspect = logo.w / logo.h;
+    let lh = maxH;
+    let lw = lh * aspect;
+    if (lw > maxW) { lw = maxW; lh = lw / aspect; }
+    const ly = 2 + (maxH - lh) / 2;
+    doc.addImage(logo.dataUrl, "PNG", 4, ly, lw, lh);
+    textX = 4 + lw + 3;
+  }
+
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.text("Production Solutions Group", 10, 13);
+  doc.text("Production Solutions Group", textX, 13);
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
   doc.text(title, 297 - 10, 13, { align: "right" });
@@ -39,8 +77,9 @@ function basePDF(title: string, subtitle?: string): jsPDF {
 type Expense = { phase: string; description: string; estimated: number; committed: number; spent: number; supplier: string | null; poNumber: string | null; paymentDue: string | null; issuedForPayment: boolean; vatExempt: boolean; notes: string | null };
 type BudgetLine = { department: string; description: string; budgeted: number; expenses: Expense[] };
 
-export function exportBudgetPDF(productionName: string, lines: BudgetLine[]) {
-  const doc = basePDF(`Budget — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`);
+export async function exportBudgetPDF(productionName: string, lines: BudgetLine[]) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF(`Budget — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
   let y = 32;
 
   const totEst = lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0);
@@ -123,8 +162,9 @@ export function exportBudgetXLSX(productionName: string, lines: BudgetLine[]) {
 
 type ScheduleEvent = { title: string; type: string; startAt: string; endAt: string; location: string | null; notes: string | null };
 
-export function exportSchedulePDF(productionName: string, events: ScheduleEvent[]) {
-  const doc = basePDF(`Schedule — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`);
+export async function exportSchedulePDF(productionName: string, events: ScheduleEvent[]) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF(`Schedule — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
   autoTable(doc, {
     startY: 32,
     head: [["Date", "Start", "End", "Title", "Type", "Location", "Notes"]],
@@ -160,8 +200,9 @@ export function exportScheduleXLSX(productionName: string, events: ScheduleEvent
 
 type CrewRow = { name: string; discipline: string; phone: string | null; email: string | null; company: string | null; isFreelance: boolean; insuranceProvider: string | null; insurancePolicyNo: string | null; insuranceExpiry: string | null; insuranceCoverType: string | null };
 
-export function exportCrewPDF(title: string, crew: CrewRow[]) {
-  const doc = basePDF(`Crew — ${title}`, `Exported ${fmtDate(new Date().toISOString())}`);
+export async function exportCrewPDF(title: string, crew: CrewRow[]) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF(`Crew — ${title}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
   autoTable(doc, {
     startY: 32,
     head: [["Name", "Discipline", "Freelance", "Phone", "Email", "Company", "Ins. Provider", "Policy No.", "Expiry", "Cover Type"]],
@@ -199,8 +240,9 @@ export function exportCrewXLSX(title: string, crew: CrewRow[]) {
 
 type BookingRow = { hotel: { name: string; city: string | null }; crew: { name: string; discipline: string } | null; guestName: string | null; roomType: string | null; roomNumber: string | null; checkIn: string; checkOut: string; ratePerNight: number | null; totalCost: number | null; confirmationNo: string | null; isPaid: boolean; notes: string | null };
 
-export function exportAccommodationPDF(productionName: string, bookings: BookingRow[]) {
-  const doc = basePDF(`Accommodation — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`);
+export async function exportAccommodationPDF(productionName: string, bookings: BookingRow[]) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF(`Accommodation — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
   autoTable(doc, {
     startY: 32,
     head: [["Guest", "Hotel", "Room Type", "Room No.", "Check In", "Check Out", "Nights", "Total", "Ref", "Paid"]],
@@ -247,8 +289,9 @@ export function exportAccommodationXLSX(productionName: string, bookings: Bookin
 
 type MovementRow = { haulageCompany: string; fromLocation: string; toLocation: string; departureAt: string; arrivalAt: string | null; driverName: string | null; vehicleInfo: string | null; cargo: string | null; notes: string | null; production?: { name: string } };
 
-export function exportHaulagePDF(title: string, movements: MovementRow[], includeProduction = false) {
-  const doc = basePDF(`Haulage — ${title}`, `Exported ${fmtDate(new Date().toISOString())}`);
+export async function exportHaulagePDF(title: string, movements: MovementRow[], includeProduction = false) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF(`Haulage — ${title}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
   const head = includeProduction
     ? [["Production", "Company", "From", "To", "Departure", "Arrival", "Driver", "Vehicle", "Cargo"]]
     : [["Company", "From", "To", "Departure", "Arrival", "Driver", "Vehicle", "Cargo"]];
@@ -281,4 +324,49 @@ export function exportHaulageXLSX(title: string, movements: MovementRow[], inclu
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Haulage");
   XLSX.writeFile(wb, `haulage-${title.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
+}
+
+// ── Tour Schedule ─────────────────────────────────────────────────────────────
+
+type TourStopRow = { stopNumber: number; venue: { name: string; city: string | null; capacity: number | null } | null; startDate: string | null; endDate: string | null; notes: string | null };
+
+export async function exportTourSchedulePDF(productionName: string, stops: TourStopRow[]) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF(`Tour Schedule — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
+  autoTable(doc, {
+    startY: 32,
+    head: [["Stop", "Venue", "City", "Capacity", "Start Date", "End Date", "Notes"]],
+    body: stops.map((s) => [
+      String(s.stopNumber),
+      s.venue?.name ?? "",
+      s.venue?.city ?? "",
+      s.venue?.capacity != null ? String(s.venue.capacity) : "",
+      s.startDate ? fmtDate(s.startDate) : "",
+      s.endDate ? fmtDate(s.endDate) : "",
+      s.notes ?? "",
+    ]),
+    styles: { fontSize: 9, cellPadding: 2.5 },
+    headStyles: { fillColor: [10, 25, 65] },
+    columnStyles: { 0: { halign: "center", cellWidth: 12 }, 3: { halign: "right" } },
+    margin: { left: 10, right: 10 },
+  });
+  doc.save(`tour-schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+}
+
+export function exportTourScheduleXLSX(productionName: string, stops: TourStopRow[]) {
+  const rows = [
+    ["Stop", "Venue", "City", "Capacity", "Start Date", "End Date", "Notes"],
+    ...stops.map((s) => [
+      s.stopNumber,
+      s.venue?.name ?? "",
+      s.venue?.city ?? "",
+      s.venue?.capacity ?? "",
+      s.startDate ? fmtDate(s.startDate) : "",
+      s.endDate ? fmtDate(s.endDate) : "",
+      s.notes ?? "",
+    ]),
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Tour Schedule");
+  XLSX.writeFile(wb, `tour-schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
 }

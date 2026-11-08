@@ -14,27 +14,46 @@ model User {
   passwordHash String
   role         String   @default("member") // admin | member
   preferences  String?  // JSON: { widgets: string[] }
+  permissions  String?  // JSON: { modules: string[], allProductions: boolean }
+  avatarUrl    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  tasksAssigned       Task[]           @relation("TaskAssignee")
+  tasksSignoff        Task[]           @relation("TaskSignoff")
+  tasksCreated        Task[]           @relation("TaskCreatedBy")
+  notifications       Notification[]
+  productionTeams     ProductionTeam[]
+  roadmapItems        RoadmapItem[]
 }
 
 model Production {
   id          Int       @id @default(autoincrement())
   name        String
+  logoUrl     String?
   type        String
-  venue       String?
+  venue       String?   // freetext fallback / override
+  venueId     Int?
+  venueRef    Venue?    @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  isTour      Boolean   @default(false)
   startDate   DateTime?
   endDate     DateTime?
-  status      String    @default("planning")
+  status              String    @default("planning")
+  announcementStatus  String    @default("not_announced")
   notes       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   events      Event[]
+  keyDates    ProductionKeyDate[]
   budgetLines BudgetLine[]
   crew        ProductionCrew[]
   hotelBookings     HotelBooking[]
   haulageMovements  HaulageMovement[]
+  callSheets        CallSheet[]
+  tasks             Task[]
+  team              ProductionTeam[]
+  tourStops   TourStop[]
 }
 
 
@@ -209,6 +228,128 @@ model BDTask {
   updatedAt     DateTime    @updatedAt
 }
 
+model Venue {
+  id          Int            @id @default(autoincrement())
+  name        String
+  type        String         // theatre | arena | outdoor | club | conference | other
+  city        String?
+  address     String?
+  postcode    String?
+  phone       String?
+  email       String?
+  website     String?
+  capacity    Int?
+  techNotes       String?
+  techSpecs       String?   // JSON: structured technical advancing data
+  techSpecFile    String?   // base64 encoded
+  techSpecName    String?
+  techSpecMime    String?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  contacts        VenueContact[]
+  productions     Production[]
+  tourStops       TourStop[]
+}
+
+model TourStop {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  venueId      Int
+  venue        Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  stopNumber   Int        @default(0)
+  startDate    DateTime?
+  endDate      DateTime?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model VenueContact {
+  id        Int      @id @default(autoincrement())
+  venueId   Int
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  phone     String?
+  email     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CallSheet {
+  id           Int              @id @default(autoincrement())
+  productionId Int
+  production   Production       @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  date         DateTime
+  title        String?
+  venue        String?
+  generalNotes String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  entries      CallSheetEntry[]
+}
+
+model CallSheetEntry {
+  id          Int        @id @default(autoincrement())
+  callSheetId Int
+  callSheet   CallSheet  @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
+  discipline  String
+  name        String?
+  role        String?
+  callTime    String?
+  notes       String?
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model ProductionTeam {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  userId       Int
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([productionId, userId])
+}
+
+model Task {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String?
+  productionId    Int?
+  production      Production? @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  assigneeUserId  Int?
+  assigneeUser    User?     @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  assigneeName    String?   // free-text if no user account
+  status          String    @default("todo") // todo | in_progress | awaiting_signoff | done
+  priority        String    @default("medium") // low | medium | high
+  dueDate         DateTime?
+  requiresSignoff Boolean   @default(false)
+  signoffUserId   Int?
+  signoffUser     User?     @relation("TaskSignoff", fields: [signoffUserId], references: [id], onDelete: SetNull)
+  signoffAt       DateTime?
+  createdByUserId Int?
+  createdByUser   User?     @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
 model Expense {
   id                Int        @id @default(autoincrement())
   budgetLineId      Int
@@ -226,4 +367,137 @@ model Expense {
   notes             String?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+}
+
+model Property {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts     PropertyContact[]
+  documents    PropertyDocument[]
+  maintenance  PropertyMaintenance[]
+  rent         PropertyRent?
+  keys         PropertyKey[]
+  alarms       PropertyAlarm[]
+}
+
+model PropertyContact {
+  id         Int      @id @default(autoincrement())
+  propertyId Int
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String
+  role       String
+  phone      String?
+  email      String?
+  notes      String?
+  createdAt  DateTime @default(now())
+}
+
+model PropertyDocument {
+  id         Int       @id @default(autoincrement())
+  propertyId Int
+  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String
+  type       String    @default("other")
+  expiryDate DateTime?
+  fileUrl    String?
+  notes      String?
+  createdAt  DateTime  @default(now())
+}
+
+model PropertyMaintenance {
+  id          Int       @id @default(autoincrement())
+  propertyId  Int
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      String    @default("reported")
+  priority    String    @default("normal")
+  contractor  String?
+  cost        Float?
+  reportedAt  DateTime  @default(now())
+  resolvedAt  DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+}
+
+model PropertyRent {
+  id              Int      @id @default(autoincrement())
+  propertyId      Int      @unique
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amount          Float?
+  frequency       String?
+  nextPaymentDate DateTime?
+  nextReviewDate  DateTime?
+  landlordRef     String?
+  notes           String?
+  updatedAt       DateTime @updatedAt
+}
+
+model PropertyKey {
+  id          Int      @id @default(autoincrement())
+  propertyId  Int
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  description String
+  holder      String?
+  quantity    Int      @default(1)
+  notes       String?
+  createdAt   DateTime @default(now())
+}
+
+model PropertyAlarm {
+  id              Int      @id @default(autoincrement())
+  propertyId      Int
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name            String
+  code            String?
+  zones           String?
+  monitoringCo    String?
+  monitoringPhone String?
+  keyholders      String?
+  notes           String?
+  createdAt       DateTime @default(now())
+}
+
+model ProductionKeyDate {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  type         String     // design_presentation | pre_production | first_rehearsal | rehearsal_period | load_in | fit_up | technical_rehearsal | dress_rehearsal | preview | press_night | performance | get_out | other
+  label        String?    // optional override label
+  startDate    DateTime
+  endDate      DateTime?
+  notes        String?
+  createdAt    DateTime   @default(now())
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+}
+
+model QuickLink {
+  id    Int    @id @default(autoincrement())
+  label String
+  url   String
+  icon  String @default("🔗")
+  order Int    @default(0)
+}
+
+model RoadmapItem {
+  id              Int      @id @default(autoincrement())
+  title           String
+  body            String?
+  category        String   @default("general") // general | feature | improvement | bug | infrastructure
+  status          String   @default("idea")    // idea | planned | in_progress | done | wont_do
+  pinned          Boolean  @default(false)
+  createdByUserId Int?
+  createdByUser   User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

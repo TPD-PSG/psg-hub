@@ -22,6 +22,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       haulageMovements: {
         orderBy: { departureAt: "asc" },
       },
+      team: {
+        include: { user: { select: { id: true, name: true, email: true, role: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      venueRef: { select: { id: true, name: true, city: true, capacity: true } },
     },
   });
   if (!production) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -37,9 +42,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       name: body.name,
       type: body.type,
       venue: body.venue || null,
+      venueId: body.venueId ? Number(body.venueId) : null,
+      isTour: body.isTour ?? false,
       startDate: body.startDate ? new Date(body.startDate) : null,
       endDate: body.endDate ? new Date(body.endDate) : null,
       status: body.status,
+      announcementStatus: body.announcementStatus || "not_announced",
       notes: body.notes || null,
     },
   });

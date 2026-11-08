@@ -15,10 +15,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json();
   const data: Record<string, unknown> = { name: body.name, email: body.email, role: body.role };
   if (body.password) data.passwordHash = await hash(body.password, 12);
+  if (body.permissions !== undefined) data.permissions = JSON.stringify(body.permissions);
   const user = await prisma.user.update({
     where: { id: Number(id) },
     data,
-    select: { id: true, name: true, email: true, role: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, permissions: true, createdAt: true },
   });
   return NextResponse.json(user);
 }

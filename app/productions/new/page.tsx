@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 
 const TYPES = ["Play", "Musical", "Opera", "Dance", "Comedy", "Drama", "Physical Theatre", "Other"];
 const STATUSES = ["planning", "in-production", "closed"];
+const ANN_OPTS: Record<string, string> = { nda: "NDA", not_announced: "Not Announced", on_sale: "On Sale", open: "Open" };
 
 const field = "w-full rounded px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 border";
 const fieldStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)", outlineColor: "var(--psg-blue)" };
 
 export default function NewProductionPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", type: "Play", venue: "", startDate: "", endDate: "", status: "planning", notes: "" });
+  const [form, setForm] = useState({ name: "", type: "Play", venue: "", startDate: "", endDate: "", status: "planning", announcementStatus: "not_announced", notes: "" });
   const [saving, setSaving] = useState(false);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -47,6 +48,12 @@ export default function NewProductionPage() {
             <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Status</label>
             <select className={field} style={fieldStyle} value={form.status} onChange={(e) => set("status", e.target.value)}>
               {STATUSES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Announcement</label>
+            <select className={field} style={fieldStyle} value={form.announcementStatus} onChange={(e) => set("announcementStatus", e.target.value)}>
+              {Object.entries(ANN_OPTS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
         </div>

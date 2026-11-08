@@ -16,7 +16,7 @@ const PROD_COLORS = [
 export async function GET() {
   const session = await auth();
   const role = (session?.user as any)?.role ?? "member";
-  const userId = (session?.user as any)?.id ? Number((session.user as any).id) : undefined;
+  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : undefined;
   const perms = parsePerms((session?.user as any)?.permissions ?? null);
 
   const where = role !== "admin" && !perms.allProductions && userId

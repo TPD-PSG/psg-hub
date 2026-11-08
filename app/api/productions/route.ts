@@ -13,7 +13,7 @@ const include = {
 export async function GET() {
   const session = await auth();
   const role: string = (session?.user as any)?.role ?? "member";
-  const userId: number | undefined = (session?.user as any)?.id ? Number((session.user as any).id) : undefined;
+  const userId: number | undefined = (session?.user as any)?.id ? Number((session!.user as any).id) : undefined;
   const permsRaw: string | null = (session?.user as any)?.permissions ?? null;
   const perms = parsePerms(permsRaw);
 

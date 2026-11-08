@@ -53,7 +53,12 @@ type CrewMember = {
   discipline: string;
   phone: string | null;
   email: string | null;
+  company: string | null;
+  isFreelance: boolean;
+  insuranceProvider: string | null;
+  insurancePolicyNo: string | null;
   insuranceExpiry: string | null;
+  insuranceCoverType: string | null;
 };
 type ProductionCrew = {
   id: number;

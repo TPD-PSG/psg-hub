@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 export async function POST(req: Request) {
   const session = await auth();
-  const userId = (session?.user as any)?.id ? Number((session.user as any).id) : null;
+  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const formData = await req.formData();

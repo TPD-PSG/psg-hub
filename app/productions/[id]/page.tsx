@@ -93,7 +93,7 @@ type HaulageMovement = {
 };
 type TeamMember = { user: { id: number; name: string; email: string; role: string } };
 type VenueRef = { id: number; name: string; city: string | null; capacity: number | null };
-type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; startDate: string | null; endDate: string | null; notes: string | null };
+type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; loadInDate: string | null; startDate: string | null; endDate: string | null; performanceStart: string | null; performanceEnd: string | null; notes: string | null };
 type Production = {
   id: number;
   name: string;
@@ -245,7 +245,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [allVenues, setAllVenues] = useState<VenueRef[]>([]);
   const [showTourForm, setShowTourForm] = useState(false);
   const [editStop, setEditStop] = useState<TourStop | null>(null);
-  const BLANK_STOP = { venueId: "", startDate: "", endDate: "", notes: "" };
+  const BLANK_STOP = { venueId: "", loadInDate: "", startDate: "", endDate: "", performanceStart: "", performanceEnd: "", notes: "" };
   const [stopForm, setStopForm] = useState(BLANK_STOP);
   const [venueSearch, setVenueSearch] = useState("");
   useEffect(() => { fetch("/api/venues").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllVenues(d); }); }, []);
@@ -1528,12 +1528,22 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Start date</label>
-                  <input type="date" className={inp} style={inpStyle} value={stopForm.startDate} onChange={e => setStopForm(f => ({ ...f, startDate: e.target.value }))} />
+                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Load-in date</label>
+                  <input type="date" className={inp} style={inpStyle} value={stopForm.loadInDate} onChange={e => setStopForm(f => ({ ...f, loadInDate: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>End date</label>
+                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Get-out date</label>
                   <input type="date" className={inp} style={inpStyle} value={stopForm.endDate} onChange={e => setStopForm(f => ({ ...f, endDate: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>First performance</label>
+                  <input type="date" className={inp} style={inpStyle} value={stopForm.performanceStart} onChange={e => setStopForm(f => ({ ...f, performanceStart: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Last performance</label>
+                  <input type="date" className={inp} style={inpStyle} value={stopForm.performanceEnd} onChange={e => setStopForm(f => ({ ...f, performanceEnd: e.target.value }))} />
                 </div>
               </div>
               <div>
@@ -1565,17 +1575,24 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     {stop.venue.city ?? ""}
                     {stop.venue.capacity ? ` · ${stop.venue.capacity.toLocaleString()} cap` : ""}
                   </p>
-                  {(stop.startDate || stop.endDate) && (
+                  {stop.loadInDate && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Load in: {fmtDate(stop.loadInDate)}</p>
+                  )}
+                  {(stop.performanceStart || stop.performanceEnd) && (
                     <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
-                      {stop.startDate ? fmtDate(stop.startDate) : "?"}{stop.endDate ? ` → ${fmtDate(stop.endDate)}` : ""}
+                      Performances: {stop.performanceStart ? fmtDate(stop.performanceStart) : "?"}
+                      {stop.performanceEnd && stop.performanceEnd !== stop.performanceStart ? ` → ${fmtDate(stop.performanceEnd)}` : ""}
                     </p>
+                  )}
+                  {stop.endDate && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Get out: {fmtDate(stop.endDate)}</p>
                   )}
                   {stop.notes && <p className="text-xs mt-0.5 italic" style={{ color: "var(--psg-muted)" }}>{stop.notes}</p>}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button onClick={() => {
                     setEditStop(stop);
-                    setStopForm({ venueId: String(stop.venueId), startDate: stop.startDate ? stop.startDate.slice(0, 10) : "", endDate: stop.endDate ? stop.endDate.slice(0, 10) : "", notes: stop.notes ?? "" });
+                    setStopForm({ venueId: String(stop.venueId), loadInDate: stop.loadInDate ? stop.loadInDate.slice(0, 10) : "", startDate: stop.startDate ? stop.startDate.slice(0, 10) : "", endDate: stop.endDate ? stop.endDate.slice(0, 10) : "", performanceStart: stop.performanceStart ? stop.performanceStart.slice(0, 10) : "", performanceEnd: stop.performanceEnd ? stop.performanceEnd.slice(0, 10) : "", notes: stop.notes ?? "" });
                     setVenueSearch(`${stop.venue.name}${stop.venue.city ? " · " + stop.venue.city : ""}`);
                     setShowTourForm(true);
                   }} className="text-xs px-2 py-1 rounded border hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>

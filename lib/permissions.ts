@@ -1,7 +1,7 @@
 export type UserPerms = { modules: string[]; allProductions: boolean };
 
 export function parsePerms(raw: string | null | undefined): UserPerms {
-  if (!raw) return { modules: ["bd", "productions", "venues", "tasks", "property"], allProductions: true };
+  if (!raw) return { modules: ["bd", "productions", "venues", "tasks", "property", "finance", "sales"], allProductions: true };
   try { return JSON.parse(raw); } catch { return { modules: [], allProductions: false }; }
 }
 

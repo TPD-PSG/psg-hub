@@ -6,7 +6,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // Allow auth routes and public assets
-  if (pathname.startsWith("/api/auth") || pathname.startsWith("/_next") || pathname === "/login") {
+  if (pathname.startsWith("/api/auth") || pathname === "/api/users/public" || pathname.startsWith("/_next") || pathname === "/login") {
     return NextResponse.next();
   }
 

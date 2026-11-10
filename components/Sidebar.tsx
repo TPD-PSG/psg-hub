@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 
 type NavItem = { label: string; href: string; section?: string };
@@ -30,6 +30,21 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
   "/bd": {
     title: "Business Dev",
     items: [{ label: "Pipeline", href: "/bd" }],
+  },
+  "/finance": {
+    title: "Finance",
+    items: [
+      { label: "Sales Invoices", href: "/finance" },
+      { label: "Purchase Invoices", href: "/finance?tab=purchase" },
+      { label: "Expenses", href: "/finance?tab=expenses" },
+    ],
+  },
+  "/sales": {
+    title: "Sales",
+    items: [
+      { label: "Brands", href: "/sales" },
+      { label: "Tasks", href: "/sales?tab=tasks" },
+    ],
   },
   "/roadmap": {
     title: "Roadmap",
@@ -65,17 +80,34 @@ const PRODUCTION_SECTIONS: NavItem[] = [
   { label: "Tasks", href: "", section: "tasks" },
 ];
 
+type CalProduction = { id: number; name: string; color: string };
+
+const CAL_COLORS = [
+  "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b",
+  "#ef4444", "#06b6d4", "#ec4899", "#84cc16",
+];
+
+const EVENT_TYPE_FILTERS = [
+  { key: "key_date", label: "Key Dates", color: "#a78bfa" },
+  { key: "tour_stop", label: "Tour Stops", color: "#38bdf8" },
+  { key: "task", label: "Tasks", color: "#6b7280" },
+];
+
 function SidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [collapsed, setCollapsed] = useState(false);
+  const router = useRouter();
+  const [collapsed, setCollapsed] = useState<boolean | null>(null);
   const [prodName, setProdName] = useState<string | null>(null);
+  const [calProductions, setCalProductions] = useState<CalProduction[]>([]);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem("sidebar-collapsed");
-      if (saved !== null) setCollapsed(saved === "true");
-    } catch {}
+      setCollapsed(saved === "true");
+    } catch {
+      setCollapsed(false);
+    }
   }, []);
 
   function toggle() {
@@ -97,6 +129,54 @@ function SidebarInner() {
       .then(d => setProdName(d?.name ?? null))
       .catch(() => setProdName(null));
   }, [prodId]);
+
+  // Fetch calendar productions when on calendar page
+  useEffect(() => {
+    if (pathname !== "/calendar") { setCalProductions([]); return; }
+    fetch("/api/productions")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          setCalProductions(d.map((p: { id: number; name: string }, i: number) => ({
+            id: p.id,
+            name: p.name,
+            color: CAL_COLORS[i % CAL_COLORS.length],
+          })));
+        }
+      })
+      .catch(() => {});
+  }, [pathname]);
+
+  // Calendar filter helpers (URL-based)
+  const hiddenProdsParam = searchParams.get("hideProds") ?? "";
+  const hiddenTypesParam = searchParams.get("hideTypes") ?? "";
+  const hiddenProdIds = new Set(hiddenProdsParam ? hiddenProdsParam.split(",").map(Number) : []);
+  const hiddenTypeKeys = new Set(hiddenTypesParam ? hiddenTypesParam.split(",") : []);
+
+  function toggleCalProd(id: number) {
+    const next = new Set(hiddenProdIds);
+    next.has(id) ? next.delete(id) : next.add(id);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.size) params.set("hideProds", [...next].join(","));
+    else params.delete("hideProds");
+    router.replace(`/calendar?${params.toString()}`);
+  }
+
+  function toggleCalType(key: string) {
+    const next = new Set(hiddenTypeKeys);
+    next.has(key) ? next.delete(key) : next.add(key);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.size) params.set("hideTypes", [...next].join(","));
+    else params.delete("hideTypes");
+    router.replace(`/calendar?${params.toString()}`);
+  }
+
+  function showAll() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("hideProds");
+    params.delete("hideTypes");
+    router.replace(`/calendar?${params.toString()}`);
+  }
 
   // Determine which section definition to use
   let section: SectionDef | null = null;
@@ -125,6 +205,7 @@ function SidebarInner() {
   }
 
   if (!section) return null;
+  if (collapsed === null) return null;
 
   const currentSection = searchParams.get("section") ?? searchParams.get("tab") ?? null;
 
@@ -162,7 +243,7 @@ function SidebarInner() {
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 py-2 overflow-hidden">
+      <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden">
         {section.items.map(item => {
           const active = isActive(item);
           return (
@@ -181,6 +262,43 @@ function SidebarInner() {
             </Link>
           );
         })}
+
+        {/* Calendar production filters */}
+        {pathname === "/calendar" && !collapsed && calProductions.length > 0 && (
+          <>
+            <div className="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Productions</div>
+            {calProductions.map(p => {
+              const on = !hiddenProdIds.has(p.id);
+              return (
+                <button key={p.id} onClick={() => toggleCalProd(p.id)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors hover:bg-white/5"
+                  style={{ color: on ? "white" : "var(--psg-muted)" }}>
+                  <span className="w-1.5 h-1.5 rounded-sm shrink-0 transition-opacity" style={{ backgroundColor: p.color, opacity: on ? 1 : 0.3 }} />
+                  <span className="truncate">{p.name}</span>
+                </button>
+              );
+            })}
+
+            <div className="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Show</div>
+            {EVENT_TYPE_FILTERS.map(t => {
+              const on = !hiddenTypeKeys.has(t.key);
+              return (
+                <button key={t.key} onClick={() => toggleCalType(t.key)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors hover:bg-white/5"
+                  style={{ color: on ? "white" : "var(--psg-muted)" }}>
+                  <span className="w-1.5 h-1.5 rounded-sm shrink-0 transition-opacity" style={{ backgroundColor: t.color, opacity: on ? 1 : 0.3 }} />
+                  <span className="truncate">{t.label}</span>
+                </button>
+              );
+            })}
+
+            {(hiddenProdIds.size > 0 || hiddenTypeKeys.size > 0) && (
+              <button onClick={showAll} className="w-full px-3 py-2 text-xs text-left transition-colors hover:text-white" style={{ color: "var(--psg-muted)" }}>
+                Show all
+              </button>
+            )}
+          </>
+        )}
       </nav>
 
       {/* Back link */}

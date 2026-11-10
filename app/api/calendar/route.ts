@@ -25,7 +25,15 @@ export async function GET() {
 
   const productions = await prisma.production.findMany({
     where,
-    select: { id: true, name: true, keyDates: { orderBy: { startDate: "asc" } } },
+    select: {
+      id: true, name: true,
+      keyDates: { orderBy: { startDate: "asc" } },
+      tourStops: {
+        where: { OR: [{ startDate: { not: null } }, { loadInDate: { not: null } }, { performanceStart: { not: null } }] },
+        orderBy: { stopNumber: "asc" },
+        select: { id: true, stopNumber: true, loadInDate: true, startDate: true, endDate: true, performanceStart: true, performanceEnd: true, notes: true, venue: { select: { name: true, city: true } } },
+      },
+    },
     orderBy: { createdAt: "asc" },
   });
 
@@ -43,7 +51,7 @@ export async function GET() {
         id: `kd-${kd.id}`,
         type: "key_date",
         kdType: kd.type,
-        title: kd.label || KEY_DATE_LABELS[kd.type] || kd.type,
+        title: `${prod.name} — ${kd.label || KEY_DATE_LABELS[kd.type] || kd.type}`,
         production: prod.name,
         productionId: prod.id,
         startDate: kd.startDate,
@@ -52,6 +60,24 @@ export async function GET() {
         color,
         href: `/productions/${prod.id}?section=schedule`,
       });
+    });
+  });
+
+  productions.forEach((prod, idx) => {
+    const color = PROD_COLORS[idx % PROD_COLORS.length];
+    prod.tourStops.forEach(stop => {
+      const venueName = stop.venue?.name ?? "Unknown Venue";
+      const city = stop.venue?.city ? ` · ${stop.venue.city}` : "";
+      const href = `/productions/${prod.id}?section=tour`;
+      if (stop.loadInDate) {
+        events.push({ id: `tour-li-${stop.id}`, type: "tour_stop", title: `${prod.name} — Load in · ${venueName}${city}`, production: prod.name, productionId: prod.id, startDate: stop.loadInDate, endDate: null, notes: stop.notes, color, href });
+      }
+      if (stop.performanceStart) {
+        events.push({ id: `tour-perf-${stop.id}`, type: "tour_stop", title: `${prod.name} · ${venueName}${city}`, production: prod.name, productionId: prod.id, startDate: stop.performanceStart, endDate: stop.performanceEnd, notes: stop.notes, color, href });
+      }
+      if (stop.endDate) {
+        events.push({ id: `tour-go-${stop.id}`, type: "tour_stop", title: `${prod.name} — Get out · ${venueName}${city}`, production: prod.name, productionId: prod.id, startDate: stop.endDate, endDate: null, notes: stop.notes, color, href });
+      }
     });
   });
 

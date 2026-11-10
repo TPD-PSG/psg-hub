@@ -73,7 +73,12 @@ export default function VenuesPage() {
   const [editContact, setEditContact] = useState<VenueContact | null>(null);
   const [contactForm, setContactForm] = useState(BLANK_CONTACT);
   const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<{ parsed: boolean; error?: string } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importResults, setImportResults] = useState<{ name: string; ok: boolean; error?: string }[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { reload(); }, []);
 
@@ -94,10 +99,11 @@ export default function VenuesPage() {
     await reload();
   }
 
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+
   async function deleteVenue(id: number) {
-    if (!confirm("Delete this venue?")) return;
     await fetch(`/api/venues/${id}`, { method: "DELETE" });
-    setSelected(null); await reload();
+    setSelected(null); setConfirmDelete(null); await reload();
   }
 
   async function saveContact(e: React.FormEvent) {
@@ -120,17 +126,61 @@ export default function VenuesPage() {
   async function uploadTechSpec(e: React.ChangeEvent<HTMLInputElement>) {
     if (!selected || !e.target.files?.[0]) return;
     setUploading(true);
+    setUploadStatus(null);
     const fd = new FormData();
     fd.append("file", e.target.files[0]);
-    await fetch(`/api/venues/${selected.id}/tech-spec`, { method: "POST", body: fd });
+    const res = await fetch(`/api/venues/${selected.id}/tech-spec`, { method: "POST", body: fd });
+    const data = await res.json();
     setUploading(false);
+    setUploadStatus({ parsed: data.parsed, error: data.error });
     await reload();
+    setTimeout(() => setUploadStatus(null), 6000);
   }
 
   async function deleteTechSpec() {
     if (!selected) return;
     await fetch(`/api/venues/${selected.id}/tech-spec`, { method: "DELETE" });
     await reload();
+  }
+
+  async function importFromPDFs(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    e.target.value = "";
+    setImporting(true);
+    setImportError(null);
+    setImportResults(null);
+
+    if (files.length === 1) {
+      // Single file: use existing route and auto-select the venue
+      const fd = new FormData();
+      fd.append("file", files[0]);
+      const res = await fetch("/api/venues/import-pdf", { method: "POST", body: fd });
+      const data = res.ok || res.headers.get("content-type")?.includes("json") ? await res.json().catch(() => ({})) : {};
+      setImporting(false);
+      if (!res.ok) {
+        setImportError(data.error ?? "Import failed");
+        setTimeout(() => setImportError(null), 6000);
+      } else {
+        await reload();
+        setSelected(data.venue);
+        setDetailTab("stage");
+      }
+    } else {
+      // Multiple files: batch route
+      const fd = new FormData();
+      files.forEach(f => fd.append("files", f));
+      const res = await fetch("/api/venues/import-pdfs", { method: "POST", body: fd });
+      const data = res.ok ? await res.json().catch(() => ({})) : {};
+      setImporting(false);
+      if (!res.ok) {
+        setImportError(data.error ?? "Import failed");
+        setTimeout(() => setImportError(null), 6000);
+      } else {
+        setImportResults((data.results ?? []).map((r: { ok: boolean; name: string; error?: string }) => ({ name: r.name, ok: r.ok, error: (r as { ok: false; name: string; error: string }).error })));
+        await reload();
+      }
+    }
   }
 
   const filtered = venues.filter((v) => {
@@ -149,8 +199,36 @@ export default function VenuesPage() {
           <h1 className="text-2xl font-bold">Venues</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{venues.length} venue{venues.length !== 1 ? "s" : ""} in directory</p>
         </div>
-        <button onClick={() => { setEditVenue(null); setVenueForm(BLANK_VENUE); setShowForm(true); }} className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Venue</button>
+        <div className="flex items-center gap-2">
+          <input ref={importRef} type="file" accept=".pdf" multiple className="hidden" onChange={importFromPDFs} />
+          <button onClick={() => importRef.current?.click()} disabled={importing} className="px-4 py-2 rounded font-medium text-sm border" style={{ borderColor: "var(--psg-card-border)", color: importing ? "var(--psg-muted)" : "var(--psg-text)" }}>
+            {importing ? "⏳ Importing…" : "⬆ Import PDF(s)"}
+          </button>
+          {importError && <span className="text-xs" style={{ color: "#f87171" }}>{importError}</span>}
+          <button onClick={() => { setEditVenue(null); setVenueForm(BLANK_VENUE); setShowForm(true); }} className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Venue</button>
+        </div>
       </div>
+
+      {/* Bulk import results */}
+      {importResults && (
+        <div className="rounded-lg border p-4 space-y-2" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-white">
+              Import complete — {importResults.filter(r => r.ok).length} of {importResults.length} imported
+            </span>
+            <button onClick={() => setImportResults(null)} className="text-xs hover:text-white" style={{ color: "var(--psg-muted)" }}>Dismiss</button>
+          </div>
+          <div className="space-y-1">
+            {importResults.map((r, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <span>{r.ok ? "✓" : "✕"}</span>
+                <span style={{ color: r.ok ? "#10b981" : "#f87171" }}>{r.name}</span>
+                {!r.ok && r.error && <span style={{ color: "var(--psg-muted)" }}>— {r.error}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
@@ -206,7 +284,15 @@ export default function VenuesPage() {
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => { setEditVenue(selected); setVenueForm({ name: selected.name, type: selected.type, city: selected.city ?? "", address: selected.address ?? "", postcode: selected.postcode ?? "", phone: selected.phone ?? "", email: selected.email ?? "", website: selected.website ?? "", capacity: selected.capacity?.toString() ?? "", techNotes: selected.techNotes ?? "", notes: selected.notes ?? "" }); setShowForm(true); }}
                     className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
-                  <button onClick={() => deleteVenue(selected.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>
+                  {confirmDelete === selected.id ? (
+                    <span className="flex items-center gap-1">
+                      <span className="text-xs" style={{ color: "#f87171" }}>Sure?</span>
+                      <button onClick={() => deleteVenue(selected.id)} className="text-xs px-2 py-1 rounded" style={{ color: "#f87171", backgroundColor: "rgba(239,68,68,0.15)" }}>Yes, delete</button>
+                      <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Cancel</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setConfirmDelete(selected.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -242,19 +328,31 @@ export default function VenuesPage() {
                   {/* Tech spec doc */}
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Technical Specification Document</div>
+                    <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={uploadTechSpec} />
                     {selected.techSpecName ? (
-                      <div className="flex items-center gap-2 rounded p-2 text-sm" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
-                        <span className="flex-1 truncate">{selected.techSpecName}</span>
-                        <a href={`/api/venues/${selected.id}/tech-spec`} target="_blank" rel="noreferrer" className="text-xs px-2 py-0.5 rounded font-medium" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Download</a>
-                        <button onClick={deleteTechSpec} className="text-xs px-1.5 py-0.5 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 rounded p-2 text-sm" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+                          <span className="flex-1 truncate">{selected.techSpecName}</span>
+                          <a href={`/api/venues/${selected.id}/tech-spec`} target="_blank" rel="noreferrer" className="text-xs px-2 py-0.5 rounded font-medium" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Download</a>
+                          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs px-2 py-0.5 rounded font-medium" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Re-import</button>
+                          <button onClick={deleteTechSpec} className="text-xs px-1.5 py-0.5 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
+                        </div>
+                        {uploading && <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>⏳ Parsing tech spec with AI — this may take a moment…</div>}
+                        {uploadStatus && !uploading && (uploadStatus.parsed
+                          ? <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#34d399" }}>✓ Tech spec parsed and fields populated</div>
+                          : <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>{uploadStatus.error ?? "File saved but could not be parsed — add ANTHROPIC_API_KEY to enable AI extraction"}</div>
+                        )}
                       </div>
                     ) : (
-                      <div>
-                        <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.xlsx,.xls" className="hidden" onChange={uploadTechSpec} />
+                      <div className="space-y-2">
                         <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs px-3 py-1.5 rounded border border-dashed" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-                          {uploading ? "Uploading…" : "Upload tech spec (PDF, Word)"}
+                          {uploading ? "Uploading…" : "Upload tech spec PDF"}
                         </button>
-                        {ts.general?.techSpecDocName && <div className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>Ref: {ts.general.techSpecDocName}</div>}
+                        {uploading && <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>⏳ Parsing tech spec with AI — this may take a moment…</div>}
+                        {uploadStatus && !uploading && (uploadStatus.parsed
+                          ? <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#34d399" }}>✓ Tech spec parsed and fields populated</div>
+                          : <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>{uploadStatus.error ?? "File saved but could not be parsed — add ANTHROPIC_API_KEY to enable AI extraction"}</div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -298,118 +396,103 @@ export default function VenuesPage() {
 
               {/* STAGE TAB */}
               {detailTab === "stage" && (
-                <div className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Load In</div>
-                  <SpecRow label="Door width" value={ts.loadIn?.doorWidthMm ? `${ts.loadIn.doorWidthMm}mm` : null} />
-                  <SpecRow label="Door height" value={ts.loadIn?.doorHeightMm ? `${ts.loadIn.doorHeightMm}mm` : null} />
-                  <SpecRow label="Door notes" value={ts.loadIn?.doorNotes} />
-                  <SpecRow label="Wagons at a time" value={ts.loadIn?.wagonsAtATime} />
-                  <SpecRow label="Wagon parking" value={ts.loadIn?.wagonParking} />
-                  <SpecRow label="Parking notes" value={ts.loadIn?.parkingNotes} />
-
-                  <div className="text-xs font-semibold uppercase tracking-widest mt-4 mb-3" style={{ color: "var(--psg-muted)" }}>Stage</div>
-                  <SpecRow label="Flat or raked" value={ts.stage?.flatOrRaked} />
-                  <SpecRow label="Proscenium width" value={ts.stage?.proscWidthM} />
-                  <SpecRow label="Proscenium height" value={ts.stage?.proscHeightM} />
-                  <SpecRow label="Depth (SL to back wall)" value={ts.stage?.depthToBackWall} />
-                  <SpecRow label="Setting line ref" value={ts.stage?.settingLineRef} />
-                  <SpecRow label="Forestage depth" value={ts.stage?.forestageDepth} />
-                  <SpecRow label="Stage width (wall to wall)" value={ts.stage?.stageWidthWallToWall} />
-                  <SpecRow label="CL to SR" value={ts.stage?.clToSR} />
-                  <SpecRow label="CL to SL" value={ts.stage?.clToSL} />
-                  <SpecRow label="Fly floor height (u/s)" value={ts.stage?.flyFloorHeight} />
-                  <SpecRow label="Fly floor distance" value={ts.stage?.flyFloorDistance} />
-                  <SpecRow label="Height to grid" value={ts.stage?.heightToGrid} />
-                  <SpecRow label="Height stage to aud" value={ts.stage?.heightToAud} />
-                  <SpecRow label="Power" value={ts.stage?.power} />
-                  <SpecRow label="Crossover" value={ts.stage?.crossover} />
+                <div className="p-4 space-y-4">
+                  {ts.loadIn && Object.values(ts.loadIn).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Load In</div>
+                      {Object.entries(ts.loadIn).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {ts.stage && Object.values(ts.stage).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Stage</div>
+                      {Object.entries(ts.stage).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {!ts.loadIn && !ts.stage && <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No stage data — upload a tech spec PDF to populate.</div>}
                 </div>
               )}
 
               {/* RIGGING TAB */}
               {detailTab === "rigging" && (
-                <div className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Fly System</div>
-                  <SpecRow label="CWT / Flying info" value={ts.rigging?.cwtInfo} />
-                  <SpecRow label="First available bar" value={ts.rigging?.firstBar} />
-                  <SpecRow label="SL to last bar" value={ts.rigging?.settingLineToLastBar} />
-                  <SpecRow label="First to last bar" value={ts.rigging?.firstToLastBar} />
-                  <SpecRow label="Bar width" value={ts.rigging?.barWidth} />
-                  <SpecRow label="Bar centres" value={ts.rigging?.barCentres} />
-                  <SpecRow label="SWL per bar" value={ts.rigging?.swl} />
-                  <SpecRow label="Max trim height" value={ts.rigging?.maxTrimHeight} />
-                  <SpecRow label="Standard trim height" value={ts.rigging?.standardTrimHeight} />
-                  <SpecRow label="Notes" value={ts.rigging?.gridRiggingPoints} />
-
-                  <div className="text-xs font-semibold uppercase tracking-widest mt-4 mb-3" style={{ color: "var(--psg-muted)" }}>FOH & Truss</div>
-                  <SpecRow label="Advance truss in house?" value={ts.rigging?.advanceTrussInHouse} />
-                  <SpecRow label="Advance truss points" value={ts.rigging?.advanceTrussPoints} />
-                  <SpecRow label="FOH notes" value={ts.rigging?.fohNotes} />
-                  <SpecRow label="Rigging equipment" value={ts.rigging?.riggingEquipment} />
-                  <SpecRow label="Access equipment" value={ts.rigging?.accessEquipment} />
-
-                  <div className="text-xs font-semibold uppercase tracking-widest mt-4 mb-3" style={{ color: "var(--psg-muted)" }}>Masking</div>
-                  <SpecRow label="Masking available?" value={ts.masking?.available} />
-                  <SpecRow label="Legs" value={ts.masking?.legs} />
-                  <SpecRow label="Borders" value={ts.masking?.borders} />
-                  <SpecRow label="Full blacks" value={ts.masking?.fullBlacks} />
+                <div className="p-4 space-y-4">
+                  {ts.rigging && Object.values(ts.rigging).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Rigging</div>
+                      {Object.entries(ts.rigging).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {ts.masking && Object.values(ts.masking).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Masking</div>
+                      {Object.entries(ts.masking).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {!ts.rigging && !ts.masking && <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No rigging data — upload a tech spec PDF to populate.</div>}
                 </div>
               )}
 
               {/* LX TAB */}
               {detailTab === "lx" && (
-                <div className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Lighting</div>
-                  <SpecRow label="LX desk" value={ts.lighting?.lxDesk} />
-                  <SpecRow label="Dimmers" value={ts.lighting?.dimmers} />
-                  <SpecRow label="Channels" value={ts.lighting?.channels} />
-                  <SpecRow label="Follow spots" value={ts.lighting?.followSpotPositions} />
-                  <SpecRow label="Followspot specs" value={ts.lighting?.followSpotSpecs} />
-                  <SpecRow label="Production desks" value={ts.lighting?.productionDesks} />
+                <div className="p-4 space-y-4">
+                  {ts.lighting && Object.values(ts.lighting).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Lighting</div>
+                      {Object.entries(ts.lighting).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {!ts.lighting && <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No lighting data — upload a tech spec PDF to populate.</div>}
                 </div>
               )}
 
               {/* SOUND TAB */}
               {detailTab === "sound" && (
-                <div className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Sound</div>
-                  <SpecRow label="Control desk" value={ts.sound?.controlDesk} />
-                  <SpecRow label="FOH mix location" value={ts.sound?.fohMixLocation} />
-                  <SpecRow label="Seats off sale" value={ts.sound?.seatsOffSale} />
-                  <SpecRow label="FOH PA" value={ts.sound?.fohPA} />
-                  <SpecRow label="Cable run to FOH" value={ts.sound?.cableRunToFOH} />
-                  <SpecRow label="Dedicated power" value={ts.sound?.dedicatedPower} />
+                <div className="p-4 space-y-4">
+                  {ts.sound && Object.values(ts.sound).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Sound</div>
+                      {Object.entries(ts.sound).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {!ts.sound && <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No sound data — upload a tech spec PDF to populate.</div>}
                 </div>
               )}
 
               {/* FACILITIES TAB */}
               {detailTab === "facilities" && (
-                <div className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Wardrobe</div>
-                  <SpecRow label="Location" value={ts.wardrobe?.location} />
-                  <SpecRow label="Size" value={ts.wardrobe?.size} />
-                  <SpecRow label="Laundry" value={ts.wardrobe?.laundry} />
-                  <SpecRow label="Quick change" value={ts.wardrobe?.quickChange} />
-                  <SpecRow label="WHAM room" value={ts.wardrobe?.whamRoom} />
-
-                  <div className="text-xs font-semibold uppercase tracking-widest mt-4 mb-3" style={{ color: "var(--psg-muted)" }}>Dressing Rooms</div>
-                  <SpecRow label="Details" value={ts.dressingRooms?.details} />
-
-                  <div className="text-xs font-semibold uppercase tracking-widest mt-4 mb-3" style={{ color: "var(--psg-muted)" }}>Comms & Stage Management</div>
-                  <SpecRow label="DSM location" value={ts.comms?.dsmLocation} />
-                  <SpecRow label="Comms" value={ts.comms?.comms} />
-                  <SpecRow label="Q lights" value={ts.comms?.qLights} />
-                  <SpecRow label="CCTV" value={ts.comms?.cctv} />
+                <div className="p-4 space-y-4">
+                  {ts.wardrobe && Object.values(ts.wardrobe).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Wardrobe</div>
+                      {Object.entries(ts.wardrobe).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {ts.dressingRooms && Object.values(ts.dressingRooms).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Dressing Rooms</div>
+                      {Object.entries(ts.dressingRooms).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {ts.comms && Object.values(ts.comms).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Comms</div>
+                      {Object.entries(ts.comms).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {!ts.wardrobe && !ts.dressingRooms && !ts.comms && <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No facilities data — upload a tech spec PDF to populate.</div>}
                 </div>
               )}
 
               {/* H&S TAB */}
               {detailTab === "hs" && (
-                <div className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Health & Safety</div>
-                  <SpecRow label="Live flame permitted?" value={ts.healthSafety?.liveFlame} />
-                  <SpecRow label="Blackout" value={ts.healthSafety?.blackout} />
-                  <SpecRow label="Safety curtain" value={ts.healthSafety?.safetyCurtain} />
+                <div className="p-4 space-y-4">
+                  {ts.healthSafety && Object.values(ts.healthSafety).some(Boolean) && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Health & Safety</div>
+                      {Object.entries(ts.healthSafety).map(([k, v]) => <SpecRow key={k} label={k} value={v as string} />)}
+                    </div>
+                  )}
+                  {!ts.healthSafety && <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No H&S data — upload a tech spec PDF to populate.</div>}
                 </div>
               )}
             </div>

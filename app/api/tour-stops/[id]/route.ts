@@ -14,8 +14,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     data: {
       venueId: body.venueId ? Number(body.venueId) : undefined,
       stopNumber: body.stopNumber != null ? Number(body.stopNumber) : undefined,
+      loadInDate: body.loadInDate !== undefined ? (body.loadInDate ? new Date(body.loadInDate) : null) : undefined,
       startDate: body.startDate !== undefined ? (body.startDate ? new Date(body.startDate) : null) : undefined,
       endDate: body.endDate !== undefined ? (body.endDate ? new Date(body.endDate) : null) : undefined,
+      performanceStart: body.performanceStart !== undefined ? (body.performanceStart ? new Date(body.performanceStart) : null) : undefined,
+      performanceEnd: body.performanceEnd !== undefined ? (body.performanceEnd ? new Date(body.performanceEnd) : null) : undefined,
       notes: body.notes !== undefined ? body.notes : undefined,
     },
     include: { venue: { select: { id: true, name: true, city: true } } },

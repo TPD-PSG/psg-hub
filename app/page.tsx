@@ -12,6 +12,8 @@ type Task = { id: number; title: string; status: string; dueDate: string | null;
 type Maintenance = { id: number; status: string; priority: string; title: string };
 type QuickLink = { id: number; label: string; url: string; icon: string };
 type Opportunity = { id: number; stage: string };
+type Invoice = { id: number; type: string; status: string; netAmount: number; vatAmount: number; dueDate: string | null };
+type SalesBrand = { id: number; stage: string };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -175,6 +177,10 @@ export default function HomePage() {
   const [news, setNews] = useState<string | null>(null);
   const [newsDismissed, setNewsDismissed] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [expenses, setExpenses] = useState<{ id: number; status: string; netAmount: number; vatAmount: number }[]>([]);
+  const [salesBrands, setSalesBrands] = useState<SalesBrand[]>([]);
+  const [salesTasksCount, setSalesTasksCount] = useState(0);
 
   useEffect(() => {
     fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d); });
@@ -183,6 +189,10 @@ export default function HomePage() {
     fetch("/api/quicklinks").then(r => r.json()).then(d => { if (Array.isArray(d)) setQuickLinks(d); });
     fetch("/api/settings").then(r => r.json()).then(d => { if (d?.news) setNews(d.news); });
     fetch("/api/opportunities").then(r => r.json()).then(d => { if (Array.isArray(d)) setOpportunities(d); });
+    fetch("/api/invoices").then(r => r.json()).then(d => { if (Array.isArray(d)) setInvoices(d); });
+    fetch("/api/expenses").then(r => r.json()).then(d => { if (Array.isArray(d)) setExpenses(d); });
+    fetch("/api/sales/brands").then(r => r.json()).then(d => { if (Array.isArray(d)) setSalesBrands(d); });
+    fetch("/api/sales/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setSalesTasksCount(d.filter((t: { completedAt: string | null }) => !t.completedAt).length); });
     try { if (localStorage.getItem("news-dismissed") === "true") setNewsDismissed(true); } catch {}
   }, []);
 
@@ -194,6 +204,10 @@ export default function HomePage() {
   const dueSoonTasks = tasks.filter(t => t.status !== "done" && t.dueDate && new Date(t.dueDate) >= now && new Date(t.dueDate) <= weekFromNow);
   const urgentMaint = maintenance.filter(m => m.priority === "urgent" && m.status !== "resolved");
   const openMaint = maintenance.filter(m => m.status !== "resolved");
+  const overdueInvoices = invoices.filter(i => i.status !== "paid" && i.dueDate && new Date(i.dueDate) < now);
+  const unpaidSales = invoices.filter(i => i.type === "sales" && i.status !== "paid");
+  const unpaidPurchases = invoices.filter(i => i.type === "purchase" && i.status !== "paid");
+  const fmt = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(n);
 
   // Upcoming productions — starting or ending in next 60 days
   const upcoming = productions
@@ -356,6 +370,38 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <CompactTile href="/bd" icon="📈" title="Pipeline"
               sub={(() => { const active = opportunities.filter(o => !["won","lost"].includes(o.stage)).length; return active > 0 ? `${active} active opportunit${active !== 1 ? "ies" : "y"}` : "No active opportunities"; })()} />
+          </div>
+        </>
+      )}
+
+      {canAccess(perms, "sales", role) && (
+        <>
+          <SectionHeading title="Sales" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <CompactTile href="/sales" icon="💡" title="Brands"
+              sub={(() => {
+                const active = salesBrands.filter(b => !["lost","paused"].includes(b.stage)).length;
+                return active > 0 ? `${active} active brand${active !== 1 ? "s" : ""}` : "No active brands";
+              })()} />
+            <CompactTile href="/sales?tab=tasks" icon="📋" title="Sales Tasks"
+              sub={salesTasksCount > 0 ? `${salesTasksCount} open task${salesTasksCount !== 1 ? "s" : ""}` : "All done"}
+              badge={salesTasksCount || undefined} />
+          </div>
+        </>
+      )}
+
+      {canAccess(perms, "finance", role) && (
+        <>
+          <SectionHeading title="Finance" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <CompactTile href="/finance" icon="🧾" title="Sales Invoices"
+              sub={unpaidSales.length > 0 ? `${unpaidSales.length} unpaid · ${fmt(unpaidSales.reduce((s, i) => s + i.netAmount + i.vatAmount, 0))}` : "All paid up"}
+              badge={overdueInvoices.filter(i => i.type === "sales").length || undefined} />
+            <CompactTile href="/finance?tab=purchase" icon="💸" title="Purchase Invoices"
+              sub={unpaidPurchases.length > 0 ? `${unpaidPurchases.length} to pay · ${fmt(unpaidPurchases.reduce((s, i) => s + i.netAmount + i.vatAmount, 0))}` : "Nothing outstanding"}
+              badge={overdueInvoices.filter(i => i.type === "purchase").length || undefined} />
+            <CompactTile href="/finance?tab=expenses" icon="🗂️" title="Expenses"
+              sub={(() => { const unpaid = expenses.filter(e => e.status !== "paid"); return unpaid.length > 0 ? `${unpaid.length} pending · ${fmt(unpaid.reduce((s, e) => s + e.netAmount + e.vatAmount, 0))}` : "Nothing pending"; })()} />
           </div>
         </>
       )}

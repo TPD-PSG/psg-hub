@@ -328,20 +328,22 @@ export function exportHaulageXLSX(title: string, movements: MovementRow[], inclu
 
 // ── Tour Schedule ─────────────────────────────────────────────────────────────
 
-type TourStopRow = { stopNumber: number; venue: { name: string; city: string | null; capacity: number | null } | null; startDate: string | null; endDate: string | null; notes: string | null };
+type TourStopRow = { stopNumber: number; venue: { name: string; city: string | null; capacity: number | null } | null; loadInDate: string | null; performanceStart: string | null; performanceEnd: string | null; endDate: string | null; notes: string | null };
 
 export async function exportTourSchedulePDF(productionName: string, stops: TourStopRow[]) {
   const logo = await fetchLogoAsset();
   const doc = basePDF(`Tour Schedule — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
   autoTable(doc, {
     startY: 32,
-    head: [["Stop", "Venue", "City", "Capacity", "Start Date", "End Date", "Notes"]],
+    head: [["Stop", "Venue", "City", "Capacity", "Load In", "First Performance", "Last Performance", "Get Out", "Notes"]],
     body: stops.map((s) => [
       String(s.stopNumber),
       s.venue?.name ?? "",
       s.venue?.city ?? "",
       s.venue?.capacity != null ? String(s.venue.capacity) : "",
-      s.startDate ? fmtDate(s.startDate) : "",
+      s.loadInDate ? fmtDate(s.loadInDate) : "",
+      s.performanceStart ? fmtDate(s.performanceStart) : "",
+      s.performanceEnd ? fmtDate(s.performanceEnd) : "",
       s.endDate ? fmtDate(s.endDate) : "",
       s.notes ?? "",
     ]),
@@ -355,13 +357,15 @@ export async function exportTourSchedulePDF(productionName: string, stops: TourS
 
 export function exportTourScheduleXLSX(productionName: string, stops: TourStopRow[]) {
   const rows = [
-    ["Stop", "Venue", "City", "Capacity", "Start Date", "End Date", "Notes"],
+    ["Stop", "Venue", "City", "Capacity", "Load In", "First Performance", "Last Performance", "Get Out", "Notes"],
     ...stops.map((s) => [
       s.stopNumber,
       s.venue?.name ?? "",
       s.venue?.city ?? "",
       s.venue?.capacity ?? "",
-      s.startDate ? fmtDate(s.startDate) : "",
+      s.loadInDate ? fmtDate(s.loadInDate) : "",
+      s.performanceStart ? fmtDate(s.performanceStart) : "",
+      s.performanceEnd ? fmtDate(s.performanceEnd) : "",
       s.endDate ? fmtDate(s.endDate) : "",
       s.notes ?? "",
     ]),

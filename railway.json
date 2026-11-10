@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "npx prisma migrate deploy && node prisma/seed.js && node_modules/.bin/next start",
+    "startCommand": "npx prisma migrate deploy && node prisma/seed.js && (while true; do node scripts/backup.js; sleep 3600; done) & node_modules/.bin/next start",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

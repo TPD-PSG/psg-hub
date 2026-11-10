@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
-import { writeFile } from "fs/promises";
+import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
 const prisma = new PrismaClient();
+
+// Store avatars on the persistent volume so they survive redeploys
+const AVATAR_DIR = process.env.NODE_ENV === "production"
+  ? "/data/avatars"
+  : join(process.cwd(), "public", "avatars");
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -22,10 +27,10 @@ export async function POST(req: Request) {
 
   const bytes = await file.arrayBuffer();
   const filename = `${userId}.${ext}`;
-  const path = join(process.cwd(), "public", "avatars", filename);
-  await writeFile(path, Buffer.from(bytes));
+  await mkdir(AVATAR_DIR, { recursive: true });
+  await writeFile(join(AVATAR_DIR, filename), Buffer.from(bytes));
 
-  const avatarUrl = `/avatars/${filename}`;
+  const avatarUrl = `/api/avatars/${filename}`;
   await prisma.user.update({ where: { id: userId }, data: { avatarUrl } });
 
   return NextResponse.json({ avatarUrl });

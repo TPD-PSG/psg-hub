@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, resetRateLimit } from "@/lib/rate-limit";
+import { headers } from "next/headers";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
@@ -13,12 +15,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
+
+        const headersList = await headers();
+        const ip = headersList.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+        const { allowed, retryAfterMs } = checkRateLimit(ip);
+        if (!allowed) {
+          const minutes = Math.ceil(retryAfterMs / 60000);
+          throw new Error(`Too many login attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`);
+        }
+
         const user = await prisma.user.findUnique({
           where: { email: String(credentials.email) },
         });
         if (!user) return null;
         const valid = await compare(String(credentials.password), user.passwordHash);
         if (!valid) return null;
+
+        resetRateLimit(ip);
         return { id: String(user.id), name: user.name, email: user.email, role: user.role, permissions: user.permissions, avatarUrl: user.avatarUrl ?? null };
       },
     }),

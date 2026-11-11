@@ -245,6 +245,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [allVenues, setAllVenues] = useState<VenueRef[]>([]);
   const [showTourForm, setShowTourForm] = useState(false);
   const [editStop, setEditStop] = useState<TourStop | null>(null);
+  const [expandedStopNotes, setExpandedStopNotes] = useState<Set<number>>(new Set());
+  const [stopNoteDrafts, setStopNoteDrafts] = useState<Record<number, string>>({});
   const BLANK_STOP = { venueId: "", loadInDate: "", startDate: "", endDate: "", performanceStart: "", performanceEnd: "", notes: "" };
   const [stopForm, setStopForm] = useState(BLANK_STOP);
   const [venueSearch, setVenueSearch] = useState("");
@@ -1607,46 +1609,88 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           )}
 
           <div className="space-y-2">
-            {tourStops.map((stop, i) => (
-              <div key={stop.id} className="flex items-start gap-4 rounded-lg border p-4" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white" style={{ backgroundColor: "var(--psg-blue)" }}>
-                  {stop.stopNumber}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white">{stop.venue.name}</p>
-                  <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
-                    {stop.venue.city ?? ""}
-                    {stop.venue.capacity ? ` · ${stop.venue.capacity.toLocaleString()} cap` : ""}
-                  </p>
-                  {stop.loadInDate && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Load in: {fmtDate(stop.loadInDate)}</p>
-                  )}
-                  {(stop.performanceStart || stop.performanceEnd) && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
-                      Performances: {stop.performanceStart ? fmtDate(stop.performanceStart) : "?"}
-                      {stop.performanceEnd && stop.performanceEnd !== stop.performanceStart ? ` → ${fmtDate(stop.performanceEnd)}` : ""}
-                    </p>
-                  )}
-                  {stop.endDate && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Get out: {fmtDate(stop.endDate)}</p>
-                  )}
-                  {stop.notes && (
-                    <div className="mt-2 rounded px-2.5 py-2 text-xs whitespace-pre-wrap" style={{ backgroundColor: "rgba(255,255,255,0.04)", color: "var(--psg-muted)", borderLeft: "2px solid var(--psg-card-border)" }}>
-                      {stop.notes}
+            {tourStops.map((stop) => {
+              const notesOpen = expandedStopNotes.has(stop.id);
+              const draft = stopNoteDrafts[stop.id] ?? stop.notes ?? "";
+              const toggleNotes = () => {
+                setExpandedStopNotes(prev => {
+                  const next = new Set(prev);
+                  if (next.has(stop.id)) { next.delete(stop.id); } else {
+                    next.add(stop.id);
+                    setStopNoteDrafts(d => ({ ...d, [stop.id]: stop.notes ?? "" }));
+                  }
+                  return next;
+                });
+              };
+              const saveNotes = async () => {
+                const val = stopNoteDrafts[stop.id] ?? stop.notes ?? "";
+                if (val === (stop.notes ?? "")) return;
+                await fetch(`/api/tour-stops/${stop.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notes: val || null }) });
+                reloadTourStops();
+              };
+              return (
+                <div key={stop.id} className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+                  {/* Main row */}
+                  <div className="flex items-start gap-4 p-4">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white" style={{ backgroundColor: "var(--psg-blue)" }}>
+                      {stop.stopNumber}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white">{stop.venue.name}</p>
+                      <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
+                        {stop.venue.city ?? ""}
+                        {stop.venue.capacity ? ` · ${stop.venue.capacity.toLocaleString()} cap` : ""}
+                      </p>
+                      {stop.loadInDate && (
+                        <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Load in: {fmtDate(stop.loadInDate)}</p>
+                      )}
+                      {(stop.performanceStart || stop.performanceEnd) && (
+                        <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                          Performances: {stop.performanceStart ? fmtDate(stop.performanceStart) : "?"}
+                          {stop.performanceEnd && stop.performanceEnd !== stop.performanceStart ? ` → ${fmtDate(stop.performanceEnd)}` : ""}
+                        </p>
+                      )}
+                      {stop.endDate && (
+                        <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Get out: {fmtDate(stop.endDate)}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={toggleNotes}
+                        className="text-xs px-2 py-1 rounded border hover:bg-white/5 transition-colors flex items-center gap-1"
+                        style={{ borderColor: "var(--psg-card-border)", color: notesOpen ? "white" : "var(--psg-muted)" }}
+                        title={notesOpen ? "Close notes" : "Open notes"}
+                      >
+                        Notes {stop.notes ? "●" : ""} {notesOpen ? "▲" : "▼"}
+                      </button>
+                      <button onClick={() => {
+                        setEditStop(stop);
+                        setStopForm({ venueId: String(stop.venueId), loadInDate: stop.loadInDate ? stop.loadInDate.slice(0, 10) : "", startDate: stop.startDate ? stop.startDate.slice(0, 10) : "", endDate: stop.endDate ? stop.endDate.slice(0, 10) : "", performanceStart: stop.performanceStart ? stop.performanceStart.slice(0, 10) : "", performanceEnd: stop.performanceEnd ? stop.performanceEnd.slice(0, 10) : "", notes: stop.notes ?? "" });
+                        setVenueSearch(`${stop.venue.name}${stop.venue.city ? " · " + stop.venue.city : ""}`);
+                        setShowTourForm(true);
+                      }} className="text-xs px-2 py-1 rounded border hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
+                      <button onClick={() => deleteStop(stop.id)} className="text-xs px-2 py-1 rounded border hover:bg-red-900/20 text-red-400" style={{ borderColor: "rgba(248,113,113,0.3)" }}>Remove</button>
+                    </div>
+                  </div>
+                  {/* Notes dropdown */}
+                  {notesOpen && (
+                    <div className="px-4 pb-4" style={{ borderTop: "1px solid var(--psg-card-border)" }}>
+                      <p className="text-xs pt-3 mb-1.5 font-medium" style={{ color: "var(--psg-muted)" }}>Notes</p>
+                      <textarea
+                        rows={5}
+                        className="w-full text-sm rounded px-3 py-2 resize-y"
+                        style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--psg-card-border)", color: "white", outline: "none" }}
+                        placeholder="Venue-specific show information, special requirements, local contacts…"
+                        value={draft}
+                        onChange={e => setStopNoteDrafts(d => ({ ...d, [stop.id]: e.target.value }))}
+                        onBlur={saveNotes}
+                      />
+                      <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>Auto-saves when you click away</p>
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => {
-                    setEditStop(stop);
-                    setStopForm({ venueId: String(stop.venueId), loadInDate: stop.loadInDate ? stop.loadInDate.slice(0, 10) : "", startDate: stop.startDate ? stop.startDate.slice(0, 10) : "", endDate: stop.endDate ? stop.endDate.slice(0, 10) : "", performanceStart: stop.performanceStart ? stop.performanceStart.slice(0, 10) : "", performanceEnd: stop.performanceEnd ? stop.performanceEnd.slice(0, 10) : "", notes: stop.notes ?? "" });
-                    setVenueSearch(`${stop.venue.name}${stop.venue.city ? " · " + stop.venue.city : ""}`);
-                    setShowTourForm(true);
-                  }} className="text-xs px-2 py-1 rounded border hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
-                  <button onClick={() => deleteStop(stop.id)} className="text-xs px-2 py-1 rounded border hover:bg-red-900/20 text-red-400" style={{ borderColor: "rgba(248,113,113,0.3)" }}>Remove</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

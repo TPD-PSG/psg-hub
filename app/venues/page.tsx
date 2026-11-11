@@ -77,6 +77,8 @@ export default function VenuesPage() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importResults, setImportResults] = useState<{ name: string; ok: boolean; error?: string }[] | null>(null);
+  const [importDrag, setImportDrag] = useState(false);
+  const [techSpecDrag, setTechSpecDrag] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -123,18 +125,40 @@ export default function VenuesPage() {
     await reload();
   }
 
-  async function uploadTechSpec(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!selected || !e.target.files?.[0]) return;
+  async function uploadTechSpecFile(file: File) {
+    if (!selected) return;
     setUploading(true);
     setUploadStatus(null);
     const fd = new FormData();
-    fd.append("file", e.target.files[0]);
+    fd.append("file", file);
     const res = await fetch(`/api/venues/${selected.id}/tech-spec`, { method: "POST", body: fd });
     const data = await res.json();
     setUploading(false);
     setUploadStatus({ parsed: data.parsed, error: data.error });
     await reload();
     setTimeout(() => setUploadStatus(null), 6000);
+  }
+
+  async function uploadTechSpec(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.[0]) await uploadTechSpecFile(e.target.files[0]);
+  }
+
+  function onTechSpecDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setTechSpecDrag(false);
+    const file = Array.from(e.dataTransfer.files).find(f => f.type === "application/pdf");
+    if (file) uploadTechSpecFile(file);
+  }
+
+  function onImportDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setImportDrag(false);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type === "application/pdf");
+    if (!files.length) return;
+    const dt = new DataTransfer();
+    files.forEach(f => dt.items.add(f));
+    const fakeEvent = { target: { files: dt.files, value: "" } } as unknown as React.ChangeEvent<HTMLInputElement>;
+    importFromPDFs(fakeEvent);
   }
 
   async function deleteTechSpec() {
@@ -199,11 +223,23 @@ export default function VenuesPage() {
           <h1 className="text-2xl font-bold">Venues</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{venues.length} venue{venues.length !== 1 ? "s" : ""} in directory</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <input ref={importRef} type="file" accept=".pdf" multiple className="hidden" onChange={importFromPDFs} />
-          <button onClick={() => importRef.current?.click()} disabled={importing} className="px-4 py-2 rounded font-medium text-sm border" style={{ borderColor: "var(--psg-card-border)", color: importing ? "var(--psg-muted)" : "var(--psg-text)" }}>
-            {importing ? "⏳ Importing…" : "⬆ Import PDF(s)"}
-          </button>
+          <div
+            onDragOver={e => { e.preventDefault(); setImportDrag(true); }}
+            onDragLeave={() => setImportDrag(false)}
+            onDrop={onImportDrop}
+            onClick={() => !importing && importRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 rounded font-medium text-sm border cursor-pointer select-none transition-colors"
+            style={{
+              borderColor: importDrag ? "var(--psg-blue)" : "var(--psg-card-border)",
+              borderStyle: "dashed",
+              color: importing ? "var(--psg-muted)" : importDrag ? "var(--psg-blue)" : "var(--psg-text)",
+              backgroundColor: importDrag ? "rgba(61,68,212,0.08)" : undefined,
+            }}
+          >
+            {importing ? "⏳ Importing…" : importDrag ? "Drop PDF(s) here" : "⬆ Import PDF(s)"}
+          </div>
           {importError && <span className="text-xs" style={{ color: "#f87171" }}>{importError}</span>}
           <button onClick={() => { setEditVenue(null); setVenueForm(BLANK_VENUE); setShowForm(true); }} className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Venue</button>
         </div>
@@ -345,9 +381,20 @@ export default function VenuesPage() {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs px-3 py-1.5 rounded border border-dashed" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-                          {uploading ? "Uploading…" : "Upload tech spec PDF"}
-                        </button>
+                        <div
+                          onDragOver={e => { e.preventDefault(); setTechSpecDrag(true); }}
+                          onDragLeave={() => setTechSpecDrag(false)}
+                          onDrop={onTechSpecDrop}
+                          onClick={() => !uploading && fileRef.current?.click()}
+                          className="flex items-center justify-center text-xs px-3 py-4 rounded border border-dashed cursor-pointer transition-colors"
+                          style={{
+                            borderColor: techSpecDrag ? "var(--psg-blue)" : "var(--psg-card-border)",
+                            color: uploading ? "var(--psg-muted)" : techSpecDrag ? "var(--psg-blue)" : "var(--psg-muted)",
+                            backgroundColor: techSpecDrag ? "rgba(61,68,212,0.08)" : undefined,
+                          }}
+                        >
+                          {uploading ? "Uploading…" : techSpecDrag ? "Drop PDF here" : "⬆ Drag & drop or click to upload tech spec PDF"}
+                        </div>
                         {uploading && <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>⏳ Parsing tech spec with AI — this may take a moment…</div>}
                         {uploadStatus && !uploading && (uploadStatus.parsed
                           ? <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#34d399" }}>✓ Tech spec parsed and fields populated</div>

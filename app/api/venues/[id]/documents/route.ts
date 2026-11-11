@@ -25,12 +25,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 
-  const allowed = ["application/pdf", "image/png", "image/jpeg", "image/webp", "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
-  if (!allowed.includes(file.type)) {
-    return NextResponse.json({ error: "File type not supported" }, { status: 400 });
-  }
-
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString("base64");
 

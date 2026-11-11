@@ -86,7 +86,7 @@ export default function VenuesPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [selected, setSelected] = useState<Venue | null>(null);
-  const [detailTab, setDetailTab] = useState<"info" | "stage" | "rigging" | "lx" | "sound" | "facilities" | "hs">("info");
+  const [detailTab, setDetailTab] = useState<"info" | "stage" | "rigging" | "lx" | "sound" | "facilities" | "hs" | "docs">("info");
   const [showForm, setShowForm] = useState(false);
   const [editVenue, setEditVenue] = useState<Venue | null>(null);
   const [venueForm, setVenueForm] = useState(BLANK_VENUE);
@@ -483,11 +483,11 @@ export default function VenuesPage() {
 
             {/* Detail tabs */}
             <div className="flex border-b overflow-x-auto" style={{ borderColor: "var(--psg-card-border)" }}>
-              {(["info", "stage", "rigging", "lx", "sound", "facilities", "hs"] as const).map((t) => (
+              {(["info", "stage", "rigging", "lx", "sound", "facilities", "hs", "docs"] as const).map((t) => (
                 <button key={t} onClick={() => setDetailTab(t)}
                   className="px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors"
                   style={detailTab === t ? { borderColor: "var(--psg-blue)", color: "var(--psg-text)" } : { borderColor: "transparent", color: "var(--psg-muted)" }}>
-                  {t === "info" ? "Info" : t === "stage" ? "Stage" : t === "rigging" ? "Rigging" : t === "lx" ? "LX" : t === "sound" ? "Sound" : t === "facilities" ? "Facilities" : "H&S"}
+                  {t === "info" ? "Info" : t === "stage" ? "Stage" : t === "rigging" ? "Rigging" : t === "lx" ? "LX" : t === "sound" ? "Sound" : t === "facilities" ? "Facilities" : t === "hs" ? "H&S" : `Documents${docs.length ? ` (${docs.length})` : ""}`}
                 </button>
               ))}
             </div>
@@ -577,39 +577,6 @@ export default function VenuesPage() {
                         ))}
                       </div>
                     )}
-                  </div>
-
-                  {/* Documents */}
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Documents</div>
-                    <input ref={docsRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp" onChange={e => { if (e.target.files?.[0]) { uploadDoc(e.target.files[0]); e.target.value = ""; } }} />
-                    {docs.length > 0 && (
-                      <div className="space-y-1 mb-2">
-                        {docs.map(doc => (
-                          <div key={doc.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
-                            <span className="text-base">{doc.mime === "application/pdf" ? "📄" : doc.mime.startsWith("image/") ? "🖼️" : "📝"}</span>
-                            <span className="flex-1 truncate text-xs">{doc.name}</span>
-                            <a href={`/api/venue-documents/${doc.id}`} target="_blank" rel="noreferrer" className="text-xs px-2 py-0.5 rounded font-medium shrink-0" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Download</a>
-                            <button onClick={() => deleteDoc(doc.id)} className="text-xs px-1.5 py-0.5 rounded shrink-0" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {docsUploading && docsPct !== null && <div className="mb-2"><UploadProgress pct={docsPct} label="Uploading…" /></div>}
-                    <div
-                      onDragOver={e => { e.preventDefault(); setDocsDrag(true); }}
-                      onDragLeave={() => setDocsDrag(false)}
-                      onDrop={onDocsDrop}
-                      onClick={() => !docsUploading && docsRef.current?.click()}
-                      className="flex items-center justify-center text-xs px-3 py-3 rounded border border-dashed cursor-pointer transition-colors"
-                      style={{
-                        borderColor: docsDrag ? "var(--psg-blue)" : "var(--psg-card-border)",
-                        color: docsUploading ? "var(--psg-muted)" : docsDrag ? "var(--psg-blue)" : "var(--psg-muted)",
-                        backgroundColor: docsDrag ? "rgba(61,68,212,0.08)" : undefined,
-                      }}
-                    >
-                      {docsUploading ? "Uploading…" : docsDrag ? "Drop file here" : "⬆ Drag & drop or click to add document"}
-                    </div>
                   </div>
 
                   {/* General notes */}
@@ -721,6 +688,69 @@ export default function VenuesPage() {
                     </div>
                   )}
                   {!ts.healthSafety && <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No H&S data — upload a tech spec PDF to populate.</div>}
+                </div>
+              )}
+
+              {/* DOCUMENTS TAB */}
+              {detailTab === "docs" && (
+                <div className="p-4 space-y-3">
+                  <input ref={docsRef} type="file" className="hidden" onChange={e => { if (e.target.files?.[0]) { uploadDoc(e.target.files[0]); e.target.value = ""; } }} />
+                  {docs.length > 0 && (
+                    <div className="space-y-1">
+                      {docs.map(doc => {
+                        const icon = doc.mime === "application/pdf" ? "📄"
+                          : doc.mime.startsWith("image/") ? "🖼️"
+                          : doc.mime.startsWith("video/") ? "🎬"
+                          : doc.mime.startsWith("audio/") ? "🎵"
+                          : doc.mime.includes("spreadsheet") || doc.mime.includes("excel") || doc.mime.includes("csv") ? "📊"
+                          : doc.mime.includes("presentation") || doc.mime.includes("powerpoint") ? "📽️"
+                          : doc.mime.includes("zip") || doc.mime.includes("compressed") ? "🗜️"
+                          : "📝";
+                        const ext = doc.name.includes(".") ? doc.name.split(".").pop()?.toUpperCase() : null;
+                        return (
+                          <div key={doc.id} className="flex items-center gap-3 rounded-lg px-3 py-2.5 group" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid var(--psg-card-border)" }}>
+                            <span className="text-xl shrink-0">{icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white truncate">{doc.name}</p>
+                              <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
+                                {ext && <span className="mr-2">{ext}</span>}
+                                {new Date(doc.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                              </p>
+                            </div>
+                            <a href={`/api/venue-documents/${doc.id}`} target="_blank" rel="noreferrer"
+                              className="text-xs px-2.5 py-1 rounded font-medium shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.12)" }}>
+                              Download
+                            </a>
+                            <button onClick={() => deleteDoc(doc.id)}
+                              className="text-xs px-1.5 py-1 rounded shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900/20 text-red-400">
+                              ✕
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {docsUploading && docsPct !== null && <UploadProgress pct={docsPct} label="Uploading…" />}
+                  <div
+                    onDragOver={e => { e.preventDefault(); setDocsDrag(true); }}
+                    onDragLeave={() => setDocsDrag(false)}
+                    onDrop={onDocsDrop}
+                    onClick={() => !docsUploading && docsRef.current?.click()}
+                    className="flex flex-col items-center justify-center gap-1 text-xs px-3 py-6 rounded-lg border border-dashed cursor-pointer transition-colors"
+                    style={{
+                      borderColor: docsDrag ? "var(--psg-blue)" : "var(--psg-card-border)",
+                      color: docsUploading ? "var(--psg-muted)" : docsDrag ? "var(--psg-blue)" : "var(--psg-muted)",
+                      backgroundColor: docsDrag ? "rgba(61,68,212,0.08)" : undefined,
+                    }}
+                  >
+                    <span className="text-2xl">{docsDrag ? "📂" : "⬆"}</span>
+                    <span>{docsUploading ? "Uploading…" : docsDrag ? "Drop file here" : "Drag & drop or click to upload"}</span>
+                    <span style={{ color: "var(--psg-muted)", opacity: 0.6 }}>All file types supported</span>
+                  </div>
+                  {docs.length === 0 && !docsUploading && (
+                    <p className="text-center text-xs" style={{ color: "var(--psg-muted)" }}>No documents uploaded yet.</p>
+                  )}
                 </div>
               )}
             </div>

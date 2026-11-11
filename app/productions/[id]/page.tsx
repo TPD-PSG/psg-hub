@@ -93,7 +93,7 @@ type HaulageMovement = {
 };
 type TeamMember = { user: { id: number; name: string; email: string; role: string } };
 type VenueRef = { id: number; name: string; city: string | null; capacity: number | null };
-type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; advancingStatus: string; loadInDate: string | null; startDate: string | null; endDate: string | null; performanceStart: string | null; performanceEnd: string | null; notes: string | null };
+type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; advancingStatus: string; contraEstimate: number | null; contraActual: number | null; loadInDate: string | null; startDate: string | null; endDate: string | null; performanceStart: string | null; performanceEnd: string | null; notes: string | null };
 type Production = {
   id: number;
   name: string;
@@ -548,8 +548,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   if (!prod) return <div className="py-20 text-center" style={{ color: "var(--psg-muted)" }}>Loading…</div>;
 
-  const totalEstimated = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0);
-  const totalCommitted = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0);
+  const contraEstimateTotal = tourStops.reduce((s, t) => s + (t.contraEstimate ?? 0), 0);
+  const contraActualTotal = tourStops.reduce((s, t) => s + (t.contraActual ?? 0), 0);
+  const totalEstimated = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0) + contraEstimateTotal;
+  const totalCommitted = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0) + contraActualTotal;
   const totalSpent = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.spent, 0), 0);
   const totalBudgeted = prod.budgetLines.reduce((s, l) => s + l.budgeted, 0);
 
@@ -939,6 +941,47 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Venue Contra section */}
+          {tourStops.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-white mb-3">Venue Contra</h3>
+              <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)" }}>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ backgroundColor: "rgba(255,255,255,0.03)", borderBottom: "1px solid var(--psg-card-border)" }}>
+                      <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--psg-muted)" }}>Venue</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--psg-muted)" }}>Estimate</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--psg-muted)" }}>Actual</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tourStops.sort((a, b) => a.stopNumber - b.stopNumber).map((stop, i) => (
+                      <tr key={stop.id} style={{ borderTop: i > 0 ? "1px solid var(--psg-card-border)" : undefined }}>
+                        <td className="px-4 py-3 text-white">
+                          <span className="text-xs mr-2 font-mono" style={{ color: "var(--psg-muted)" }}>#{stop.stopNumber}</span>
+                          {stop.venue.name}{stop.venue.city ? `, ${stop.venue.city}` : ""}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-yellow-300">{stop.contraEstimate != null ? fmt(stop.contraEstimate) : <span style={{ color: "var(--psg-muted)" }}>—</span>}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-orange-300">{stop.contraActual != null ? fmt(stop.contraActual) : <span style={{ color: "var(--psg-muted)" }}>—</span>}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: "2px solid var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
+                      <td className="px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--psg-muted)" }}>Total</td>
+                      <td className="px-4 py-3 text-right font-semibold text-yellow-300">{fmt(contraEstimateTotal)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-orange-300">{fmt(contraActualTotal)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -1606,10 +1649,16 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
       {/* ── TASKS TAB ── */}
       {tab === "advancing" && (
-        <AdvancingBoard tourStops={tourStops} onStatusChange={async (stopId, status) => {
-          await fetch(`/api/tour-stops/${stopId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ advancingStatus: status }) });
-          reloadTourStops();
-        }} />
+        <AdvancingBoard tourStops={tourStops}
+          onStatusChange={async (stopId, status) => {
+            await fetch(`/api/tour-stops/${stopId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ advancingStatus: status }) });
+            reloadTourStops();
+          }}
+          onContraChange={async (stopId, field, value) => {
+            await fetch(`/api/tour-stops/${stopId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value === "" ? null : Number(value) }) });
+            reloadTourStops();
+          }}
+        />
       )}
 
       {tab === "tasks" && prod && (
@@ -1660,12 +1709,14 @@ const ADVANCING_COLUMNS = [
   { key: "closed",           label: "Closed / Pre Contra", color: "#b91c1c" },
 ];
 
-function AdvancingBoard({ tourStops, onStatusChange }: {
+function AdvancingBoard({ tourStops, onStatusChange, onContraChange }: {
   tourStops: TourStop[];
   onStatusChange: (stopId: number, status: string) => Promise<void>;
+  onContraChange: (stopId: number, field: "contraEstimate" | "contraActual", value: string) => Promise<void>;
 }) {
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [contraEdits, setContraEdits] = useState<Record<string, string>>({});
 
   if (tourStops.length === 0) {
     return <div className="p-6 text-sm" style={{ color: "var(--psg-muted)" }}>No tour stops yet — add them in Tour Stops first.</div>;
@@ -1734,6 +1785,39 @@ function AdvancingBoard({ tourStops, onStatusChange }: {
                           {stop.endDate ? ` – ${fmtDate(stop.endDate)}` : ""}
                         </div>
                       )}
+                      {/* Contra fields */}
+                      <div className="mt-2 space-y-1" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+                        {(["contraEstimate", "contraActual"] as const).map(field => {
+                          const key = `${stop.id}-${field}`;
+                          const label = field === "contraEstimate" ? "Est." : "Act.";
+                          const color = field === "contraEstimate" ? "#fde047" : "#fb923c";
+                          const stored = stop[field];
+                          const editing = contraEdits[key] !== undefined;
+                          return (
+                            <div key={field} className="flex items-center gap-1.5">
+                              <span className="text-xs w-6 shrink-0" style={{ color: "var(--psg-muted)" }}>{label}</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="flex-1 text-xs rounded px-1.5 py-1 w-full"
+                                style={{ backgroundColor: "rgba(255,255,255,0.07)", border: "1px solid var(--psg-card-border)", color, outline: "none", minWidth: 0 }}
+                                value={editing ? contraEdits[key] : (stored != null ? String(stored) : "")}
+                                placeholder="—"
+                                onFocus={() => setContraEdits(c => ({ ...c, [key]: stored != null ? String(stored) : "" }))}
+                                onChange={e => setContraEdits(c => ({ ...c, [key]: e.target.value }))}
+                                onBlur={async e => {
+                                  const val = contraEdits[key] ?? "";
+                                  setContraEdits(c => { const n = { ...c }; delete n[key]; return n; });
+                                  if (val !== (stored != null ? String(stored) : "")) {
+                                    await onContraChange(stop.id, field, val);
+                                  }
+                                }}
+                                onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   ))}
               </div>

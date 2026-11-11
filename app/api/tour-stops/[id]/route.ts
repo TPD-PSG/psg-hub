@@ -21,6 +21,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       performanceEnd: body.performanceEnd !== undefined ? (body.performanceEnd ? new Date(body.performanceEnd) : null) : undefined,
       notes: body.notes !== undefined ? body.notes : undefined,
       advancingStatus: body.advancingStatus !== undefined ? body.advancingStatus : undefined,
+      contraEstimate: body.contraEstimate !== undefined ? (body.contraEstimate === null ? null : Number(body.contraEstimate)) : undefined,
+      contraActual: body.contraActual !== undefined ? (body.contraActual === null ? null : Number(body.contraActual)) : undefined,
     },
     include: { venue: { select: { id: true, name: true, city: true } } },
   });

@@ -16,9 +16,9 @@ export async function GET(req: NextRequest) {
   const tasks = await prisma.task.findMany({
     where,
     include: {
-      assigneeUser: { select: { id: true, name: true, email: true } },
-      signoffUser: { select: { id: true, name: true, email: true } },
-      createdByUser: { select: { id: true, name: true } },
+      assigneeUser: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      signoffUser: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      createdByUser: { select: { id: true, name: true, avatarUrl: true } },
       production: { select: { id: true, name: true } },
     },
     orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
@@ -48,8 +48,8 @@ export async function POST(req: NextRequest) {
       createdByUserId: createdByUserId ? Number(createdByUserId) : null,
     },
     include: {
-      assigneeUser: { select: { id: true, name: true, email: true } },
-      signoffUser: { select: { id: true, name: true, email: true } },
+      assigneeUser: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      signoffUser: { select: { id: true, name: true, email: true, avatarUrl: true } },
     },
   });
 

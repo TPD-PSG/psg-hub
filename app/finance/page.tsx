@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useSession } from "next-auth/react";
+import UserAvatar from "@/components/UserAvatar";
 
 type Invoice = {
   id: number;
@@ -26,7 +27,7 @@ type Expense = {
   production: string | null;
   productionId: number | null;
   productionLink: { id: number; name: string } | null;
-  submittedByUser: { id: number; name: string } | null;
+  submittedByUser: { id: number; name: string; avatarUrl?: string | null } | null;
   category: string;
   description: string;
   supplier: string | null;
@@ -360,7 +361,14 @@ function FinancePageInner() {
                   <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{exp.productionLink?.name ?? exp.production ?? "—"}</td>
                   <td className="px-4 py-3 text-xs capitalize" style={{ color: "var(--psg-muted)" }}>{exp.category}</td>
                   <td className="px-4 py-3 font-medium text-white">{exp.description}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{exp.submittedByUser?.name ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>
+                    {exp.submittedByUser ? (
+                      <span className="flex items-center gap-1.5">
+                        <UserAvatar name={exp.submittedByUser.name} avatarUrl={exp.submittedByUser.avatarUrl} size={20} />
+                        {exp.submittedByUser.name}
+                      </span>
+                    ) : "—"}
+                  </td>
                   <td className="px-4 py-3 text-right font-medium text-white">{fmt(exp.netAmount)}</td>
                   <td className="px-4 py-3 text-right font-medium text-white">{fmt(exp.netAmount + exp.vatAmount)}</td>
                   <td className="px-4 py-3"><StatusBadge status={exp.status} statuses={EXPENSE_STATUSES} /></td>
@@ -473,7 +481,7 @@ function FinancePageInner() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              {selectedExp.submittedByUser && <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Submitted by</div><div className="text-sm text-white">{selectedExp.submittedByUser.name}</div></div>}
+              {selectedExp.submittedByUser && <div><div className="text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Submitted by</div><div className="flex items-center gap-2"><UserAvatar name={selectedExp.submittedByUser.name} avatarUrl={selectedExp.submittedByUser.avatarUrl} size={24} /><span className="text-sm text-white">{selectedExp.submittedByUser.name}</span></div></div>}
               {selectedExp.supplier && <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Supplier</div><div className="text-sm text-white">{selectedExp.supplier}</div></div>}
               {selectedExp.date && <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Date</div><div className="text-sm text-white">{fmtDate(selectedExp.date)}</div></div>}
               <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Payment method</div><div className="text-sm text-white">{PAYMENT_METHODS.find(p => p.key === selectedExp.paymentMethod)?.label ?? selectedExp.paymentMethod}</div></div>

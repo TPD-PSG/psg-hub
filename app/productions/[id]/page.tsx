@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
-import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX } from "@/lib/exports";
+import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF } from "@/lib/exports";
 
 type Expense = {
   id: number;
@@ -1655,6 +1655,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       )}
                     </div>
                     <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => exportVenueStopPDF(prod.name, stop)}
+                        className="text-xs px-2 py-1 rounded border hover:bg-white/5 transition-colors"
+                        style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+                        title="Export venue sheet as PDF"
+                      >↓ PDF</button>
                       <button
                         onClick={toggleNotes}
                         className="text-xs px-2 py-1 rounded border hover:bg-white/5 transition-colors flex items-center gap-1"

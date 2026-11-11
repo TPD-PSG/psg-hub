@@ -17,7 +17,7 @@ export async function GET() {
     orderBy: { date: "desc" },
     include: {
       productionLink: { select: { id: true, name: true } },
-      submittedByUser: { select: { id: true, name: true } },
+      submittedByUser: { select: { id: true, name: true, avatarUrl: true } },
     },
   });
   return NextResponse.json(expenses);
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     },
     include: {
       productionLink: { select: { id: true, name: true } },
-      submittedByUser: { select: { id: true, name: true } },
+      submittedByUser: { select: { id: true, name: true, avatarUrl: true } },
     },
   });
   return NextResponse.json(expense);

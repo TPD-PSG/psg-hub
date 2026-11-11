@@ -38,7 +38,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     },
     include: {
       productionLink: { select: { id: true, name: true } },
-      submittedByUser: { select: { id: true, name: true } },
+      submittedByUser: { select: { id: true, name: true, avatarUrl: true } },
     },
   });
   return NextResponse.json(expense);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import UserAvatar from "@/components/UserAvatar";
 
 const MODULES = [
   { key: "bd", label: "Business Dev" },
@@ -12,7 +13,7 @@ const MODULES = [
 
 type Permissions = { modules: string[]; allProductions: boolean };
 type User = {
-  id: number; name: string; email: string; role: string;
+  id: number; name: string; email: string; role: string; avatarUrl?: string | null;
   permissions: string | null; createdAt: string;
 };
 
@@ -120,7 +121,12 @@ export default function AdminUsersPage() {
               const isAdmin = u.role === "admin";
               return (
                 <tr key={u.id} className="hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)" }}>
-                  <td className="px-4 py-3 font-medium">{u.name}</td>
+                  <td className="px-4 py-3">
+                    <span className="flex items-center gap-2 font-medium">
+                      <UserAvatar name={u.name} avatarUrl={u.avatarUrl} size={28} />
+                      {u.name}
+                    </span>
+                  </td>
                   <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{u.email}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isAdmin ? "bg-purple-900/60 text-purple-300" : "bg-white/10 text-white/60"}`}>

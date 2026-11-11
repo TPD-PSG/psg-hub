@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import UserAvatar from "@/components/UserAvatar";
 
-type User = { id: number; name: string; email: string };
+type User = { id: number; name: string; email: string; avatarUrl?: string | null };
 type Task = {
   id: number;
   title: string;
@@ -195,10 +196,14 @@ export default function TasksPanel({ productionId }: Props) {
 
                   <div className="flex flex-wrap gap-3 mt-2 text-xs" style={{ color: "var(--psg-muted)" }}>
                     {(task.assigneeUser || task.assigneeName) && (
-                      <span>Assigned to: <span className="text-white/70">{task.assigneeUser?.name ?? task.assigneeName}</span></span>
+                      <span className="flex items-center gap-1">
+                        {task.assigneeUser && <UserAvatar name={task.assigneeUser.name} avatarUrl={task.assigneeUser.avatarUrl} size={18} />}
+                        <span>Assigned to: <span className="text-white/70">{task.assigneeUser?.name ?? task.assigneeName}</span></span>
+                      </span>
                     )}
                     {task.requiresSignoff && task.signoffUser && (
-                      <span className={task.status === "awaiting_signoff" ? "text-yellow-400 font-medium" : ""}>
+                      <span className={`flex items-center gap-1 ${task.status === "awaiting_signoff" ? "text-yellow-400 font-medium" : ""}`}>
+                        <UserAvatar name={task.signoffUser.name} avatarUrl={task.signoffUser.avatarUrl} size={18} />
                         Sign-off: {task.signoffUser.name}
                         {task.signoffAt ? ` ✓ ${new Date(task.signoffAt).toLocaleDateString("en-GB")}` : ""}
                       </span>

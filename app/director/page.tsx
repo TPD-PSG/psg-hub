@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import UserAvatar from "@/components/UserAvatar";
 
 type Production = { id: number; name: string; status: string; startDate: string | null; endDate: string | null; announcementStatus?: string; budgetLines?: { estimated: number; committed: number; spent: number }[] };
 type Invoice = { id: number; type: string; status: string; netAmount: number; vatAmount: number; dueDate: string | null; issuedDate: string | null };
 type Opportunity = { id: number; name: string; stage: string; value: number | null };
-type Task = { id: number; title: string; status: string; dueDate: string | null; assigneeUser?: { name: string } | null; production?: { name: string } | null };
+type Task = { id: number; title: string; status: string; dueDate: string | null; assigneeUser?: { name: string; avatarUrl?: string | null } | null; production?: { name: string } | null };
 type HelpTicket = { id: number; status: string; priority: string; title: string };
 type Expense = { id: number; status: string; netAmount: number; vatAmount: number };
 
@@ -263,7 +264,14 @@ export default function DirectorPage() {
                   <tr key={t.id} className="border-b last:border-0 hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)" }}>
                     <td className="px-4 py-3 text-white">{t.title}</td>
                     <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{t.production?.name ?? "—"}</td>
-                    <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{t.assigneeUser?.name ?? "Unassigned"}</td>
+                    <td className="px-4 py-3">
+                      {t.assigneeUser ? (
+                        <span className="flex items-center gap-1.5" style={{ color: "var(--psg-muted)" }}>
+                          <UserAvatar name={t.assigneeUser.name} avatarUrl={t.assigneeUser.avatarUrl} size={20} />
+                          {t.assigneeUser.name}
+                        </span>
+                      ) : <span style={{ color: "var(--psg-muted)" }}>Unassigned</span>}
+                    </td>
                     <td className="px-4 py-3 text-red-400">{fmtDate(t.dueDate)}</td>
                   </tr>
                 ))}

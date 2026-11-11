@@ -328,7 +328,7 @@ export function exportHaulageXLSX(title: string, movements: MovementRow[], inclu
 
 // ── Tour Schedule ─────────────────────────────────────────────────────────────
 
-type TourStopRow = { stopNumber: number; venue: { name: string; city: string | null; capacity: number | null } | null; loadInDate: string | null; performanceStart: string | null; performanceEnd: string | null; endDate: string | null; notes: string | null };
+type TourStopRow = { stopNumber: number; venue: { name: string; city: string | null; capacity: number | null } | null; loadInDate: string | null; performanceStart: string | null; performanceEnd: string | null; endDate: string | null; notes: string | null; advancingStatus?: string; contraEstimate?: number | null; contraActual?: number | null };
 
 export async function exportTourSchedulePDF(productionName: string, stops: TourStopRow[]) {
   const logo = await fetchLogoAsset();
@@ -373,4 +373,41 @@ export function exportTourScheduleXLSX(productionName: string, stops: TourStopRo
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Tour Schedule");
   XLSX.writeFile(wb, `tour-schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
+}
+
+export async function exportVenueStopPDF(productionName: string, stop: TourStopRow) {
+  const logo = await fetchLogoAsset();
+  const venueName = stop.venue?.name ?? `Stop ${stop.stopNumber}`;
+  const doc = basePDF(`${productionName} — ${venueName}`, `Stop ${stop.stopNumber}${stop.venue?.city ? ` · ${stop.venue.city}` : ""}`, logo);
+  const rows: [string, string][] = [];
+  if (stop.venue?.city) rows.push(["City", stop.venue.city]);
+  if (stop.venue?.capacity != null) rows.push(["Capacity", stop.venue.capacity.toLocaleString()]);
+  if (stop.loadInDate) rows.push(["Load In", fmtDate(stop.loadInDate)]);
+  if (stop.performanceStart) rows.push(["First Performance", fmtDate(stop.performanceStart)]);
+  if (stop.performanceEnd && stop.performanceEnd !== stop.performanceStart) rows.push(["Last Performance", fmtDate(stop.performanceEnd)]);
+  if (stop.endDate) rows.push(["Get Out", fmtDate(stop.endDate)]);
+  if (stop.advancingStatus) rows.push(["Advancing Status", stop.advancingStatus.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())]);
+  if (stop.contraEstimate != null) rows.push(["Contra Estimate", `£${stop.contraEstimate.toLocaleString()}`]);
+  if (stop.contraActual != null) rows.push(["Contra Actual", `£${stop.contraActual.toLocaleString()}`]);
+  autoTable(doc, {
+    startY: 32,
+    head: [["Field", "Value"]],
+    body: rows,
+    styles: { fontSize: 10, cellPadding: 3 },
+    headStyles: { fillColor: [10, 25, 65] },
+    columnStyles: { 0: { cellWidth: 50, fontStyle: "bold" } },
+    margin: { left: 10, right: 10 },
+  });
+  if (stop.notes) {
+    const finalY = (doc as any).lastAutoTable?.finalY ?? 60;
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 120);
+    doc.text("Notes", 10, finalY + 10);
+    doc.setTextColor(30, 30, 50);
+    doc.setFontSize(9);
+    const lines: string[] = doc.splitTextToSize(stop.notes, 190);
+    doc.text(lines, 10, finalY + 16);
+  }
+  const slug = `${productionName}-${venueName}`.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
+  doc.save(`venue-${slug}.pdf`);
 }

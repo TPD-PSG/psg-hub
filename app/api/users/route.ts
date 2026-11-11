@@ -7,7 +7,7 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const users = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, role: true, permissions: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true },
     orderBy: { name: "asc" },
   });
   return NextResponse.json(users);
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       role: body.role ?? "member",
       permissions: body.permissions ? JSON.stringify(body.permissions) : null,
     },
-    select: { id: true, name: true, email: true, role: true, permissions: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true },
   });
   return NextResponse.json(user, { status: 201 });
 }

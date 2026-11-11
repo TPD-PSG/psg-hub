@@ -449,6 +449,7 @@ export default function HomePage() {
       <SectionHeading title="Hub" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <CompactTile href="/roadmap" icon="💡" title="Ideas & Roadmap" sub="Feature requests & improvements" />
+        <CompactTile href="/helpdesk" icon="🎫" title="Help Desk" sub="Report an issue or request help" />
       </div>
 
       {role === "admin" && (

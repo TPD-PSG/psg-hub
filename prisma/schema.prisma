@@ -26,6 +26,8 @@ model User {
   productionTeams     ProductionTeam[]
   roadmapItems        RoadmapItem[]
   staffAssignments    StaffAssignment[]
+  helpTicketsCreated  HelpTicket[]     @relation("TicketCreator")
+  helpTicketsAssigned HelpTicket[]     @relation("TicketAssignee")
 }
 
 model Production {
@@ -585,6 +587,22 @@ model SalesTask {
   brand       SalesBrand?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+}
+
+model HelpTicket {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String?
+  category        String    @default("bug")    // bug | feature | question | other
+  priority        String    @default("medium") // low | medium | high | urgent
+  status          String    @default("open")   // open | in_progress | resolved | closed
+  createdByUserId Int?
+  createdByUser   User?     @relation("TicketCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  assignedToUserId Int?
+  assignedToUser  User?     @relation("TicketAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  resolvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model RoadmapItem {

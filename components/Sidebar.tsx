@@ -67,6 +67,10 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
     title: "Roadmap",
     items: [{ label: "Roadmap", href: "/roadmap" }],
   },
+  "/helpdesk": {
+    title: "Help Desk",
+    items: [{ label: "Help Desk", href: "/helpdesk" }],
+  },
   "/admin": {
     title: "Admin",
     items: [

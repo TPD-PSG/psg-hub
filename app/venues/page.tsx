@@ -79,6 +79,7 @@ export default function VenuesPage() {
   const [importResults, setImportResults] = useState<{ name: string; ok: boolean; error?: string }[] | null>(null);
   const [importDrag, setImportDrag] = useState(false);
   const [techSpecDrag, setTechSpecDrag] = useState(false);
+  const [dupDialog, setDupDialog] = useState<{ file: File; existing: { id: number; name: string; city: string | null }; extractedName: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -161,6 +162,29 @@ export default function VenuesPage() {
     importFromPDFs(fakeEvent);
   }
 
+  async function resolveDuplicate(action: "update" | "create") {
+    if (!dupDialog) return;
+    const { file, existing } = dupDialog;
+    setDupDialog(null);
+    setImporting(true);
+    setImportError(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    if (action === "update") fd.append("updateId", String(existing.id));
+    else fd.append("forceCreate", "true");
+    const res = await fetch("/api/venues/import-pdf", { method: "POST", body: fd });
+    const data = res.ok ? await res.json().catch(() => ({})) : {};
+    setImporting(false);
+    if (!res.ok) {
+      setImportError(data.error ?? "Import failed");
+      setTimeout(() => setImportError(null), 6000);
+    } else {
+      await reload();
+      setSelected(data.venue);
+      setDetailTab("stage");
+    }
+  }
+
   async function deleteTechSpec() {
     if (!selected) return;
     await fetch(`/api/venues/${selected.id}/tech-spec`, { method: "DELETE" });
@@ -182,7 +206,9 @@ export default function VenuesPage() {
       const res = await fetch("/api/venues/import-pdf", { method: "POST", body: fd });
       const data = res.ok || res.headers.get("content-type")?.includes("json") ? await res.json().catch(() => ({})) : {};
       setImporting(false);
-      if (!res.ok) {
+      if (data.duplicate) {
+        setDupDialog({ file: files[0], existing: data.existing, extractedName: data.extractedName });
+      } else if (!res.ok) {
         setImportError(data.error ?? "Import failed");
         setTimeout(() => setImportError(null), 6000);
       } else {
@@ -217,6 +243,44 @@ export default function VenuesPage() {
 
   return (
     <div className="space-y-5">
+      {/* Duplicate venue dialog */}
+      {dupDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="rounded-xl border p-6 max-w-md w-full space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+            <h2 className="text-base font-semibold text-white">Possible duplicate venue</h2>
+            <p className="text-sm" style={{ color: "var(--psg-muted)" }}>
+              The PDF appears to be for <span className="text-white font-medium">{dupDialog.extractedName}</span>, but a venue called{" "}
+              <span className="text-white font-medium">{dupDialog.existing.name}</span>
+              {dupDialog.existing.city ? ` (${dupDialog.existing.city})` : ""} already exists.
+            </p>
+            <p className="text-sm" style={{ color: "var(--psg-muted)" }}>What would you like to do?</p>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => resolveDuplicate("update")}
+                className="flex-1 px-4 py-2 rounded font-medium text-white text-sm"
+                style={{ backgroundColor: "var(--psg-blue)" }}
+              >
+                Update existing venue
+              </button>
+              <button
+                onClick={() => resolveDuplicate("create")}
+                className="flex-1 px-4 py-2 rounded font-medium text-sm border"
+                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}
+              >
+                Create new venue
+              </button>
+              <button
+                onClick={() => setDupDialog(null)}
+                className="px-3 py-2 rounded text-sm"
+                style={{ color: "var(--psg-muted)" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>

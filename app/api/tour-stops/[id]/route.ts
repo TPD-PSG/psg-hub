@@ -20,6 +20,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       performanceStart: body.performanceStart !== undefined ? (body.performanceStart ? new Date(body.performanceStart) : null) : undefined,
       performanceEnd: body.performanceEnd !== undefined ? (body.performanceEnd ? new Date(body.performanceEnd) : null) : undefined,
       notes: body.notes !== undefined ? body.notes : undefined,
+      advancingStatus: body.advancingStatus !== undefined ? body.advancingStatus : undefined,
     },
     include: { venue: { select: { id: true, name: true, city: true } } },
   });

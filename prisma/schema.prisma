@@ -272,6 +272,7 @@ model TourStop {
   venueId          Int
   venue            Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
   stopNumber       Int        @default(0)
+  advancingStatus  String     @default("triage")
   loadInDate       DateTime?
   startDate        DateTime?
   endDate          DateTime?

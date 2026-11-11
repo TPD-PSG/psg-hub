@@ -93,7 +93,7 @@ type HaulageMovement = {
 };
 type TeamMember = { user: { id: number; name: string; email: string; role: string } };
 type VenueRef = { id: number; name: string; city: string | null; capacity: number | null };
-type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; loadInDate: string | null; startDate: string | null; endDate: string | null; performanceStart: string | null; performanceEnd: string | null; notes: string | null };
+type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; advancingStatus: string; loadInDate: string | null; startDate: string | null; endDate: string | null; performanceStart: string | null; performanceEnd: string | null; notes: string | null };
 type Production = {
   id: number;
   name: string;
@@ -191,7 +191,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 
 const BLANK_EXPENSE = { phase: "pre-production", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "tasks" | "tour";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "tasks" | "tour";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -1605,6 +1605,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ── TASKS TAB ── */}
+      {tab === "advancing" && (
+        <AdvancingBoard tourStops={tourStops} onStatusChange={async (stopId, status) => {
+          await fetch(`/api/tour-stops/${stopId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ advancingStatus: status }) });
+          reloadTourStops();
+        }} />
+      )}
+
       {tab === "tasks" && prod && (
         <TasksPanel productionId={prod.id} />
       )}
@@ -1639,6 +1646,101 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           </form>
         </Modal>
       )}
+    </div>
+  );
+}
+
+const ADVANCING_COLUMNS = [
+  { key: "triage",           label: "Triage",              color: "#6b7280" },
+  { key: "rider_released",   label: "Rider Released",      color: "#b45309" },
+  { key: "contra_in",        label: "Contra Estimate In",  color: "#1d4ed8" },
+  { key: "plans_drawn",      label: "Plans Drawn",         color: "#6d28d9" },
+  { key: "email_released",   label: "Full Email Released", color: "#0e7490" },
+  { key: "in_venue",         label: "In Venue",            color: "#15803d" },
+  { key: "closed",           label: "Closed / Pre Contra", color: "#b91c1c" },
+];
+
+function AdvancingBoard({ tourStops, onStatusChange }: {
+  tourStops: TourStop[];
+  onStatusChange: (stopId: number, status: string) => Promise<void>;
+}) {
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+
+  if (tourStops.length === 0) {
+    return <div className="p-6 text-sm" style={{ color: "var(--psg-muted)" }}>No tour stops yet — add them in Tour Stops first.</div>;
+  }
+
+  function fmtDate(s: string | null) {
+    if (!s) return null;
+    return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  }
+
+  return (
+    <div className="p-4 overflow-x-auto">
+      <div className="flex gap-3 min-w-max">
+        {ADVANCING_COLUMNS.map(col => {
+          const stops = tourStops.filter(s => (s.advancingStatus || "triage") === col.key);
+          return (
+            <div
+              key={col.key}
+              className="flex flex-col rounded-lg w-52 shrink-0"
+              style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid var(--psg-card-border)" }}
+              onDragOver={e => { e.preventDefault(); setDragOver(col.key); }}
+              onDragLeave={() => setDragOver(null)}
+              onDrop={async e => {
+                e.preventDefault();
+                setDragOver(null);
+                const stopId = Number(e.dataTransfer.getData("stopId"));
+                if (stopId) await onStatusChange(stopId, col.key);
+              }}
+            >
+              {/* Column header */}
+              <div
+                className="px-3 py-2.5 rounded-t-lg flex items-center justify-between"
+                style={{ backgroundColor: col.color + "22", borderBottom: `2px solid ${col.color}` }}
+              >
+                <span className="text-xs font-semibold" style={{ color: col.color }}>{col.label}</span>
+                <span className="text-xs rounded-full px-1.5 py-0.5 font-medium" style={{ backgroundColor: col.color + "33", color: col.color }}>{stops.length}</span>
+              </div>
+
+              {/* Drop highlight */}
+              <div
+                className="flex-1 p-2 space-y-2 min-h-20 transition-colors rounded-b-lg"
+                style={{ backgroundColor: dragOver === col.key ? col.color + "11" : undefined }}
+              >
+                {stops
+                  .sort((a, b) => a.stopNumber - b.stopNumber)
+                  .map(stop => (
+                    <div
+                      key={stop.id}
+                      draggable
+                      onDragStart={e => { e.dataTransfer.setData("stopId", String(stop.id)); setDragging(stop.id); }}
+                      onDragEnd={() => setDragging(null)}
+                      className="rounded-lg p-2.5 cursor-grab active:cursor-grabbing select-none transition-opacity"
+                      style={{
+                        backgroundColor: "var(--psg-card-bg)",
+                        border: "1px solid var(--psg-card-border)",
+                        opacity: dragging === stop.id ? 0.4 : 1,
+                      }}
+                    >
+                      <div className="text-xs font-semibold text-white mb-0.5">
+                        {stop.stopNumber} · {stop.venue.name}
+                      </div>
+                      {stop.venue.city && <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{stop.venue.city}</div>}
+                      {(stop.loadInDate || stop.startDate) && (
+                        <div className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>
+                          {fmtDate(stop.loadInDate ?? stop.startDate)}
+                          {stop.endDate ? ` – ${fmtDate(stop.endDate)}` : ""}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

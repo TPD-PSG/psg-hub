@@ -443,6 +443,7 @@ export default function HomePage() {
                 badge={urgentMaint.length || undefined} />
             )}
             <CompactTile href="/suppliers" icon="📦" title="Supplier Register" sub="Contractors, venues & services" />
+            <CompactTile href="/marketing" icon="📣" title="Marketing" sub="Social media content calendar" />
           </div>
         </>
       )}

@@ -54,6 +54,7 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
       { label: "Sales Invoices", href: "/finance" },
       { label: "Purchase Invoices", href: "/finance?tab=purchase" },
       { label: "Expenses", href: "/finance?tab=expenses" },
+      { label: "Invoice To-Do", href: "/finance?tab=todo" },
     ],
   },
   "/sales": {
@@ -78,6 +79,13 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
   "/suppliers": {
     title: "Supplier Register",
     items: [{ label: "All Suppliers", href: "/suppliers" }],
+  },
+  "/marketing": {
+    title: "Marketing",
+    items: [
+      { label: "Content Calendar", href: "/marketing" },
+      { label: "List View", href: "/marketing?view=list" },
+    ],
   },
   "/director": {
     title: "Director Dashboard",

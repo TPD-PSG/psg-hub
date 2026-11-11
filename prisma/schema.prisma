@@ -29,6 +29,7 @@ model User {
   helpTicketsCreated  HelpTicket[]     @relation("TicketCreator")
   helpTicketsAssigned HelpTicket[]     @relation("TicketAssignee")
   expensesSubmitted   ProductionExpense[] @relation("ExpenseSubmitter")
+  marketingPosts      MarketingPost[]    @relation("MarketingPostCreator")
 }
 
 model Production {
@@ -60,6 +61,8 @@ model Production {
   tourStops         TourStop[]
   staffAssignments  StaffAssignment[]
   expenses          ProductionExpense[]
+  marketingPosts    MarketingPost[]
+  invoiceTodos      InvoiceTodo[]      @relation("InvoiceTodos")
 }
 
 
@@ -631,6 +634,40 @@ model Supplier {
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model InvoiceTodo {
+  id           Int      @id @default(autoincrement())
+  client       String
+  description  String
+  productionId Int?
+  production   Production? @relation("InvoiceTodos", fields: [productionId], references: [id], onDelete: SetNull)
+  amount       Float?
+  dueDate      DateTime?
+  notes        String?
+  done         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model MarketingPost {
+  id           Int      @id @default(autoincrement())
+  title        String
+  caption      String?
+  platforms    String   @default("[]") // JSON array: "instagram" | "facebook" | "twitter" | "linkedin" | "tiktok"
+  status       String   @default("draft") // draft | scheduled | published | cancelled
+  scheduledAt  DateTime?
+  publishedAt  DateTime?
+  productionId Int?
+  production   Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  imageUrl     String?
+  link         String?
+  tags         String?  // comma-separated
+  notes        String?
+  createdByUserId Int?
+  createdByUser   User?  @relation("MarketingPostCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model RoadmapItem {

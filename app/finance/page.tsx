@@ -109,11 +109,46 @@ function FinancePageInner() {
   const { data: session } = useSession();
   const role = (session?.user as any)?.role ?? "member";
   const searchParams = useSearchParams();
-  const initTab = searchParams.get("tab") === "purchase" ? "purchase" : searchParams.get("tab") === "expenses" ? "expenses" : "sales";
+  const initTab = searchParams.get("tab") === "purchase" ? "purchase" : searchParams.get("tab") === "expenses" ? "expenses" : searchParams.get("tab") === "todo" ? "todo" : "sales";
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [productions, setProductions] = useState<Production[]>([]);
-  const [tab, setTab] = useState<"sales" | "purchase" | "expenses">(initTab as "sales" | "purchase" | "expenses");
+  const [tab, setTab] = useState<"sales" | "purchase" | "expenses" | "todo">(initTab as "sales" | "purchase" | "expenses" | "todo");
+
+  // Invoice To-Do list
+  type InvoiceTodo = { id: number; client: string; description: string; amount: number | null; dueDate: string | null; notes: string | null; done: boolean; production: { id: number; name: string } | null };
+  const [todos, setTodos] = useState<InvoiceTodo[]>([]);
+  const [todoForm, setTodoForm] = useState({ client: "", description: "", productionId: "", amount: "", dueDate: "", notes: "" });
+  const [showTodoForm, setShowTodoForm] = useState(false);
+  const [editTodo, setEditTodo] = useState<InvoiceTodo | null>(null);
+
+  async function reloadTodos() {
+    const d = await fetch("/api/invoice-todos").then(r => r.json());
+    if (Array.isArray(d)) setTodos(d);
+  }
+
+  async function saveTodo(e: React.FormEvent) {
+    e.preventDefault();
+    const body = { ...todoForm, amount: todoForm.amount || null, dueDate: todoForm.dueDate || null, productionId: todoForm.productionId || null };
+    const url = editTodo ? `/api/invoice-todos/${editTodo.id}` : "/api/invoice-todos";
+    const method = editTodo ? "PUT" : "POST";
+    await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    await reloadTodos();
+    setShowTodoForm(false);
+    setEditTodo(null);
+    setTodoForm({ client: "", description: "", productionId: "", amount: "", dueDate: "", notes: "" });
+  }
+
+  async function toggleTodoDone(todo: InvoiceTodo) {
+    await fetch(`/api/invoice-todos/${todo.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done: !todo.done }) });
+    await reloadTodos();
+  }
+
+  async function deleteTodo(id: number) {
+    if (!confirm("Remove this item?")) return;
+    await fetch(`/api/invoice-todos/${id}`, { method: "DELETE" });
+    await reloadTodos();
+  }
   const [filterStatus, setFilterStatus] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [invForm, setInvForm] = useState<typeof BLANK_INV & { id?: number }>(BLANK_INV);
@@ -124,6 +159,7 @@ function FinancePageInner() {
 
   useEffect(() => {
     reloadAll();
+    reloadTodos();
     fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d); });
   }, []);
 
@@ -228,7 +264,7 @@ function FinancePageInner() {
     setShowForm(true);
   }
 
-  function switchTab(t: "sales" | "purchase" | "expenses") {
+  function switchTab(t: "sales" | "purchase" | "expenses" | "todo") {
     setTab(t);
     setFilterStatus("all");
     setSelectedInv(null);
@@ -242,7 +278,7 @@ function FinancePageInner() {
   const visibleExp = expenses
     .filter(i => filterStatus === "all" || i.status === filterStatus);
 
-  const invStatuses = tab === "sales" ? SALES_STATUSES : PURCHASE_STATUSES;
+  const invStatuses = tab === "purchase" ? PURCHASE_STATUSES : SALES_STATUSES;
 
   const outstanding = invoices.filter(i => i.type === "sales" && i.status !== "paid").reduce((s, i) => s + i.netAmount + i.vatAmount, 0);
   const owed = invoices.filter(i => i.type === "purchase" && i.status !== "paid").reduce((s, i) => s + i.netAmount + i.vatAmount, 0);
@@ -260,32 +296,137 @@ function FinancePageInner() {
             {overdueCount > 0 && <span className="ml-2 text-red-400">{overdueCount} overdue</span>}
           </p>
         </div>
-        <button onClick={openNew} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
-          + {tab === "sales" ? "Sales Invoice" : tab === "purchase" ? "Purchase Invoice" : "Expense"}
-        </button>
+        {tab !== "todo" && (
+          <button onClick={openNew} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
+            + {tab === "sales" ? "Sales Invoice" : tab === "purchase" ? "Purchase Invoice" : "Expense"}
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
       <div className="flex items-center gap-4 flex-wrap">
         <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)" }}>
-          {(["sales", "purchase", "expenses"] as const).map(t => (
+          {(["sales", "purchase", "expenses", "todo"] as const).map(t => (
             <button key={t} onClick={() => switchTab(t)} className="px-4 py-1.5 text-sm transition-colors" style={{ backgroundColor: tab === t ? "var(--psg-blue)" : "transparent", color: tab === t ? "#fff" : "var(--psg-muted)" }}>
-              {t === "sales" ? "Sales Invoices" : t === "purchase" ? "Purchase Invoices" : "Expenses"}
+              {t === "sales" ? "Sales Invoices" : t === "purchase" ? "Purchase Invoices" : t === "expenses" ? "Expenses" : "Invoice To-Do"}
             </button>
           ))}
         </div>
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={() => setFilterStatus("all")} className="px-3 py-1 rounded text-xs transition-colors" style={{ backgroundColor: filterStatus === "all" ? "rgba(255,255,255,0.1)" : "transparent", color: "var(--psg-muted)" }}>All</button>
-          {(tab === "expenses" ? EXPENSE_STATUSES : invStatuses).map(s => (
-            <button key={s.key} onClick={() => setFilterStatus(s.key)} className="px-3 py-1 rounded text-xs transition-colors" style={{ backgroundColor: filterStatus === s.key ? s.color + "33" : "transparent", color: filterStatus === s.key ? s.color : "var(--psg-muted)" }}>
-              {s.label}
-            </button>
-          ))}
-        </div>
+        {tab !== "todo" && (
+          <div className="flex gap-1 flex-wrap">
+            <button onClick={() => setFilterStatus("all")} className="px-3 py-1 rounded text-xs transition-colors" style={{ backgroundColor: filterStatus === "all" ? "rgba(255,255,255,0.1)" : "transparent", color: "var(--psg-muted)" }}>All</button>
+            {(tab === "expenses" ? EXPENSE_STATUSES : invStatuses).map(s => (
+              <button key={s.key} onClick={() => setFilterStatus(s.key)} className="px-3 py-1 rounded text-xs transition-colors" style={{ backgroundColor: filterStatus === s.key ? s.color + "33" : "transparent", color: filterStatus === s.key ? s.color : "var(--psg-muted)" }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* ── INVOICE TO-DO TAB ─────────────────────────────────────────── */}
+      {tab === "todo" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">Invoices to generate</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                {todos.filter(t => !t.done).length} outstanding · {todos.filter(t => t.done).length} done
+              </p>
+            </div>
+            <button onClick={() => { setEditTodo(null); setTodoForm({ client: "", description: "", productionId: "", amount: "", dueDate: "", notes: "" }); setShowTodoForm(true); }}
+              className="text-sm px-4 py-2 rounded font-medium text-white hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: "var(--psg-blue)" }}>+ Add</button>
+          </div>
+
+          {showTodoForm && (
+            <form onSubmit={saveTodo} className="rounded-lg border p-4 space-y-3" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-dark-bg)" }}>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs mb-1 font-medium" style={{ color: "var(--psg-muted)" }}>Client *</label>
+                  <input required className={inp} style={inpStyle} value={todoForm.client} onChange={e => setTodoForm(f => ({ ...f, client: e.target.value }))} placeholder="Client name" />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1 font-medium" style={{ color: "var(--psg-muted)" }}>Production</label>
+                  <select className={inp} style={inpStyle} value={todoForm.productionId} onChange={e => setTodoForm(f => ({ ...f, productionId: e.target.value }))}>
+                    <option value="">None</option>
+                    {productions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs mb-1 font-medium" style={{ color: "var(--psg-muted)" }}>Description *</label>
+                <input required className={inp} style={inpStyle} value={todoForm.description} onChange={e => setTodoForm(f => ({ ...f, description: e.target.value }))} placeholder="What is this invoice for?" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs mb-1 font-medium" style={{ color: "var(--psg-muted)" }}>Amount (£)</label>
+                  <input type="number" step="0.01" className={inp} style={inpStyle} value={todoForm.amount} onChange={e => setTodoForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1 font-medium" style={{ color: "var(--psg-muted)" }}>Due by</label>
+                  <input type="date" className={inp} style={inpStyle} value={todoForm.dueDate} onChange={e => setTodoForm(f => ({ ...f, dueDate: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs mb-1 font-medium" style={{ color: "var(--psg-muted)" }}>Notes</label>
+                <textarea rows={2} className={inp} style={inpStyle} value={todoForm.notes} onChange={e => setTodoForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="px-4 py-2 rounded text-sm text-white font-medium" style={{ backgroundColor: "var(--psg-blue)" }}>{editTodo ? "Save" : "Add"}</button>
+                <button type="button" onClick={() => { setShowTodoForm(false); setEditTodo(null); }} className="px-4 py-2 rounded text-sm border hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+              </div>
+            </form>
+          )}
+
+          <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+            {todos.length === 0 ? (
+              <p className="text-center py-8 text-sm" style={{ color: "var(--psg-muted)" }}>No invoices to generate — add one above.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <th className="px-4 py-3 text-left font-medium text-white w-8"></th>
+                    <th className="px-4 py-3 text-left font-medium text-white">Client</th>
+                    <th className="px-4 py-3 text-left font-medium text-white">Description</th>
+                    <th className="px-4 py-3 text-left font-medium text-white">Production</th>
+                    <th className="px-4 py-3 text-right font-medium text-white">Amount</th>
+                    <th className="px-4 py-3 text-left font-medium text-white">Due by</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y" style={{ borderColor: "var(--psg-card-border)" }}>
+                  {todos.map(t => (
+                    <tr key={t.id} className={`group hover:bg-white/5 transition-colors ${t.done ? "opacity-50" : ""}`}>
+                      <td className="px-4 py-3">
+                        <input type="checkbox" checked={t.done} onChange={() => toggleTodoDone(t)}
+                          className="w-4 h-4 rounded cursor-pointer accent-blue-500" />
+                      </td>
+                      <td className={`px-4 py-3 font-medium ${t.done ? "line-through" : "text-white"}`}>{t.client}</td>
+                      <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{t.description}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{t.production?.name ?? "—"}</td>
+                      <td className="px-4 py-3 text-right text-white">
+                        {t.amount != null ? `£${t.amount.toLocaleString("en-GB", { minimumFractionDigits: 2 })}` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: t.dueDate && new Date(t.dueDate) < new Date() && !t.done ? "#ef4444" : "var(--psg-muted)" }}>
+                        {t.dueDate ? new Date(t.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                      <td className="px-4 py-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => { setEditTodo(t); setTodoForm({ client: t.client, description: t.description, productionId: t.production ? String(t.production.id) : "", amount: t.amount != null ? String(t.amount) : "", dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", notes: t.notes ?? "" }); setShowTodoForm(true); }}
+                          className="text-xs mr-2" style={{ color: "var(--psg-muted)" }}>Edit</button>
+                        <button onClick={() => deleteTodo(t.id)} className="text-xs text-red-400">Remove</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Invoice Table */}
-      {tab !== "expenses" && (
+      {tab !== "expenses" && tab !== "todo" && (
         <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
           <table className="w-full text-sm">
             <thead>

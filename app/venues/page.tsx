@@ -155,11 +155,7 @@ export default function VenuesPage() {
     e.preventDefault();
     setImportDrag(false);
     const files = Array.from(e.dataTransfer.files).filter(f => f.type === "application/pdf");
-    if (!files.length) return;
-    const dt = new DataTransfer();
-    files.forEach(f => dt.items.add(f));
-    const fakeEvent = { target: { files: dt.files, value: "" } } as unknown as React.ChangeEvent<HTMLInputElement>;
-    importFromPDFs(fakeEvent);
+    if (files.length) doImport(files);
   }
 
   async function resolveDuplicate(action: "update" | "create") {
@@ -191,16 +187,13 @@ export default function VenuesPage() {
     await reload();
   }
 
-  async function importFromPDFs(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
+  async function doImport(files: File[]) {
     if (!files.length) return;
-    e.target.value = "";
     setImporting(true);
     setImportError(null);
     setImportResults(null);
 
     if (files.length === 1) {
-      // Single file: use existing route and auto-select the venue
       const fd = new FormData();
       fd.append("file", files[0]);
       const res = await fetch("/api/venues/import-pdf", { method: "POST", body: fd });
@@ -217,7 +210,6 @@ export default function VenuesPage() {
         setDetailTab("stage");
       }
     } else {
-      // Multiple files: batch route
       const fd = new FormData();
       files.forEach(f => fd.append("files", f));
       const res = await fetch("/api/venues/import-pdfs", { method: "POST", body: fd });
@@ -231,6 +223,12 @@ export default function VenuesPage() {
         await reload();
       }
     }
+  }
+
+  async function importFromPDFs(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    doImport(files);
   }
 
   const filtered = venues.filter((v) => {

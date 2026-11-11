@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { useSession } from "next-auth/react";
 
 type Invoice = {
   id: number;
@@ -23,6 +24,9 @@ type Invoice = {
 type Expense = {
   id: number;
   production: string | null;
+  productionId: number | null;
+  productionLink: { id: number; name: string } | null;
+  submittedByUser: { id: number; name: string } | null;
   category: string;
   description: string;
   supplier: string | null;
@@ -35,6 +39,8 @@ type Expense = {
   notes: string | null;
   createdAt: string;
 };
+
+type Production = { id: number; name: string };
 
 const SALES_STATUSES = [
   { key: "draft",    label: "Draft",    color: "#6b7280" },
@@ -51,6 +57,7 @@ const EXPENSE_STATUSES = [
   { key: "pending",  label: "Pending",  color: "#6b7280" },
   { key: "approved", label: "Approved", color: "#3b82f6" },
   { key: "paid",     label: "Paid",     color: "#10b981" },
+  { key: "rejected", label: "Rejected", color: "#ef4444" },
 ];
 const EXPENSE_CATEGORIES = [
   "travel", "accommodation", "marketing", "props", "costume", "set", "equipment", "catering", "venue", "misc",
@@ -66,8 +73,9 @@ const BLANK_INV: Partial<Invoice> & { type: string } = {
   type: "sales", reference: "", description: "", party: "", production: "",
   netAmount: 0, vatAmount: 0, issueDate: "", dueDate: "", status: "draft", notes: "",
 };
-const BLANK_EXP: Partial<Expense> = {
-  production: "", category: "misc", description: "", supplier: "",
+const BLANK_EXP: Partial<Expense> & { productionId: number | null } = {
+  production: "", productionId: null, productionLink: null, submittedByUser: null,
+  category: "misc", description: "", supplier: "",
   netAmount: 0, vatAmount: 0, date: "", paymentMethod: "to_pay", status: "pending", reference: "", notes: "",
 };
 
@@ -97,10 +105,13 @@ function StatusBadge({ status, statuses }: { status: string; statuses: { key: st
 }
 
 function FinancePageInner() {
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role ?? "member";
   const searchParams = useSearchParams();
   const initTab = searchParams.get("tab") === "purchase" ? "purchase" : searchParams.get("tab") === "expenses" ? "expenses" : "sales";
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [productions, setProductions] = useState<Production[]>([]);
   const [tab, setTab] = useState<"sales" | "purchase" | "expenses">(initTab as "sales" | "purchase" | "expenses");
   const [filterStatus, setFilterStatus] = useState("all");
   const [showForm, setShowForm] = useState(false);
@@ -110,7 +121,10 @@ function FinancePageInner() {
   const [selectedExp, setSelectedExp] = useState<Expense | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
-  useEffect(() => { reloadAll(); }, []);
+  useEffect(() => {
+    reloadAll();
+    fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d); });
+  }, []);
 
   async function reloadAll() {
     const [invData, expData] = await Promise.all([
@@ -202,8 +216,9 @@ function FinancePageInner() {
 
   function openEditExp(exp: Expense) {
     setExpForm({
-      id: exp.id, production: exp.production ?? "", category: exp.category,
-      description: exp.description, supplier: exp.supplier ?? "",
+      id: exp.id, production: exp.production ?? "", productionId: exp.productionId ?? null,
+      productionLink: exp.productionLink, submittedByUser: exp.submittedByUser,
+      category: exp.category, description: exp.description, supplier: exp.supplier ?? "",
       netAmount: exp.netAmount, vatAmount: exp.vatAmount,
       date: exp.date ? exp.date.slice(0, 10) : "",
       paymentMethod: exp.paymentMethod ?? "to_pay",
@@ -331,11 +346,9 @@ function FinancePageInner() {
                 <th className="px-4 py-3 text-left font-medium text-white">Production</th>
                 <th className="px-4 py-3 text-left font-medium text-white">Category</th>
                 <th className="px-4 py-3 text-left font-medium text-white">Description</th>
-                <th className="px-4 py-3 text-left font-medium text-white">Supplier</th>
+                <th className="px-4 py-3 text-left font-medium text-white">Submitted by</th>
                 <th className="px-4 py-3 text-right font-medium text-white">Net</th>
-                <th className="px-4 py-3 text-right font-medium text-white">VAT</th>
                 <th className="px-4 py-3 text-right font-medium text-white">Total</th>
-                <th className="px-4 py-3 text-left font-medium text-white">Payment</th>
                 <th className="px-4 py-3 text-left font-medium text-white">Status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -344,14 +357,12 @@ function FinancePageInner() {
               {visibleExp.map(exp => (
                 <tr key={exp.id} onClick={() => { setSelectedExp(exp); setSelectedInv(null); }} className="border-t hover:bg-white/5 transition-colors cursor-pointer group" style={{ borderColor: "var(--psg-card-border)" }}>
                   <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{fmtDate(exp.date)}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{exp.production || "—"}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{exp.productionLink?.name ?? exp.production ?? "—"}</td>
                   <td className="px-4 py-3 text-xs capitalize" style={{ color: "var(--psg-muted)" }}>{exp.category}</td>
                   <td className="px-4 py-3 font-medium text-white">{exp.description}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{exp.supplier || "—"}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{exp.submittedByUser?.name ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-medium text-white">{fmt(exp.netAmount)}</td>
-                  <td className="px-4 py-3 text-right text-xs" style={{ color: "var(--psg-muted)" }}>{exp.vatAmount > 0 ? fmt(exp.vatAmount) : "—"}</td>
                   <td className="px-4 py-3 text-right font-medium text-white">{fmt(exp.netAmount + exp.vatAmount)}</td>
-                  <td className="px-4 py-3 text-xs capitalize" style={{ color: "var(--psg-muted)" }}>{PAYMENT_METHODS.find(p => p.key === exp.paymentMethod)?.label ?? exp.paymentMethod}</td>
                   <td className="px-4 py-3"><StatusBadge status={exp.status} statuses={EXPENSE_STATUSES} /></td>
                   <td className="px-4 py-3 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                     <div className="flex gap-3 items-center">
@@ -366,7 +377,7 @@ function FinancePageInner() {
                 </tr>
               ))}
               {visibleExp.length === 0 && (
-                <tr><td colSpan={11} className="px-4 py-10 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No expenses yet — add one to get started</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No expenses yet — add one to get started</td></tr>
               )}
             </tbody>
           </table>
@@ -428,21 +439,31 @@ function FinancePageInner() {
           <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
             <div>
               <h2 className="font-semibold text-white">{selectedExp.description}</h2>
-              <div className="text-xs mt-0.5 capitalize" style={{ color: "var(--psg-muted)" }}>{selectedExp.category}{selectedExp.production ? ` · ${selectedExp.production}` : ""}</div>
+              <div className="text-xs mt-0.5 capitalize" style={{ color: "var(--psg-muted)" }}>
+                {selectedExp.category}{(selectedExp.productionLink?.name ?? selectedExp.production) ? ` · ${selectedExp.productionLink?.name ?? selectedExp.production}` : ""}
+              </div>
             </div>
             <button onClick={() => setSelectedExp(null)} className="text-xl leading-none hover:text-white shrink-0" style={{ color: "var(--psg-muted)" }}>×</button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: "var(--psg-muted)" }}>Status</div>
-              <div className="flex flex-wrap gap-1">
-                {EXPENSE_STATUSES.map(s => (
-                  <button key={s.key} onClick={() => setExpStatus(selectedExp, s.key)} className="px-3 py-1 rounded-full text-xs font-medium transition-colors" style={{ backgroundColor: selectedExp.status === s.key ? s.color : s.color + "22", color: selectedExp.status === s.key ? "#fff" : s.color }}>
-                    {s.label}
-                  </button>
-                ))}
+            {role === "admin" && (
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: "var(--psg-muted)" }}>Status</div>
+                <div className="flex flex-wrap gap-1">
+                  {EXPENSE_STATUSES.map(s => (
+                    <button key={s.key} onClick={() => setExpStatus(selectedExp, s.key)} className="px-3 py-1 rounded-full text-xs font-medium transition-colors" style={{ backgroundColor: selectedExp.status === s.key ? s.color : s.color + "22", color: selectedExp.status === s.key ? "#fff" : s.color }}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+            {role !== "admin" && (
+              <div className="flex items-center gap-2">
+                <StatusBadge status={selectedExp.status} statuses={EXPENSE_STATUSES} />
+                {selectedExp.status === "rejected" && <span className="text-xs text-red-400">Your expense was rejected.</span>}
+              </div>
+            )}
             <div className="rounded-lg p-4 space-y-2 border" style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" }}>
               <div className="flex justify-between text-sm"><span style={{ color: "var(--psg-muted)" }}>Net</span><span className="text-white font-medium">{fmt(selectedExp.netAmount)}</span></div>
               {selectedExp.vatAmount > 0 && <div className="flex justify-between text-sm"><span style={{ color: "var(--psg-muted)" }}>VAT</span><span className="text-white">{fmt(selectedExp.vatAmount)}</span></div>}
@@ -452,6 +473,7 @@ function FinancePageInner() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              {selectedExp.submittedByUser && <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Submitted by</div><div className="text-sm text-white">{selectedExp.submittedByUser.name}</div></div>}
               {selectedExp.supplier && <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Supplier</div><div className="text-sm text-white">{selectedExp.supplier}</div></div>}
               {selectedExp.date && <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Date</div><div className="text-sm text-white">{fmtDate(selectedExp.date)}</div></div>}
               <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Payment method</div><div className="text-sm text-white">{PAYMENT_METHODS.find(p => p.key === selectedExp.paymentMethod)?.label ?? selectedExp.paymentMethod}</div></div>
@@ -460,12 +482,17 @@ function FinancePageInner() {
             {selectedExp.notes && <div><div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: "var(--psg-muted)" }}>Notes</div><p className="text-sm" style={{ color: "var(--psg-muted)" }}>{selectedExp.notes}</p></div>}
           </div>
           <div className="px-5 py-4 border-t flex gap-2" style={{ borderColor: "var(--psg-card-border)" }}>
-            <button onClick={() => openEditExp(selectedExp)} className="flex-1 border py-2 rounded text-sm hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
-            {selectedExp.status !== "paid" && <button onClick={() => setExpStatus(selectedExp, "paid")} className="flex-1 text-white py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "#10b981" }}>Mark Paid</button>}
+            {(role === "admin" || selectedExp.status === "pending") && (
+              <button onClick={() => openEditExp(selectedExp)} className="flex-1 border py-2 rounded text-sm hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
+            )}
+            {role === "admin" && selectedExp.status === "pending" && <button onClick={() => setExpStatus(selectedExp, "approved")} className="flex-1 text-white py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "#3b82f6" }}>Approve</button>}
+            {role === "admin" && selectedExp.status === "approved" && <button onClick={() => setExpStatus(selectedExp, "paid")} className="flex-1 text-white py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "#10b981" }}>Mark Paid</button>}
             {confirmDelete === selectedExp.id ? (
               <><button onClick={() => delExp(selectedExp.id)} className="border py-2 px-3 rounded text-sm text-red-400" style={{ borderColor: "rgba(239,68,68,0.3)" }}>Yes, delete</button><button onClick={() => setConfirmDelete(null)} className="border py-2 px-3 rounded text-sm" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button></>
             ) : (
-              <button onClick={() => setConfirmDelete(selectedExp.id)} className="border py-2 px-3 rounded text-sm text-red-400 hover:bg-red-900/20" style={{ borderColor: "rgba(239,68,68,0.3)" }}>Delete</button>
+              (role === "admin" || selectedExp.status === "pending") && (
+                <button onClick={() => setConfirmDelete(selectedExp.id)} className="border py-2 px-3 rounded text-sm text-red-400 hover:bg-red-900/20" style={{ borderColor: "rgba(239,68,68,0.3)" }}>Delete</button>
+              )
             )}
           </div>
         </div>
@@ -571,7 +598,10 @@ function FinancePageInner() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Production</label>
-                    <input className={inp} style={inpStyle} value={expForm.production ?? ""} onChange={e => setExpForm(f => ({ ...f, production: e.target.value }))} placeholder="e.g. Curious Incident" />
+                    <select className={inp} style={inpStyle} value={expForm.productionId ?? ""} onChange={e => setExpForm(f => ({ ...f, productionId: e.target.value ? Number(e.target.value) : null }))}>
+                      <option value="">— None —</option>
+                      {productions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -606,12 +636,14 @@ function FinancePageInner() {
                     </select>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Status</label>
-                  <select className={inp} style={inpStyle} value={expForm.status ?? "pending"} onChange={e => setExpForm(f => ({ ...f, status: e.target.value }))}>
-                    {EXPENSE_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-                  </select>
-                </div>
+                {role === "admin" && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Status</label>
+                    <select className={inp} style={inpStyle} value={expForm.status ?? "pending"} onChange={e => setExpForm(f => ({ ...f, status: e.target.value }))}>
+                      {EXPENSE_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Notes</label>
                   <textarea rows={2} className={inp} style={inpStyle} value={expForm.notes ?? ""} onChange={e => setExpForm(f => ({ ...f, notes: e.target.value }))} />

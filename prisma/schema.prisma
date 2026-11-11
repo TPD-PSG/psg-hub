@@ -28,6 +28,7 @@ model User {
   staffAssignments    StaffAssignment[]
   helpTicketsCreated  HelpTicket[]     @relation("TicketCreator")
   helpTicketsAssigned HelpTicket[]     @relation("TicketAssignee")
+  expensesSubmitted   ProductionExpense[] @relation("ExpenseSubmitter")
 }
 
 model Production {
@@ -58,6 +59,7 @@ model Production {
   team              ProductionTeam[]
   tourStops         TourStop[]
   staffAssignments  StaffAssignment[]
+  expenses          ProductionExpense[]
 }
 
 
@@ -515,20 +517,24 @@ model CompanyInvoice {
 }
 
 model ProductionExpense {
-  id            Int       @id @default(autoincrement())
-  production    String?   // free-text production name
-  category      String    @default("misc") // travel | accommodation | marketing | props | costume | set | equipment | catering | venue | misc
-  description   String
-  supplier      String?
-  netAmount     Float     @default(0)
-  vatAmount     Float     @default(0)
-  date          DateTime?
-  paymentMethod String?   @default("to_pay") // card | cash | transfer | to_pay
-  status        String    @default("pending") // pending | approved | paid
-  reference     String?
-  notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                Int        @id @default(autoincrement())
+  production        String?    // free-text fallback (legacy)
+  productionId      Int?
+  productionLink    Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  submittedByUserId Int?
+  submittedByUser   User?      @relation("ExpenseSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  category          String     @default("misc") // travel | accommodation | marketing | props | costume | set | equipment | catering | venue | misc
+  description       String
+  supplier          String?
+  netAmount         Float      @default(0)
+  vatAmount         Float      @default(0)
+  date              DateTime?
+  paymentMethod     String?    @default("to_pay") // card | cash | transfer | to_pay
+  status            String     @default("pending") // pending | approved | paid | rejected
+  reference         String?
+  notes             String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 }
 
 model Setting {

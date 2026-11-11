@@ -2,7 +2,24 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, createContext, useContext } from "react";
+
+// ── Mobile sidebar context ────────────────────────────────────────────────────
+
+type MobileSidebarCtx = { open: boolean; setOpen: (v: boolean) => void };
+const MobileSidebarContext = createContext<MobileSidebarCtx>({ open: false, setOpen: () => {} });
+export function useMobileSidebar() { return useContext(MobileSidebarContext); }
+
+export function MobileSidebarProvider({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <MobileSidebarContext.Provider value={{ open, setOpen }}>
+      {children}
+    </MobileSidebarContext.Provider>
+  );
+}
+
+// ── Types & data ──────────────────────────────────────────────────────────────
 
 type NavItem = { label: string; href: string; section?: string };
 type SectionDef = { title: string; backHref?: string; items: NavItem[] };
@@ -93,6 +110,8 @@ const EVENT_TYPE_FILTERS = [
   { key: "task", label: "Tasks", color: "#6b7280" },
 ];
 
+// ── Main sidebar inner ────────────────────────────────────────────────────────
+
 function SidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -100,6 +119,7 @@ function SidebarInner() {
   const [collapsed, setCollapsed] = useState<boolean | null>(null);
   const [prodName, setProdName] = useState<string | null>(null);
   const [calProductions, setCalProductions] = useState<CalProduction[]>([]);
+  const { open: mobileOpen, setOpen: setMobileOpen } = useMobileSidebar();
 
   useEffect(() => {
     try {
@@ -110,6 +130,11 @@ function SidebarInner() {
     }
   }, []);
 
+  // Close mobile sidebar on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname, searchParams, setMobileOpen]);
+
   function toggle() {
     setCollapsed(c => {
       try { localStorage.setItem("sidebar-collapsed", String(!c)); } catch {}
@@ -117,11 +142,9 @@ function SidebarInner() {
     });
   }
 
-  // Detect production detail: /productions/123
   const prodMatch = pathname.match(/^\/productions\/(\d+)/);
   const prodId = prodMatch?.[1] ?? null;
 
-  // Fetch production name for the sidebar title
   useEffect(() => {
     if (!prodId) { setProdName(null); return; }
     fetch(`/api/productions/${prodId}`)
@@ -130,7 +153,6 @@ function SidebarInner() {
       .catch(() => setProdName(null));
   }, [prodId]);
 
-  // Fetch calendar productions when on calendar page
   useEffect(() => {
     if (pathname !== "/calendar") { setCalProductions([]); return; }
     fetch("/api/productions")
@@ -147,7 +169,6 @@ function SidebarInner() {
       .catch(() => {});
   }, [pathname]);
 
-  // Calendar filter helpers (URL-based)
   const hiddenProdsParam = searchParams.get("hideProds") ?? "";
   const hiddenTypesParam = searchParams.get("hideTypes") ?? "";
   const hiddenProdIds = new Set(hiddenProdsParam ? hiddenProdsParam.split(",").map(Number) : []);
@@ -178,11 +199,9 @@ function SidebarInner() {
     router.replace(`/calendar?${params.toString()}`);
   }
 
-  // Determine which section definition to use
   let section: SectionDef | null = null;
 
   if (prodId) {
-    const currentSection = searchParams.get("section") ?? "schedule";
     section = {
       title: prodName ?? "Production",
       backHref: "/productions",
@@ -191,12 +210,11 @@ function SidebarInner() {
         href: `/productions/${prodId}?section=${s.section}`,
       })),
     };
-    // mark active based on current section param
     section = {
       ...section,
       items: section.items.map(item => ({
         ...item,
-        active: item.section === currentSection,
+        active: item.section === (searchParams.get("section") ?? "schedule"),
       } as NavItem & { active: boolean })),
     };
   } else {
@@ -212,59 +230,61 @@ function SidebarInner() {
   function isActive(item: NavItem) {
     if (prodId) return item.section === (searchParams.get("section") ?? "schedule");
     if (item.section) return (currentSection ?? "Overview") === item.section;
-    // For items without section, match exact pathname
     const itemPath = item.href.split("?")[0];
     return pathname === itemPath && !currentSection;
   }
 
-  return (
-    <aside
-      className="shrink-0 flex flex-col border-r transition-[width] duration-200"
-      style={{
-        width: collapsed ? 44 : 220,
-        backgroundColor: "var(--psg-card-bg)",
-        borderColor: "var(--psg-card-border)",
-        minHeight: "calc(100vh - 56px)",
-      }}
-    >
+  const sidebarContent = (isMobile: boolean) => (
+    <>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-3.5 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-        {!collapsed && (
-          <span className="text-sm font-semibold text-white truncate pr-2">{section.title}</span>
+        {(!collapsed || isMobile) && (
+          <span className="text-sm font-semibold text-white truncate pr-2">{section!.title}</span>
         )}
-        <button
-          onClick={toggle}
-          className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors shrink-0 text-lg leading-none"
-          style={{ color: "var(--psg-muted)", marginLeft: collapsed ? "auto" : undefined }}
-          title={collapsed ? "Expand" : "Collapse"}
-        >
-          {collapsed ? "›" : "‹"}
-        </button>
+        {isMobile ? (
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/10 transition-colors shrink-0 text-lg"
+            style={{ color: "var(--psg-muted)", marginLeft: collapsed ? "auto" : undefined }}
+            title="Close"
+          >
+            ✕
+          </button>
+        ) : (
+          <button
+            onClick={toggle}
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors shrink-0 text-lg leading-none"
+            style={{ color: "var(--psg-muted)", marginLeft: collapsed ? "auto" : undefined }}
+            title={collapsed ? "Expand" : "Collapse"}
+          >
+            {collapsed ? "›" : "‹"}
+          </button>
+        )}
       </div>
 
       {/* Nav items */}
       <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden">
-        {section.items.map(item => {
+        {section!.items.map(item => {
           const active = isActive(item);
           return (
             <Link
               key={item.href}
               href={item.href}
-              title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${active ? "bg-white/10 text-white" : "hover:bg-white/5 hover:text-white"}`}
+              title={collapsed && !isMobile ? item.label : undefined}
+              className={`flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors ${active ? "bg-white/10 text-white" : "hover:bg-white/5 hover:text-white"}`}
               style={{ color: active ? "white" : "var(--psg-muted)" }}
             >
               <span
                 className="w-1.5 h-1.5 rounded-full shrink-0"
                 style={{ backgroundColor: active ? "var(--psg-blue)" : "transparent", border: active ? "none" : "1px solid currentColor", opacity: active ? 1 : 0.4 }}
               />
-              {!collapsed && <span className="truncate">{item.label}</span>}
+              {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
             </Link>
           );
         })}
 
         {/* Calendar production filters */}
-        {pathname === "/calendar" && !collapsed && calProductions.length > 0 && (
+        {pathname === "/calendar" && (!collapsed || isMobile) && calProductions.length > 0 && (
           <>
             <div className="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Productions</div>
             {calProductions.map(p => {
@@ -303,15 +323,53 @@ function SidebarInner() {
 
       {/* Back link */}
       <div className="p-3 border-t" style={{ borderColor: "var(--psg-card-border)" }}>
-        {!collapsed ? (
-          <Link href={section.backHref ?? "/"} className="flex items-center gap-1.5 text-xs hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>
-            ← {section.backHref ? "Back" : "Home"}
+        {(!collapsed || isMobile) ? (
+          <Link href={section!.backHref ?? "/"} className="flex items-center gap-1.5 text-xs hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>
+            ← {section!.backHref ? "Back" : "Home"}
           </Link>
         ) : (
-          <Link href={section.backHref ?? "/"} title={section.backHref ? "Back" : "Home"} className="flex items-center justify-center hover:text-white transition-colors text-sm" style={{ color: "var(--psg-muted)" }}>←</Link>
+          <Link href={section!.backHref ?? "/"} title={section!.backHref ? "Back" : "Home"} className="flex items-center justify-center hover:text-white transition-colors text-sm" style={{ color: "var(--psg-muted)" }}>←</Link>
         )}
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside
+        className="hidden md:flex shrink-0 flex-col border-r transition-[width] duration-200"
+        style={{
+          width: collapsed ? 44 : 220,
+          backgroundColor: "var(--psg-card-bg)",
+          borderColor: "var(--psg-card-border)",
+          minHeight: "calc(100vh - 56px)",
+        }}
+      >
+        {sidebarContent(false)}
+      </aside>
+
+      {/* Mobile drawer backdrop */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-50 bg-black/60"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <aside
+        className={`md:hidden fixed top-0 left-0 z-50 flex flex-col border-r transition-transform duration-250 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{
+          width: 260,
+          height: "100dvh",
+          backgroundColor: "var(--psg-card-bg)",
+          borderColor: "var(--psg-card-border)",
+        }}
+      >
+        {sidebarContent(true)}
+      </aside>
+    </>
   );
 }
 

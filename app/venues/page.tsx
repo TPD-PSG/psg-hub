@@ -205,7 +205,7 @@ export default function VenuesPage() {
   function onImportDrop(e: React.DragEvent) {
     e.preventDefault();
     setImportDrag(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type === "application/pdf");
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".doc") || f.name.toLowerCase().endsWith(".docx"));
     if (files.length) doImport(files);
   }
 
@@ -369,7 +369,7 @@ export default function VenuesPage() {
           <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{venues.length} venue{venues.length !== 1 ? "s" : ""} in directory</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <input ref={importRef} type="file" accept=".pdf" multiple className="hidden" onChange={importFromPDFs} />
+          <input ref={importRef} type="file" accept=".pdf,.doc,.docx" multiple className="hidden" onChange={importFromPDFs} />
           <div
             onDragOver={e => { e.preventDefault(); setImportDrag(true); }}
             onDragLeave={() => setImportDrag(false)}
@@ -383,7 +383,7 @@ export default function VenuesPage() {
               backgroundColor: importDrag ? "rgba(61,68,212,0.08)" : undefined,
             }}
           >
-            {importing ? (importPct === -1 ? "Analysing with AI…" : importPct !== null ? `Uploading… ${importPct}%` : "Importing…") : importDrag ? "Drop PDF(s) here" : "⬆ Import PDF(s)"}
+            {importing ? (importPct === -1 ? "Analysing with AI…" : importPct !== null ? `Uploading… ${importPct}%` : "Importing…") : importDrag ? "Drop file(s) here" : "⬆ Import PDF / Word"}
           </div>
           {importPct !== null && importing && (
             <div className="w-48"><UploadProgress pct={importPct} label="Analysing with AI…" /></div>

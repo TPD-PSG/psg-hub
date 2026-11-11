@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Anthropic from "@anthropic-ai/sdk";
+import mammoth from "mammoth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +34,18 @@ export async function POST(req: NextRequest) {
 
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString("base64");
+  const isDocx = file.name.toLowerCase().endsWith(".docx") || file.name.toLowerCase().endsWith(".doc") || file.type.includes("wordprocessingml") || file.type.includes("msword");
 
   const client = new Anthropic({ apiKey });
+
+  // Build document content block — PDF goes as base64 doc, Word gets text-extracted first
+  let docContent: Anthropic.MessageParam["content"][number];
+  if (isDocx) {
+    const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
+    docContent = { type: "text", text: `Venue document text:\n\n${result.value}` };
+  } else {
+    docContent = { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } };
+  }
 
   const message = await client.messages.create({
     model: "claude-sonnet-5-5",
@@ -43,10 +54,7 @@ export async function POST(req: NextRequest) {
       {
         role: "user",
         content: [
-          {
-            type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: base64 },
-          },
+          docContent,
           {
             type: "text",
             text: `Extract information from this venue document. Return ONLY valid JSON with this structure — omit any key where the value is unknown, omit entire techSpecs sections with no data:

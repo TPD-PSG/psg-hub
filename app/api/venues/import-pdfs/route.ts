@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Anthropic from "@anthropic-ai/sdk";
+import mammoth from "mammoth";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,15 @@ Extract all named contacts (technical manager, production manager, stage door, m
 async function processPDF(file: File, client: Anthropic): Promise<{ ok: true; name: string } | { ok: false; name: string; error: string }> {
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString("base64");
+  const isDocx = file.name.toLowerCase().endsWith(".docx") || file.name.toLowerCase().endsWith(".doc") || file.type.includes("wordprocessingml") || file.type.includes("msword");
+
+  let docContent: Anthropic.MessageParam["content"][number];
+  if (isDocx) {
+    const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
+    docContent = { type: "text", text: `Venue document text:\n\n${result.value}` };
+  } else {
+    docContent = { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } };
+  }
 
   try {
     const message = await client.messages.create({
@@ -38,7 +48,7 @@ async function processPDF(file: File, client: Anthropic): Promise<{ ok: true; na
         {
           role: "user",
           content: [
-            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+            docContent,
             { type: "text", text: PROMPT },
           ],
         },

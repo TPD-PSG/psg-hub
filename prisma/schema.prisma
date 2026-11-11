@@ -613,6 +613,20 @@ model HelpTicket {
   updatedAt       DateTime  @updatedAt
 }
 
+model Supplier {
+  id          Int      @id @default(autoincrement())
+  name        String
+  category    String   @default("other") // venue | contractor | equipment | transport | catering | marketing | legal | insurance | other
+  contactName String?
+  email       String?
+  phone       String?
+  website     String?
+  address     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model RoadmapItem {
   id              Int      @id @default(autoincrement())
   title           String

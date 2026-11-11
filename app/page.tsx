@@ -442,6 +442,7 @@ export default function HomePage() {
                 sub={openMaint.length > 0 ? `${openMaint.length} open issue${openMaint.length !== 1 ? "s" : ""}` : "No open issues"}
                 badge={urgentMaint.length || undefined} />
             )}
+            <CompactTile href="/suppliers" icon="📦" title="Supplier Register" sub="Contractors, venues & services" />
           </div>
         </>
       )}
@@ -457,6 +458,7 @@ export default function HomePage() {
         <>
           <SectionHeading title="Admin" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <CompactTile href="/director" icon="📊" title="Director Dashboard" sub="Finance, pipeline & operations overview" />
             <CompactTile href="/admin/users" icon="👥" title="Users" sub="Access & permissions" />
             <CompactTile href="/admin/settings" icon="⚙️" title="Hub Settings" sub="News banner, quick links" />
           </div>

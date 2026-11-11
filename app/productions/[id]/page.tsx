@@ -1059,7 +1059,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ── ACCOMMODATION TAB ── */}
-      {tab === "accommodation" && (
+      {tab === "accommodation" && prod.isTour && (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             {prod.hotelBookings.length > 0 && (
@@ -1146,7 +1146,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ── HAULAGE TAB ── */}
-      {tab === "haulage" && (
+      {tab === "haulage" && prod.isTour && (
         <div className="space-y-4">
           <div className="flex justify-end gap-2">
             <ExportMenu actions={[
@@ -1514,7 +1514,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ── TOUR STOPS TAB ── */}
-      {tab === "tour" && (
+      {tab === "tour" && prod.isTour && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -1695,8 +1695,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         </div>
       )}
 
-      {/* ── TASKS TAB ── */}
-      {tab === "advancing" && (
+      {/* ── ADVANCING TAB ── */}
+      {tab === "advancing" && prod.isTour && (
         <AdvancingBoard tourStops={tourStops}
           onStatusChange={async (stopId, status) => {
             await fetch(`/api/tour-stops/${stopId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ advancingStatus: status }) });

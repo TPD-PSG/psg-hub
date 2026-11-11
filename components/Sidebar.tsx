@@ -102,7 +102,7 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
   },
 };
 
-const PRODUCTION_SECTIONS: NavItem[] = [
+const PRODUCTION_SECTIONS_ALL: NavItem[] = [
   { label: "Schedule", href: "", section: "schedule" },
   { label: "Tour Stops", href: "", section: "tour" },
   { label: "Budget", href: "", section: "budget" },
@@ -113,6 +113,8 @@ const PRODUCTION_SECTIONS: NavItem[] = [
   { label: "Advancing", href: "", section: "advancing" },
   { label: "Tasks", href: "", section: "tasks" },
 ];
+
+const TOUR_ONLY_SECTIONS = new Set(["tour", "accommodation", "haulage", "advancing"]);
 
 type CalProduction = { id: number; name: string; color: string };
 
@@ -135,6 +137,7 @@ function SidebarInner() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState<boolean | null>(null);
   const [prodName, setProdName] = useState<string | null>(null);
+  const [prodIsTour, setProdIsTour] = useState<boolean | null>(null);
   const [calProductions, setCalProductions] = useState<CalProduction[]>([]);
   const { open: mobileOpen, setOpen: setMobileOpen } = useMobileSidebar();
 
@@ -163,11 +166,11 @@ function SidebarInner() {
   const prodId = prodMatch?.[1] ?? null;
 
   useEffect(() => {
-    if (!prodId) { setProdName(null); return; }
+    if (!prodId) { setProdName(null); setProdIsTour(null); return; }
     fetch(`/api/productions/${prodId}`)
       .then(r => r.json())
-      .then(d => setProdName(d?.name ?? null))
-      .catch(() => setProdName(null));
+      .then(d => { setProdName(d?.name ?? null); setProdIsTour(d?.isTour ?? false); })
+      .catch(() => { setProdName(null); setProdIsTour(null); });
   }, [prodId]);
 
   useEffect(() => {
@@ -219,10 +222,13 @@ function SidebarInner() {
   let section: SectionDef | null = null;
 
   if (prodId) {
+    const visibleSections = PRODUCTION_SECTIONS_ALL.filter(s =>
+      prodIsTour === null || prodIsTour || !TOUR_ONLY_SECTIONS.has(s.section!)
+    );
     section = {
       title: prodName ?? "Production",
       backHref: "/productions",
-      items: PRODUCTION_SECTIONS.map(s => ({
+      items: visibleSections.map(s => ({
         ...s,
         href: `/productions/${prodId}?section=${s.section}`,
       })),

@@ -37,6 +37,26 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
   );
 }
 
+// pct: 0-100 = upload progress, -1 = indeterminate AI processing
+function UploadProgress({ pct, label }: { pct: number; label?: string }) {
+  const indeterminate = pct === -1;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs" style={{ color: "var(--psg-blue)" }}>
+        <span>{indeterminate ? (label ?? "Analysing with AI…") : `Uploading… ${pct}%`}</span>
+        {!indeterminate && <span>{pct}%</span>}
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(61,68,212,0.2)" }}>
+        {indeterminate ? (
+          <div className="h-full w-1/3 rounded-full animate-[shimmer_1.2s_ease-in-out_infinite]" style={{ backgroundColor: "var(--psg-blue)" }} />
+        ) : (
+          <div className="h-full rounded-full transition-all duration-150" style={{ width: `${pct}%`, backgroundColor: "var(--psg-blue)" }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SpecRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value || value === "None" || value === "null") return null;
   return (
@@ -73,8 +93,10 @@ export default function VenuesPage() {
   const [editContact, setEditContact] = useState<VenueContact | null>(null);
   const [contactForm, setContactForm] = useState(BLANK_CONTACT);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null); // null=idle, 0-100=uploading, -1=processing
   const [uploadStatus, setUploadStatus] = useState<{ parsed: boolean; error?: string } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importPct, setImportPct] = useState<number | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importResults, setImportResults] = useState<{ name: string; ok: boolean; error?: string }[] | null>(null);
   const [importDrag, setImportDrag] = useState(false);
@@ -126,16 +148,35 @@ export default function VenuesPage() {
     await reload();
   }
 
+  function xhrPost(url: string, fd: FormData, onProgress: (pct: number) => void): Promise<{ ok: boolean; status: number; data: unknown }> {
+    return new Promise(resolve => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100)); };
+      xhr.onload = () => {
+        let data: unknown = {};
+        try { data = JSON.parse(xhr.responseText); } catch {}
+        resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data });
+      };
+      xhr.onerror = () => resolve({ ok: false, status: 0, data: { error: "Network error" } });
+      xhr.send(fd);
+    });
+  }
+
   async function uploadTechSpecFile(file: File) {
     if (!selected) return;
     setUploading(true);
+    setUploadPct(0);
     setUploadStatus(null);
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch(`/api/venues/${selected.id}/tech-spec`, { method: "POST", body: fd });
-    const data = await res.json();
+    const { data } = await xhrPost(`/api/venues/${selected.id}/tech-spec`, fd, pct => {
+      setUploadPct(pct < 100 ? pct : -1); // -1 = processing
+    });
+    const d = data as { parsed?: boolean; error?: string };
     setUploading(false);
-    setUploadStatus({ parsed: data.parsed, error: data.error });
+    setUploadPct(null);
+    setUploadStatus({ parsed: d.parsed ?? false, error: d.error });
     await reload();
     setTimeout(() => setUploadStatus(null), 6000);
   }
@@ -190,36 +231,43 @@ export default function VenuesPage() {
   async function doImport(files: File[]) {
     if (!files.length) return;
     setImporting(true);
+    setImportPct(0);
     setImportError(null);
     setImportResults(null);
 
     if (files.length === 1) {
       const fd = new FormData();
       fd.append("file", files[0]);
-      const res = await fetch("/api/venues/import-pdf", { method: "POST", body: fd });
-      const data = res.ok || res.headers.get("content-type")?.includes("json") ? await res.json().catch(() => ({})) : {};
+      const { ok, data } = await xhrPost("/api/venues/import-pdf", fd, pct => {
+        setImportPct(pct < 100 ? pct : -1);
+      });
+      const d = data as { duplicate?: boolean; existing?: { id: number; name: string; city: string | null }; extractedName?: string; error?: string; venue?: Venue };
       setImporting(false);
-      if (data.duplicate) {
-        setDupDialog({ file: files[0], existing: data.existing, extractedName: data.extractedName });
-      } else if (!res.ok) {
-        setImportError(data.error ?? "Import failed");
+      setImportPct(null);
+      if (d.duplicate) {
+        setDupDialog({ file: files[0], existing: d.existing!, extractedName: d.extractedName! });
+      } else if (!ok) {
+        setImportError(d.error ?? "Import failed");
         setTimeout(() => setImportError(null), 6000);
       } else {
         await reload();
-        setSelected(data.venue);
+        setSelected(d.venue!);
         setDetailTab("stage");
       }
     } else {
       const fd = new FormData();
       files.forEach(f => fd.append("files", f));
-      const res = await fetch("/api/venues/import-pdfs", { method: "POST", body: fd });
-      const data = res.ok ? await res.json().catch(() => ({})) : {};
+      const { ok, data } = await xhrPost("/api/venues/import-pdfs", fd, pct => {
+        setImportPct(pct < 100 ? pct : -1);
+      });
+      const d = data as { results?: { ok: boolean; name: string; error?: string }[]; error?: string };
       setImporting(false);
-      if (!res.ok) {
-        setImportError(data.error ?? "Import failed");
+      setImportPct(null);
+      if (!ok) {
+        setImportError(d.error ?? "Import failed");
         setTimeout(() => setImportError(null), 6000);
       } else {
-        setImportResults((data.results ?? []).map((r: { ok: boolean; name: string; error?: string }) => ({ name: r.name, ok: r.ok, error: (r as { ok: false; name: string; error: string }).error })));
+        setImportResults((d.results ?? []).map(r => ({ name: r.name, ok: r.ok, error: r.error })));
         await reload();
       }
     }
@@ -300,8 +348,11 @@ export default function VenuesPage() {
               backgroundColor: importDrag ? "rgba(61,68,212,0.08)" : undefined,
             }}
           >
-            {importing ? "⏳ Importing…" : importDrag ? "Drop PDF(s) here" : "⬆ Import PDF(s)"}
+            {importing ? (importPct === -1 ? "Analysing with AI…" : importPct !== null ? `Uploading… ${importPct}%` : "Importing…") : importDrag ? "Drop PDF(s) here" : "⬆ Import PDF(s)"}
           </div>
+          {importPct !== null && importing && (
+            <div className="w-48"><UploadProgress pct={importPct} label="Analysing with AI…" /></div>
+          )}
           {importError && <span className="text-xs" style={{ color: "#f87171" }}>{importError}</span>}
           <button onClick={() => { setEditVenue(null); setVenueForm(BLANK_VENUE); setShowForm(true); }} className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Venue</button>
         </div>
@@ -435,7 +486,7 @@ export default function VenuesPage() {
                           <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs px-2 py-0.5 rounded font-medium" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Re-import</button>
                           <button onClick={deleteTechSpec} className="text-xs px-1.5 py-0.5 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
                         </div>
-                        {uploading && <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>⏳ Parsing tech spec with AI — this may take a moment…</div>}
+                        {uploading && uploadPct !== null && <UploadProgress pct={uploadPct} />}
                         {uploadStatus && !uploading && (uploadStatus.parsed
                           ? <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#34d399" }}>✓ Tech spec parsed and fields populated</div>
                           : <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>{uploadStatus.error ?? "File saved but could not be parsed — add ANTHROPIC_API_KEY to enable AI extraction"}</div>
@@ -455,9 +506,9 @@ export default function VenuesPage() {
                             backgroundColor: techSpecDrag ? "rgba(61,68,212,0.08)" : undefined,
                           }}
                         >
-                          {uploading ? "Uploading…" : techSpecDrag ? "Drop PDF here" : "⬆ Drag & drop or click to upload tech spec PDF"}
+                          {uploading ? (uploadPct === -1 ? "Analysing with AI…" : "Uploading…") : techSpecDrag ? "Drop PDF here" : "⬆ Drag & drop or click to upload tech spec PDF"}
                         </div>
-                        {uploading && <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>⏳ Parsing tech spec with AI — this may take a moment…</div>}
+                        {uploading && uploadPct !== null && <UploadProgress pct={uploadPct} />}
                         {uploadStatus && !uploading && (uploadStatus.parsed
                           ? <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#34d399" }}>✓ Tech spec parsed and fields populated</div>
                           : <div className="text-xs py-1.5 px-3 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>{uploadStatus.error ?? "File saved but could not be parsed — add ANTHROPIC_API_KEY to enable AI extraction"}</div>

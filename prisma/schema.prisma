@@ -589,6 +589,14 @@ model SalesTask {
   updatedAt   DateTime     @updatedAt
 }
 
+model KnowledgeDoc {
+  id        Int      @id @default(autoincrement())
+  name      String
+  mime      String
+  file      String   // base64 encoded
+  createdAt DateTime @default(now())
+}
+
 model HelpTicket {
   id              Int       @id @default(autoincrement())
   title           String

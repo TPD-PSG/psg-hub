@@ -450,6 +450,7 @@ export default function HomePage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <CompactTile href="/roadmap" icon="💡" title="Ideas & Roadmap" sub="Feature requests & improvements" />
         <CompactTile href="/helpdesk" icon="🎫" title="Help Desk" sub="Report an issue or request help" />
+        <CompactTile href="/ask" icon="🤖" title="Ask Me Anything" sub="Questions answered from company docs" />
       </div>
 
       {role === "admin" && (

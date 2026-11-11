@@ -1591,7 +1591,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               </div>
               <div>
                 <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Notes</label>
-                <input className={inp} style={inpStyle} value={stopForm.notes} onChange={e => setStopForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional" />
+                <textarea rows={4} className={inp} style={inpStyle} value={stopForm.notes} onChange={e => setStopForm(f => ({ ...f, notes: e.target.value }))} placeholder="Venue-specific show information, special requirements, contacts…" />
               </div>
               <div className="flex gap-2">
                 <button type="submit" className="px-4 py-2 rounded text-sm text-white font-medium" style={{ backgroundColor: "var(--psg-blue)" }} disabled={!stopForm.venueId}>
@@ -1630,7 +1630,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   {stop.endDate && (
                     <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Get out: {fmtDate(stop.endDate)}</p>
                   )}
-                  {stop.notes && <p className="text-xs mt-0.5 italic" style={{ color: "var(--psg-muted)" }}>{stop.notes}</p>}
+                  {stop.notes && (
+                    <div className="mt-2 rounded px-2.5 py-2 text-xs whitespace-pre-wrap" style={{ backgroundColor: "rgba(255,255,255,0.04)", color: "var(--psg-muted)", borderLeft: "2px solid var(--psg-card-border)" }}>
+                      {stop.notes}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button onClick={() => {

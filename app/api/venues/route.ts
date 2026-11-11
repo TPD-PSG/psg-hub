@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const venues = await prisma.venue.findMany({
-    include: { contacts: { orderBy: { name: "asc" } }, _count: { select: { contacts: true } } },
+    select: {
+      id: true, name: true, type: true, city: true, address: true, postcode: true,
+      phone: true, email: true, website: true, capacity: true,
+      techNotes: true, techSpecs: true, techSpecName: true, techSpecMime: true,
+      notes: true,
+      // techSpecFile excluded — base64 blob only needed on download
+      contacts: { orderBy: { name: "asc" } },
+      _count: { select: { contacts: true } },
+    },
     orderBy: { name: "asc" },
   });
   return NextResponse.json(venues);

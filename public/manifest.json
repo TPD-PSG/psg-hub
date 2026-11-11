@@ -1,0 +1,24 @@
+{
+  "name": "PSG Hub",
+  "short_name": "PSG Hub",
+  "description": "Production Solutions Group — Company Hub",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a193d",
+  "theme_color": "#0a193d",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

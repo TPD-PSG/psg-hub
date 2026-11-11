@@ -443,10 +443,15 @@ export default function HomePage() {
                 badge={urgentMaint.length || undefined} />
             )}
             <CompactTile href="/suppliers" icon="📦" title="Supplier Register" sub="Contractors, venues & services" />
-            <CompactTile href="/marketing" icon="📣" title="Marketing" sub="Social media content calendar" />
           </div>
         </>
       )}
+
+      <SectionHeading title="Marketing" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <CompactTile href="/marketing" icon="📣" title="Content Calendar" sub="Schedule & plan social media posts" />
+        <CompactTile href="/marketing?view=list" icon="📋" title="Post List" sub="All posts across platforms" />
+      </div>
 
       <SectionHeading title="Hub" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

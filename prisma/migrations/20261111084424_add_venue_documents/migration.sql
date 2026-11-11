@@ -1,0 +1,10 @@
+-- CreateTable
+CREATE TABLE "VenueDocument" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "venueId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "mime" TEXT NOT NULL,
+    "file" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "VenueDocument_venueId_fkey" FOREIGN KEY ("venueId") REFERENCES "Venue" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);

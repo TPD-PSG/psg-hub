@@ -25,6 +25,7 @@ model User {
   notifications       Notification[]
   productionTeams     ProductionTeam[]
   roadmapItems        RoadmapItem[]
+  staffAssignments    StaffAssignment[]
 }
 
 model Production {
@@ -53,7 +54,8 @@ model Production {
   callSheets        CallSheet[]
   tasks             Task[]
   team              ProductionTeam[]
-  tourStops   TourStop[]
+  tourStops         TourStop[]
+  staffAssignments  StaffAssignment[]
 }
 
 
@@ -250,20 +252,35 @@ model Venue {
   contacts        VenueContact[]
   productions     Production[]
   tourStops       TourStop[]
+  documents       VenueDocument[]
+}
+
+model VenueDocument {
+  id        Int      @id @default(autoincrement())
+  venueId   Int
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name      String
+  mime      String
+  file      String   // base64 encoded
+  createdAt DateTime @default(now())
 }
 
 model TourStop {
-  id           Int        @id @default(autoincrement())
-  productionId Int
-  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  venueId      Int
-  venue        Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  stopNumber   Int        @default(0)
-  startDate    DateTime?
-  endDate      DateTime?
-  notes        String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id               Int        @id @default(autoincrement())
+  productionId     Int
+  production       Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  venueId          Int
+  venue            Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  stopNumber       Int        @default(0)
+  loadInDate       DateTime?
+  startDate        DateTime?
+  endDate          DateTime?
+  performanceStart DateTime?
+  performanceEnd   DateTime?
+  notes            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  staffAssignments StaffAssignment[]
 }
 
 model VenueContact {
@@ -475,6 +492,40 @@ model ProductionKeyDate {
   createdAt    DateTime   @default(now())
 }
 
+model CompanyInvoice {
+  id          Int       @id @default(autoincrement())
+  type        String    // sales | purchase
+  reference   String?
+  description String
+  party       String    // client (sales) or supplier (purchase)
+  production  String?   // free-text production name, for context
+  netAmount   Float     @default(0)
+  vatAmount   Float     @default(0)
+  issueDate   DateTime?
+  dueDate     DateTime?
+  status      String    @default("draft") // draft | sent | received | overdue | paid
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ProductionExpense {
+  id            Int       @id @default(autoincrement())
+  production    String?   // free-text production name
+  category      String    @default("misc") // travel | accommodation | marketing | props | costume | set | equipment | catering | venue | misc
+  description   String
+  supplier      String?
+  netAmount     Float     @default(0)
+  vatAmount     Float     @default(0)
+  date          DateTime?
+  paymentMethod String?   @default("to_pay") // card | cash | transfer | to_pay
+  status        String    @default("pending") // pending | approved | paid
+  reference     String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
 model Setting {
   id    Int    @id @default(autoincrement())
   key   String @unique
@@ -487,6 +538,50 @@ model QuickLink {
   url   String
   icon  String @default("🔗")
   order Int    @default(0)
+}
+
+model StaffAssignment {
+  id           Int        @id @default(autoincrement())
+  userId       Int
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  tourStopId   Int?
+  tourStop     TourStop?  @relation(fields: [tourStopId], references: [id], onDelete: SetNull)
+  startDate    DateTime
+  endDate      DateTime
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model SalesBrand {
+  id          Int          @id @default(autoincrement())
+  name        String
+  category    String       @default("lighting") // lighting | sound | cable | staging | rigging | video | consumables | other
+  stage       String       @default("prospect")  // prospect | contacted | samples | negotiating | active | paused | lost
+  website     String?
+  rep         String?
+  repEmail    String?
+  repPhone    String?
+  notes       String?
+  priority    String       @default("medium")    // high | medium | low
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  tasks       SalesTask[]
+}
+
+model SalesTask {
+  id          Int          @id @default(autoincrement())
+  title       String
+  notes       String?
+  dueDate     DateTime?
+  completedAt DateTime?
+  priority    String       @default("medium")    // high | medium | low
+  brandId     Int?
+  brand       SalesBrand?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model RoadmapItem {

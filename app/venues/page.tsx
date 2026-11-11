@@ -16,6 +16,7 @@ type TechSpecs = {
   comms?: Record<string, string | null>;
   healthSafety?: Record<string, string | null>;
 };
+type VenueDoc = { id: number; name: string; mime: string; createdAt: string };
 type Venue = {
   id: number; name: string; type: string; city: string | null; address: string | null; postcode: string | null;
   phone: string | null; email: string | null; website: string | null; capacity: number | null;
@@ -101,11 +102,20 @@ export default function VenuesPage() {
   const [importResults, setImportResults] = useState<{ name: string; ok: boolean; error?: string }[] | null>(null);
   const [importDrag, setImportDrag] = useState(false);
   const [techSpecDrag, setTechSpecDrag] = useState(false);
+  const [docsDrag, setDocsDrag] = useState(false);
+  const [docs, setDocs] = useState<VenueDoc[]>([]);
+  const [docsUploading, setDocsUploading] = useState(false);
+  const [docsPct, setDocsPct] = useState<number | null>(null);
+  const docsRef = useRef<HTMLInputElement>(null);
   const [dupDialog, setDupDialog] = useState<{ file: File; existing: { id: number; name: string; city: string | null }; extractedName: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    if (!selected) { setDocs([]); return; }
+    fetch(`/api/venues/${selected.id}/documents`).then(r => r.json()).then(setDocs).catch(() => {});
+  }, [selected?.id]);
 
   async function reload() {
     const data = await fetch("/api/venues").then((r) => r.json());
@@ -226,6 +236,31 @@ export default function VenuesPage() {
     if (!selected) return;
     await fetch(`/api/venues/${selected.id}/tech-spec`, { method: "DELETE" });
     await reload();
+  }
+
+  async function uploadDoc(file: File) {
+    if (!selected) return;
+    setDocsUploading(true);
+    setDocsPct(0);
+    const fd = new FormData();
+    fd.append("file", file);
+    await xhrPost(`/api/venues/${selected.id}/documents`, fd, pct => setDocsPct(pct < 100 ? pct : -1));
+    setDocsUploading(false);
+    setDocsPct(null);
+    const updated = await fetch(`/api/venues/${selected.id}/documents`).then(r => r.json());
+    setDocs(updated);
+  }
+
+  async function deleteDoc(docId: number) {
+    await fetch(`/api/venue-documents/${docId}`, { method: "DELETE" });
+    setDocs(d => d.filter(x => x.id !== docId));
+  }
+
+  function onDocsDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDocsDrag(false);
+    const file = Array.from(e.dataTransfer.files)[0];
+    if (file) uploadDoc(file);
   }
 
   async function doImport(files: File[]) {
@@ -542,6 +577,39 @@ export default function VenuesPage() {
                         ))}
                       </div>
                     )}
+                  </div>
+
+                  {/* Documents */}
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Documents</div>
+                    <input ref={docsRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp" onChange={e => { if (e.target.files?.[0]) { uploadDoc(e.target.files[0]); e.target.value = ""; } }} />
+                    {docs.length > 0 && (
+                      <div className="space-y-1 mb-2">
+                        {docs.map(doc => (
+                          <div key={doc.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                            <span className="text-base">{doc.mime === "application/pdf" ? "📄" : doc.mime.startsWith("image/") ? "🖼️" : "📝"}</span>
+                            <span className="flex-1 truncate text-xs">{doc.name}</span>
+                            <a href={`/api/venue-documents/${doc.id}`} target="_blank" rel="noreferrer" className="text-xs px-2 py-0.5 rounded font-medium shrink-0" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Download</a>
+                            <button onClick={() => deleteDoc(doc.id)} className="text-xs px-1.5 py-0.5 rounded shrink-0" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {docsUploading && docsPct !== null && <div className="mb-2"><UploadProgress pct={docsPct} label="Uploading…" /></div>}
+                    <div
+                      onDragOver={e => { e.preventDefault(); setDocsDrag(true); }}
+                      onDragLeave={() => setDocsDrag(false)}
+                      onDrop={onDocsDrop}
+                      onClick={() => !docsUploading && docsRef.current?.click()}
+                      className="flex items-center justify-center text-xs px-3 py-3 rounded border border-dashed cursor-pointer transition-colors"
+                      style={{
+                        borderColor: docsDrag ? "var(--psg-blue)" : "var(--psg-card-border)",
+                        color: docsUploading ? "var(--psg-muted)" : docsDrag ? "var(--psg-blue)" : "var(--psg-muted)",
+                        backgroundColor: docsDrag ? "rgba(61,68,212,0.08)" : undefined,
+                      }}
+                    >
+                      {docsUploading ? "Uploading…" : docsDrag ? "Drop file here" : "⬆ Drag & drop or click to add document"}
+                    </div>
                   </div>
 
                   {/* General notes */}

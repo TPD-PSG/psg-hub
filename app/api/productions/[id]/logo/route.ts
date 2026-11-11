@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile } from "fs/promises";
+import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
 export const dynamic = "force-dynamic";
+
+const LOGO_DIR = process.env.NODE_ENV === "production"
+  ? "/data/production-logos"
+  : join(process.cwd(), "public", "production-logos");
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -23,10 +27,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const bytes = await file.arrayBuffer();
   const filename = `${productionId}.${ext}`;
-  const path = join(process.cwd(), "public", "production-logos", filename);
-  await writeFile(path, Buffer.from(bytes));
+  await mkdir(LOGO_DIR, { recursive: true });
+  await writeFile(join(LOGO_DIR, filename), Buffer.from(bytes));
 
-  const logoUrl = `/production-logos/${filename}`;
+  const logoUrl = `/api/production-logos/${filename}`;
   await prisma.production.update({ where: { id: productionId }, data: { logoUrl } });
 
   return NextResponse.json({ logoUrl });

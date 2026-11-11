@@ -6,9 +6,12 @@ export async function GET(req: NextRequest) {
   const productionId = searchParams.get("productionId");
   const companyWide = searchParams.get("companyWide");
 
+  const assigneeId = searchParams.get("assigneeId");
+
   const where: Record<string, unknown> = {};
   if (productionId) where.productionId = Number(productionId);
   if (companyWide === "1") where.productionId = null;
+  if (assigneeId) where.assigneeUserId = Number(assigneeId);
 
   const tasks = await prisma.task.findMany({
     where,

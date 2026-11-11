@@ -172,6 +172,8 @@ export default function HomePage() {
 
   const [productions, setProductions] = useState<Production[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [showAllTasks, setShowAllTasks] = useState(false);
   const [maintenance, setMaintenance] = useState<Maintenance[]>([]);
   const [quickLinks, setQuickLinks] = useState<QuickLink[]>([]);
   const [news, setNews] = useState<string | null>(null);
@@ -182,9 +184,15 @@ export default function HomePage() {
   const [salesBrands, setSalesBrands] = useState<SalesBrand[]>([]);
   const [salesTasksCount, setSalesTasksCount] = useState(0);
 
+  const userId = Number((session?.user as any)?.id);
+
   useEffect(() => {
+    if (!userId) return;
+    fetch(`/api/tasks?assigneeId=${userId}`).then(r => r.json()).then(d => { if (Array.isArray(d)) setTasks(d); });
+    if (role === "admin") {
+      fetch("/api/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllTasks(d); });
+    }
     fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d); });
-    fetch("/api/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setTasks(d); });
     fetch("/api/property").then(r => r.json()).then(d => { if (d?.maintenance) setMaintenance(d.maintenance); });
     fetch("/api/quicklinks").then(r => r.json()).then(d => { if (Array.isArray(d)) setQuickLinks(d); });
     fetch("/api/settings").then(r => r.json()).then(d => { if (d?.news) setNews(d.news); });
@@ -194,14 +202,15 @@ export default function HomePage() {
     fetch("/api/sales/brands").then(r => r.json()).then(d => { if (Array.isArray(d)) setSalesBrands(d); });
     fetch("/api/sales/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setSalesTasksCount(d.filter((t: { completedAt: string | null }) => !t.completedAt).length); });
     try { if (localStorage.getItem("news-dismissed") === "true") setNewsDismissed(true); } catch {}
-  }, []);
+  }, [userId, role]);
 
   // Computed
   const now = new Date();
   const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const activeProd = productions.filter(p => p.status !== "closed");
-  const overdueTasks = tasks.filter(t => t.status !== "done" && t.dueDate && new Date(t.dueDate) < now);
-  const dueSoonTasks = tasks.filter(t => t.status !== "done" && t.dueDate && new Date(t.dueDate) >= now && new Date(t.dueDate) <= weekFromNow);
+  const activeTasks = showAllTasks ? allTasks : tasks;
+  const overdueTasks = activeTasks.filter(t => t.status !== "done" && t.dueDate && new Date(t.dueDate) < now);
+  const dueSoonTasks = activeTasks.filter(t => t.status !== "done" && t.dueDate && new Date(t.dueDate) >= now && new Date(t.dueDate) <= weekFromNow);
   const urgentMaint = maintenance.filter(m => m.priority === "urgent" && m.status !== "resolved");
   const openMaint = maintenance.filter(m => m.status !== "resolved");
   const overdueInvoices = invoices.filter(i => i.status !== "paid" && i.dueDate && new Date(i.dueDate) < now);
@@ -263,11 +272,24 @@ export default function HomePage() {
         <div className="lg:col-span-3 space-y-4">
           <Card>
             <CardHeader
-              title="Waiting on you"
-              action={<span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--psg-blue)", color: "white" }}>{waitingCount} in all</span>}
+              title={showAllTasks ? "Waiting on the team" : "Waiting on you"}
+              action={
+                <div className="flex items-center gap-2">
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--psg-blue)", color: "white" }}>{waitingCount} in all</span>
+                  {role === "admin" && (
+                    <button
+                      onClick={() => setShowAllTasks(v => !v)}
+                      className="text-xs px-2 py-0.5 rounded border transition-colors"
+                      style={{ borderColor: "var(--psg-card-border)", color: showAllTasks ? "white" : "var(--psg-muted)", backgroundColor: showAllTasks ? "rgba(255,255,255,0.1)" : "transparent" }}
+                    >
+                      {showAllTasks ? "My tasks" : "All tasks"}
+                    </button>
+                  )}
+                </div>
+              }
             />
             {overdueTasks.length > 0 && (
-              <WaitingRow count={overdueTasks.length} label="Late tasks" sub="Past their due date in Tasks" href="/tasks" alert />
+              <WaitingRow count={overdueTasks.length} label="Late tasks" sub={showAllTasks ? "Past their due date across the team" : "Past their due date in Tasks"} href="/tasks" alert />
             )}
             {dueSoonTasks.length > 0 && (
               <WaitingRow count={dueSoonTasks.length} label="Tasks due this week" sub="Not late yet, due in the next 7 days" href="/tasks" />
@@ -276,7 +298,7 @@ export default function HomePage() {
               <WaitingRow count={urgentMaint.length} label="Urgent maintenance" sub="Open urgent issues at Cockshute" href="/property?tab=Maintenance" alert />
             )}
             {waitingCount === 0 && (
-              <div className="text-sm py-2" style={{ color: "var(--psg-muted)" }}>Nothing waiting on you right now.</div>
+              <div className="text-sm py-2" style={{ color: "var(--psg-muted)" }}>{showAllTasks ? "Nothing waiting on the team right now." : "Nothing waiting on you right now."}</div>
             )}
           </Card>
 
@@ -412,8 +434,8 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {canAccess(perms, "tasks", role) && (
               <CompactTile href="/tasks" icon="✅" title="Tasks"
-                sub={`${tasks.filter(t => t.status !== "done").length} open`}
-                badge={overdueTasks.length || undefined} />
+                sub={`${tasks.filter(t => t.status !== "done").length} assigned to you`}
+                badge={tasks.filter(t => t.status !== "done" && t.dueDate && new Date(t.dueDate) < now).length || undefined} />
             )}
             {canAccess(perms, "property", role) && (
               <CompactTile href="/property" icon="🏭" title="Cockshute Industrial Estate"

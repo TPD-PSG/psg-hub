@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Anthropic from "@anthropic-ai/sdk";
-import mammoth from "mammoth";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +33,8 @@ async function processPDF(file: File, client: Anthropic): Promise<{ ok: true; na
 
   let docContent: Anthropic.MessageParam["content"][number];
   if (isDocx) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mammoth = require("mammoth") as { extractRawText: (input: { buffer: Buffer }) => Promise<{ value: string }> };
     const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
     docContent = { type: "text", text: `Venue document text:\n\n${result.value}` };
   } else {

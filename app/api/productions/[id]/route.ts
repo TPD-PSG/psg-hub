@@ -48,6 +48,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       endDate: body.endDate ? new Date(body.endDate) : null,
       status: body.status,
       announcementStatus: body.announcementStatus || "not_announced",
+      color: body.color || null,
       notes: body.notes || null,
     },
   });

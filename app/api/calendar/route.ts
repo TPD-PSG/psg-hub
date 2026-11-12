@@ -26,7 +26,7 @@ export async function GET() {
   const productions = await prisma.production.findMany({
     where,
     select: {
-      id: true, name: true,
+      id: true, name: true, color: true,
       keyDates: { orderBy: { startDate: "asc" } },
       tourStops: {
         where: { OR: [{ startDate: { not: null } }, { loadInDate: { not: null } }, { performanceStart: { not: null } }] },
@@ -45,7 +45,7 @@ export async function GET() {
   const events: object[] = [];
 
   productions.forEach((prod, idx) => {
-    const color = PROD_COLORS[idx % PROD_COLORS.length];
+    const color = (prod as { color?: string | null }).color || PROD_COLORS[idx % PROD_COLORS.length];
     prod.keyDates.forEach(kd => {
       events.push({
         id: `kd-${kd.id}`,
@@ -64,7 +64,7 @@ export async function GET() {
   });
 
   productions.forEach((prod, idx) => {
-    const color = PROD_COLORS[idx % PROD_COLORS.length];
+    const color = (prod as { color?: string | null }).color || PROD_COLORS[idx % PROD_COLORS.length];
     prod.tourStops.forEach(stop => {
       const venueName = stop.venue?.name ?? "Unknown Venue";
       const city = stop.venue?.city ? ` · ${stop.venue.city}` : "";

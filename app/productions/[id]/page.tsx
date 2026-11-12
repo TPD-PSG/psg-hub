@@ -107,6 +107,7 @@ type Production = {
   endDate: string | null;
   status: string;
   announcementStatus: string;
+  color: string | null;
   notes: string | null;
   events: Event[];
   budgetLines: BudgetLine[];
@@ -306,7 +307,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [eventForm, setEventForm] = useState({ title: "", type: "Rehearsal", startAt: "", endAt: "", location: "", notes: "" });
   const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", budgeted: "", notes: "" });
   const [expenseForm, setExpenseForm] = useState<typeof BLANK_EXPENSE & { id?: number }>(BLANK_EXPENSE);
-  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", notes: "" });
+  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", color: "", notes: "" });
 
   useEffect(() => {
     reload();
@@ -388,7 +389,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       isTour: data.isTour ?? false,
       startDate: data.startDate ? data.startDate.slice(0, 10) : "",
       endDate: data.endDate ? data.endDate.slice(0, 10) : "",
-      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", notes: data.notes ?? "",
+      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", color: data.color ?? "", notes: data.notes ?? "",
     });
   }
 
@@ -598,6 +599,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           </label>
         <div>
           <div className="flex items-center gap-2 flex-wrap">
+            {prod.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: prod.color }} />}
             <h1 className="text-2xl font-bold text-white">{prod.name}</h1>
             <span className="text-sm" style={{ color: "var(--psg-muted)" }}>{prod.type}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[prod.status] ?? "bg-white/10 text-white/50"}`}>{prod.status}</span>
@@ -1744,6 +1746,17 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               <F label="Start Date"><input type="date" className={inp} style={inpStyle} value={prodForm.startDate} onChange={(e) => setProdForm((f) => ({ ...f, startDate: e.target.value }))} /></F>
               <F label="End Date"><input type="date" className={inp} style={inpStyle} value={prodForm.endDate} onChange={(e) => setProdForm((f) => ({ ...f, endDate: e.target.value }))} /></F>
             </div>
+            <F label="Calendar Colour">
+              <div className="flex items-center gap-2 flex-wrap">
+                {["#3b82f6","#8b5cf6","#10b981","#f59e0b","#ef4444","#06b6d4","#ec4899","#84cc16","#f97316","#a855f7"].map(c => (
+                  <button key={c} type="button" onClick={() => setProdForm(f => ({ ...f, color: c }))}
+                    className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
+                    style={{ backgroundColor: c, borderColor: prodForm.color === c ? "white" : "transparent" }} />
+                ))}
+                <input type="color" value={prodForm.color || "#3b82f6"} onChange={e => setProdForm(f => ({ ...f, color: e.target.value }))}
+                  className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Custom colour" style={{ backgroundColor: "transparent" }} />
+              </div>
+            </F>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={prodForm.notes} onChange={(e) => setProdForm((f) => ({ ...f, notes: e.target.value }))} /></F>
             <Btns onCancel={() => setEditProd(false)} label="Save Changes" />
           </form>

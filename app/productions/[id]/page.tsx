@@ -1504,7 +1504,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       {showBudgetForm && (
         <Modal title="Add Budget Department" onClose={() => setShowBudgetForm(false)}>
           <form onSubmit={saveBudgetLine} className="space-y-3">
-            <F label="Department"><select className={inp} style={inpStyle} value={budgetForm.department} onChange={(e) => setBudgetForm((f) => ({ ...f, department: e.target.value }))}>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></F>
+            <F label="Department">
+              <input list="budget-departments" required className={inp} style={inpStyle} value={budgetForm.department} onChange={(e) => setBudgetForm((f) => ({ ...f, department: e.target.value }))} placeholder="e.g. Scenery" />
+              <datalist id="budget-departments">
+                {Array.from(new Set([...DEPARTMENTS, ...prod.budgetLines.map(l => l.department)])).map(d => <option key={d} value={d} />)}
+              </datalist>
+            </F>
             <F label="Description *"><input required className={inp} style={inpStyle} value={budgetForm.description} onChange={(e) => setBudgetForm((f) => ({ ...f, description: e.target.value }))} placeholder="e.g. Sound Hires" /></F>
             <F label="Overall Allocation (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={budgetForm.budgeted} onChange={(e) => setBudgetForm((f) => ({ ...f, budgeted: e.target.value }))} /></F>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={budgetForm.notes} onChange={(e) => setBudgetForm((f) => ({ ...f, notes: e.target.value }))} /></F>

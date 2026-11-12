@@ -411,3 +411,40 @@ export async function exportVenueStopPDF(productionName: string, stop: TourStopR
   const slug = `${productionName}-${venueName}`.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
   doc.save(`venue-${slug}.pdf`);
 }
+
+// ── Production Contact Sheet ─────────────────────────────────────────────────
+
+type ProductionContact = { name: string; company?: string | null; role?: string | null; phone?: string | null; email?: string | null; notes?: string | null };
+
+export async function exportContactSheetPDF(productionName: string, contacts: ProductionContact[]) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF(`Contact Sheet — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
+
+  autoTable(doc, {
+    startY: 32,
+    head: [["Name", "Role / Title", "Company", "Phone", "Email", "Notes"]],
+    body: contacts.map(c => [
+      c.name,
+      c.role ?? "",
+      c.company ?? "",
+      c.phone ?? "",
+      c.email ?? "",
+      c.notes ?? "",
+    ]),
+    styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
+    headStyles: { fillColor: [10, 25, 65], fontSize: 9 },
+    columnStyles: {
+      0: { cellWidth: 40, fontStyle: "bold" },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 40 },
+      3: { cellWidth: 32 },
+      4: { cellWidth: 50 },
+      5: { cellWidth: "auto" },
+    },
+    margin: { left: 10, right: 10 },
+    alternateRowStyles: { fillColor: [245, 245, 250] },
+  });
+
+  const slug = productionName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
+  doc.save(`contacts-${slug}.pdf`);
+}

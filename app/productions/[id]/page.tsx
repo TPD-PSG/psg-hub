@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
-import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF } from "@/lib/exports";
+import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF } from "@/lib/exports";
 
 type Expense = {
   id: number;
@@ -1752,12 +1752,21 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
       {tab === "contacts" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <h2 className="text-lg font-semibold text-white">Contacts</h2>
-            <button onClick={() => { setEditContact(null); setContactForm(BLANK_CONTACT); setShowContactForm(true); }}
-              className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
-              + Add Contact
-            </button>
+            <div className="flex items-center gap-2">
+              {contacts.length > 0 && (
+                <button onClick={() => exportContactSheetPDF(prod.name, contacts)}
+                  className="px-3 py-2 rounded text-sm border hover:bg-white/5 transition-colors"
+                  style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                  ↓ Export PDF
+                </button>
+              )}
+              <button onClick={() => { setEditContact(null); setContactForm(BLANK_CONTACT); setShowContactForm(true); }}
+                className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
+                + Add Contact
+              </button>
+            </div>
           </div>
 
           {contacts.length === 0 ? (

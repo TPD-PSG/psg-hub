@@ -119,6 +119,7 @@ const PRODUCTION_SECTIONS_ALL: NavItem[] = [
   { label: "Haulage", href: "", section: "haulage" },
   { label: "Call Sheets", href: "", section: "callsheets" },
   { label: "Advancing", href: "", section: "advancing" },
+  { label: "Contacts", href: "", section: "contacts" },
   { label: "Tasks", href: "", section: "tasks" },
 ];
 

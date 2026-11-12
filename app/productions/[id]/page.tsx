@@ -192,7 +192,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 
 const BLANK_EXPENSE = { phase: "pre-production", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "tasks" | "tour";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "tasks" | "tour";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -286,6 +286,38 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     reload();
   }
 
+  // Contacts
+  type ProdContact = { id: number; name: string; company: string | null; role: string | null; phone: string | null; email: string | null; notes: string | null };
+  const [contacts, setContacts] = useState<ProdContact[]>([]);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [editContact, setEditContact] = useState<ProdContact | null>(null);
+  const BLANK_CONTACT = { name: "", company: "", role: "", phone: "", email: "", notes: "" };
+  const [contactForm, setContactForm] = useState(BLANK_CONTACT);
+
+  async function reloadContacts() {
+    const data = await fetch(`/api/productions/${id}/contacts`).then(r => r.json());
+    if (Array.isArray(data)) setContacts(data);
+  }
+
+  async function saveContact(e: React.FormEvent) {
+    e.preventDefault();
+    if (editContact) {
+      await fetch(`/api/production-contacts/${editContact.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(contactForm) });
+    } else {
+      await fetch(`/api/productions/${id}/contacts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(contactForm) });
+    }
+    setShowContactForm(false);
+    setEditContact(null);
+    setContactForm(BLANK_CONTACT);
+    reloadContacts();
+  }
+
+  async function deleteContact(cid: number) {
+    if (!confirm("Delete this contact?")) return;
+    await fetch(`/api/production-contacts/${cid}`, { method: "DELETE" });
+    reloadContacts();
+  }
+
   const [showEventForm, setShowEventForm] = useState(false);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState<number | null>(null);
@@ -316,6 +348,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     reloadCallSheets();
     reloadKeyDates();
     reloadTourStops();
+    reloadContacts();
   }, [id]);
 
   async function reloadKeyDates() {
@@ -1715,6 +1748,61 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             reloadTourStops();
           }}
         />
+      )}
+
+      {tab === "contacts" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Contacts</h2>
+            <button onClick={() => { setEditContact(null); setContactForm(BLANK_CONTACT); setShowContactForm(true); }}
+              className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
+              + Add Contact
+            </button>
+          </div>
+
+          {contacts.length === 0 ? (
+            <div className="rounded-xl border p-10 text-center text-sm" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+              No contacts yet — add people associated with this production.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {contacts.map(c => (
+                <div key={c.id} className="rounded-xl border p-4 space-y-1 relative group" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <div className="font-medium text-white text-sm">{c.name}</div>
+                  {c.role && <div className="text-xs" style={{ color: "var(--psg-blue)" }}>{c.role}</div>}
+                  {c.company && <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{c.company}</div>}
+                  {c.phone && <a href={`tel:${c.phone}`} className="block text-xs hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>📞 {c.phone}</a>}
+                  {c.email && <a href={`mailto:${c.email}`} className="block text-xs hover:text-white transition-colors truncate" style={{ color: "var(--psg-muted)" }}>✉ {c.email}</a>}
+                  {c.notes && <div className="text-xs pt-1 border-t" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)" }}>{c.notes}</div>}
+                  <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditContact(c); setContactForm({ name: c.name, company: c.company ?? "", role: c.role ?? "", phone: c.phone ?? "", email: c.email ?? "", notes: c.notes ?? "" }); setShowContactForm(true); }}
+                      className="text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors" style={{ color: "var(--psg-muted)" }}>Edit</button>
+                    <button onClick={() => deleteContact(c.id)}
+                      className="text-xs px-2 py-1 rounded hover:bg-red-900/20 transition-colors text-red-400">✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showContactForm && (
+            <Modal title={editContact ? "Edit Contact" : "Add Contact"} onClose={() => { setShowContactForm(false); setEditContact(null); }}>
+              <form onSubmit={saveContact} className="space-y-3">
+                <F label="Name *"><input required className={inp} style={inpStyle} value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} /></F>
+                <div className="grid grid-cols-2 gap-3">
+                  <F label="Role / Title"><input className={inp} style={inpStyle} value={contactForm.role} onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))} placeholder="e.g. Director, Producer" /></F>
+                  <F label="Company"><input className={inp} style={inpStyle} value={contactForm.company} onChange={e => setContactForm(f => ({ ...f, company: e.target.value }))} /></F>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <F label="Phone"><input type="tel" className={inp} style={inpStyle} value={contactForm.phone} onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))} /></F>
+                  <F label="Email"><input type="email" className={inp} style={inpStyle} value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} /></F>
+                </div>
+                <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={contactForm.notes} onChange={e => setContactForm(f => ({ ...f, notes: e.target.value }))} /></F>
+                <Btns onCancel={() => { setShowContactForm(false); setEditContact(null); }} label={editContact ? "Save Changes" : "Add Contact"} />
+              </form>
+            </Modal>
+          )}
+        </div>
       )}
 
       {tab === "tasks" && prod && (

@@ -64,6 +64,7 @@ model Production {
   expenses          ProductionExpense[]
   marketingPosts    MarketingPost[]
   invoiceTodos      InvoiceTodo[]      @relation("InvoiceTodos")
+  contacts          ProductionContact[]
 }
 
 
@@ -682,4 +683,18 @@ model RoadmapItem {
   createdByUser   User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+model ProductionContact {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  name         String
+  company      String?
+  role         String?
+  phone        String?
+  email        String?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }

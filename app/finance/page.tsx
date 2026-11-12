@@ -109,11 +109,17 @@ function FinancePageInner() {
   const { data: session } = useSession();
   const role = (session?.user as any)?.role ?? "member";
   const searchParams = useSearchParams();
-  const initTab = searchParams.get("tab") === "purchase" ? "purchase" : searchParams.get("tab") === "expenses" ? "expenses" : searchParams.get("tab") === "todo" ? "todo" : "sales";
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [productions, setProductions] = useState<Production[]>([]);
-  const [tab, setTab] = useState<"sales" | "purchase" | "expenses" | "todo">(initTab as "sales" | "purchase" | "expenses" | "todo");
+  const [tab, setTab] = useState<"sales" | "purchase" | "expenses" | "todo">("sales");
+
+  // Sync tab with URL search param so sidebar nav links work
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "purchase" || t === "expenses" || t === "todo") setTab(t);
+    else setTab("sales");
+  }, [searchParams]);
 
   // Invoice To-Do list
   type InvoiceTodo = { id: number; client: string; description: string; amount: number | null; dueDate: string | null; notes: string | null; done: boolean; production: { id: number; name: string } | null };

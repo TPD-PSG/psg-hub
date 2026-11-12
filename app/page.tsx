@@ -8,6 +8,7 @@ import { parsePerms, canAccess } from "@/lib/permissions";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Production = { id: number; name: string; status: string; startDate: string | null; endDate: string | null; announcementStatus?: string };
+type CalEvent = { id: string; type: string; title: string; production: string | null; productionId: number | null; startDate: string; color: string; href?: string };
 type Task = { id: number; title: string; status: string; dueDate: string | null; assigneeUserId: number | null; production?: { name: string } | null };
 type Maintenance = { id: number; status: string; priority: string; title: string };
 type QuickLink = { id: number; label: string; url: string; icon: string };
@@ -183,6 +184,7 @@ export default function HomePage() {
   const [expenses, setExpenses] = useState<{ id: number; status: string; netAmount: number; vatAmount: number }[]>([]);
   const [salesBrands, setSalesBrands] = useState<SalesBrand[]>([]);
   const [salesTasksCount, setSalesTasksCount] = useState(0);
+  const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
 
   const userId = Number((session?.user as any)?.id);
 
@@ -201,6 +203,7 @@ export default function HomePage() {
     fetch("/api/expenses").then(r => r.json()).then(d => { if (Array.isArray(d)) setExpenses(d); });
     fetch("/api/sales/brands").then(r => r.json()).then(d => { if (Array.isArray(d)) setSalesBrands(d); });
     fetch("/api/sales/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setSalesTasksCount(d.filter((t: { completedAt: string | null }) => !t.completedAt).length); });
+    fetch("/api/calendar").then(r => r.json()).then(d => { if (Array.isArray(d)) setCalEvents(d); });
     try { if (localStorage.getItem("news-dismissed") === "true") setNewsDismissed(true); } catch {}
   }, [userId, role]);
 
@@ -218,18 +221,12 @@ export default function HomePage() {
   const unpaidPurchases = invoices.filter(i => i.type === "purchase" && i.status !== "paid");
   const fmt = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(n);
 
-  // Upcoming productions — starting or ending in next 60 days
-  const upcoming = productions
-    .filter(p => p.status !== "closed" && (
-      (p.startDate && new Date(p.startDate) >= now && new Date(p.startDate) <= new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)) ||
-      (p.endDate && new Date(p.endDate) >= now && new Date(p.endDate) <= new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000))
-    ))
-    .sort((a, b) => {
-      const da = new Date(a.startDate ?? a.endDate ?? 0).getTime();
-      const db = new Date(b.startDate ?? b.endDate ?? 0).getTime();
-      return da - db;
-    })
-    .slice(0, 5);
+  // Upcoming key dates + tour stops in next 60 days
+  const in60Days = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+  const upcoming = calEvents
+    .filter(ev => (ev.type === "key_date" || ev.type === "tour_stop") && ev.startDate && new Date(ev.startDate) >= now && new Date(ev.startDate) <= in60Days)
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+    .slice(0, 8);
 
   const greeting = (() => {
     const h = now.getHours();
@@ -309,28 +306,24 @@ export default function HomePage() {
         {/* Right: Upcoming + Quick links */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* Upcoming productions */}
+          {/* Upcoming key dates */}
           <Card>
             <CardHeader title="Upcoming" action={
-              <Link href="/productions" className="text-xs hover:text-white transition-colors" style={{ color: "var(--psg-blue)" }}>All productions</Link>
+              <Link href="/calendar" className="text-xs hover:text-white transition-colors" style={{ color: "var(--psg-blue)" }}>Calendar</Link>
             } />
             {upcoming.length === 0 ? (
-              <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No productions in the next 60 days.</div>
+              <div className="text-sm" style={{ color: "var(--psg-muted)" }}>No upcoming events in the next 60 days.</div>
             ) : (
-              <div className="space-y-2">
-                {upcoming.map(p => (
-                  <Link key={p.id} href={`/productions/${p.id}`}
+              <div className="space-y-0">
+                {upcoming.map(ev => (
+                  <Link key={ev.id} href={ev.href ?? "/calendar"}
                     className="flex items-center gap-3 py-2 border-b last:border-0 hover:bg-white/5 -mx-5 px-5 transition-colors group"
                     style={{ borderColor: "var(--psg-card-border)" }}>
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ev.color }} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-white font-medium truncate group-hover:text-blue-300 transition-colors">{p.name}</div>
-                      <div className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
-                        {p.startDate ? `Starts ${fmtDate(p.startDate)}` : p.endDate ? `Ends ${fmtDate(p.endDate)}` : ""}
-                      </div>
+                      <div className="text-sm text-white truncate group-hover:text-blue-300 transition-colors">{ev.title}</div>
                     </div>
-                    {p.announcementStatus && p.announcementStatus !== "not_announced" && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${ANN_COLORS[p.announcementStatus]}`}>{ANN_LABELS[p.announcementStatus]}</span>
-                    )}
+                    <div className="text-xs shrink-0" style={{ color: "var(--psg-muted)" }}>{fmtDate(ev.startDate)}</div>
                   </Link>
                 ))}
               </div>

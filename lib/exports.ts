@@ -414,23 +414,26 @@ export async function exportVenueStopPDF(productionName: string, stop: TourStopR
 
 // ── Production Contact Sheet ─────────────────────────────────────────────────
 
-type ProductionContact = { name: string; company?: string | null; role?: string | null; phone?: string | null; email?: string | null; notes?: string | null };
+type ProductionContact = { section?: string | null; name: string; company?: string | null; role?: string | null; phone?: string | null; email?: string | null; notes?: string | null };
 
 export async function exportContactSheetPDF(productionName: string, contacts: ProductionContact[]) {
   const logo = await fetchLogoAsset();
   const doc = basePDF(`Contact Sheet — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`, logo);
 
+  // Group contacts by section, preserving order
+  const sections = Array.from(new Set(contacts.map(c => c.section ?? "General")));
+  const body: (string | { content: string; colSpan: number; styles: Record<string, unknown> } )[][] = [];
+  for (const section of sections) {
+    body.push([{ content: section, colSpan: 6, styles: { fillColor: [10, 25, 65], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 } }]);
+    for (const c of contacts.filter(x => (x.section ?? "General") === section)) {
+      body.push([c.name, c.role ?? "", c.company ?? "", c.phone ?? "", c.email ?? "", c.notes ?? ""]);
+    }
+  }
+
   autoTable(doc, {
     startY: 32,
     head: [["Name", "Role / Title", "Company", "Phone", "Email", "Notes"]],
-    body: contacts.map(c => [
-      c.name,
-      c.role ?? "",
-      c.company ?? "",
-      c.phone ?? "",
-      c.email ?? "",
-      c.notes ?? "",
-    ]),
+    body,
     styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
     headStyles: { fillColor: [10, 25, 65], fontSize: 9 },
     columnStyles: {

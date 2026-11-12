@@ -12,6 +12,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const contact = await prisma.productionContact.update({
     where: { id: Number(id) },
     data: {
+      section: body.section || "General",
       name: body.name,
       company: body.company || null,
       role: body.role || null,

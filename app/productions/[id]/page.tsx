@@ -287,12 +287,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   // Contacts
-  type ProdContact = { id: number; name: string; company: string | null; role: string | null; phone: string | null; email: string | null; notes: string | null };
+  type ProdContact = { id: number; section: string; sortOrder: number; name: string; company: string | null; role: string | null; phone: string | null; email: string | null; notes: string | null };
   const [contacts, setContacts] = useState<ProdContact[]>([]);
   const [showContactForm, setShowContactForm] = useState(false);
   const [editContact, setEditContact] = useState<ProdContact | null>(null);
-  const BLANK_CONTACT = { name: "", company: "", role: "", phone: "", email: "", notes: "" };
+  const BLANK_CONTACT = { section: "General", name: "", company: "", role: "", phone: "", email: "", notes: "" };
   const [contactForm, setContactForm] = useState(BLANK_CONTACT);
+  const [dragContactId, setDragContactId] = useState<number | null>(null);
 
   async function reloadContacts() {
     const data = await fetch(`/api/productions/${id}/contacts`).then(r => r.json());
@@ -1774,20 +1775,53 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               No contacts yet — add people associated with this production.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {contacts.map(c => (
-                <div key={c.id} className="rounded-xl border p-4 space-y-1 relative group" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-                  <div className="font-medium text-white text-sm">{c.name}</div>
-                  {c.role && <div className="text-xs" style={{ color: "var(--psg-blue)" }}>{c.role}</div>}
-                  {c.company && <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{c.company}</div>}
-                  {c.phone && <a href={`tel:${c.phone}`} className="block text-xs hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>📞 {c.phone}</a>}
-                  {c.email && <a href={`mailto:${c.email}`} className="block text-xs hover:text-white transition-colors truncate" style={{ color: "var(--psg-muted)" }}>✉ {c.email}</a>}
-                  {c.notes && <div className="text-xs pt-1 border-t" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)" }}>{c.notes}</div>}
-                  <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setEditContact(c); setContactForm({ name: c.name, company: c.company ?? "", role: c.role ?? "", phone: c.phone ?? "", email: c.email ?? "", notes: c.notes ?? "" }); setShowContactForm(true); }}
-                      className="text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors" style={{ color: "var(--psg-muted)" }}>Edit</button>
-                    <button onClick={() => deleteContact(c.id)}
-                      className="text-xs px-2 py-1 rounded hover:bg-red-900/20 transition-colors text-red-400">✕</button>
+            <div className="space-y-6">
+              {Array.from(new Set(contacts.map(c => c.section))).map(section => (
+                <div key={section}>
+                  <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>{section}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {contacts.filter(c => c.section === section).map((c) => (
+                      <div
+                        key={c.id}
+                        draggable
+                        onDragStart={() => setDragContactId(c.id)}
+                        onDragOver={e => { e.preventDefault(); }}
+                        onDrop={() => {
+                          if (dragContactId === null || dragContactId === c.id) return;
+                          const draggedIdx = contacts.findIndex(x => x.id === dragContactId);
+                          const targetIdx = contacts.findIndex(x => x.id === c.id);
+                          if (draggedIdx === -1 || targetIdx === -1) return;
+                          const next = [...contacts];
+                          const [moved] = next.splice(draggedIdx, 1);
+                          next.splice(targetIdx, 0, moved);
+                          const updated = next.map((x, i) => ({ ...x, sortOrder: i }));
+                          setContacts(updated);
+                          setDragContactId(null);
+                          fetch(`/api/productions/${id}/contacts/reorder`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ order: updated.map(x => ({ id: x.id, sortOrder: x.sortOrder })) }),
+                          });
+                        }}
+                        onDragEnd={() => setDragContactId(null)}
+                        className={`rounded-xl border p-4 space-y-1 relative group cursor-grab active:cursor-grabbing transition-opacity ${dragContactId === c.id ? "opacity-40" : ""}`}
+                        style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}
+                      >
+                        <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-30 transition-opacity text-xs select-none" style={{ color: "var(--psg-muted)" }}>⠿</div>
+                        <div className="font-medium text-white text-sm pl-3">{c.name}</div>
+                        {c.role && <div className="text-xs pl-3" style={{ color: "var(--psg-blue)" }}>{c.role}</div>}
+                        {c.company && <div className="text-xs pl-3" style={{ color: "var(--psg-muted)" }}>{c.company}</div>}
+                        {c.phone && <a href={`tel:${c.phone}`} className="block text-xs pl-3 hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>📞 {c.phone}</a>}
+                        {c.email && <a href={`mailto:${c.email}`} className="block text-xs pl-3 hover:text-white transition-colors truncate" style={{ color: "var(--psg-muted)" }}>✉ {c.email}</a>}
+                        {c.notes && <div className="text-xs pl-3 pt-1 border-t" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)" }}>{c.notes}</div>}
+                        <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => { setEditContact(c); setContactForm({ section: c.section, name: c.name, company: c.company ?? "", role: c.role ?? "", phone: c.phone ?? "", email: c.email ?? "", notes: c.notes ?? "" }); setShowContactForm(true); }}
+                            className="text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors" style={{ color: "var(--psg-muted)" }}>Edit</button>
+                          <button onClick={() => deleteContact(c.id)}
+                            className="text-xs px-2 py-1 rounded hover:bg-red-900/20 transition-colors text-red-400">✕</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -1797,6 +1831,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           {showContactForm && (
             <Modal title={editContact ? "Edit Contact" : "Add Contact"} onClose={() => { setShowContactForm(false); setEditContact(null); }}>
               <form onSubmit={saveContact} className="space-y-3">
+                <F label="Section">
+                  <input list="contact-sections" className={inp} style={inpStyle} value={contactForm.section} onChange={e => setContactForm(f => ({ ...f, section: e.target.value }))} placeholder="e.g. Creative Team" />
+                  <datalist id="contact-sections">
+                    {Array.from(new Set(["General", "Creative Team", "Production Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage", ...contacts.map(c => c.section)])).map(s => <option key={s} value={s} />)}
+                  </datalist>
+                </F>
                 <F label="Name *"><input required className={inp} style={inpStyle} value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} /></F>
                 <div className="grid grid-cols-2 gap-3">
                   <F label="Role / Title"><input className={inp} style={inpStyle} value={contactForm.role} onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))} placeholder="e.g. Director, Producer" /></F>

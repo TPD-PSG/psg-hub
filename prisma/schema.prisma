@@ -689,6 +689,8 @@ model ProductionContact {
   id           Int        @id @default(autoincrement())
   productionId Int
   production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  section      String     @default("General")
+  sortOrder    Int        @default(0)
   name         String
   company      String?
   role         String?

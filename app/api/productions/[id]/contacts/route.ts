@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const contacts = await prisma.productionContact.findMany({
     where: { productionId: Number(id) },
-    orderBy: { name: "asc" },
+    orderBy: [{ section: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
   });
   return NextResponse.json(contacts);
 }
@@ -23,6 +23,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const contact = await prisma.productionContact.create({
     data: {
       productionId: Number(id),
+      section: body.section || "General",
+      sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : 0,
       name: body.name,
       company: body.company || null,
       role: body.role || null,

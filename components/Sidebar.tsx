@@ -120,6 +120,7 @@ const PRODUCTION_SECTIONS_ALL: NavItem[] = [
   { label: "Call Sheets", href: "", section: "callsheets" },
   { label: "Advancing", href: "", section: "advancing" },
   { label: "Contacts", href: "", section: "contacts" },
+  { label: "Show Reports", href: "", section: "reports" },
   { label: "Tasks", href: "", section: "tasks" },
 ];
 

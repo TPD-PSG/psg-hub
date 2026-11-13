@@ -50,6 +50,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       announcementStatus: body.announcementStatus || "not_announced",
       color: body.color || null,
       notes: body.notes || null,
+      reportEmail: body.reportEmail || null,
     },
   });
   return NextResponse.json(production);

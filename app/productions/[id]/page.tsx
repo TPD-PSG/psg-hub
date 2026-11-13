@@ -109,6 +109,7 @@ type Production = {
   announcementStatus: string;
   color: string | null;
   notes: string | null;
+  reportEmail: string | null;
   events: Event[];
   budgetLines: BudgetLine[];
   crew: ProductionCrew[];
@@ -192,7 +193,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 
 const BLANK_EXPENSE = { phase: "pre-production", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "tasks" | "tour";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "reports" | "tasks" | "tour";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -225,6 +226,39 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => { fetch("/api/users").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setAllUsers(d); }); }, []);
 
   const [logoUploading, setLogoUploading] = useState(false);
+
+  // Show Reports
+  type ShowReport = { id: number; reportDate: string; venue: string | null; performance: string | null; attendance: number | null; notes: string | null; createdByUser: { id: number; name: string } | null };
+  const [showReports, setShowReports] = useState<ShowReport[]>([]);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [editReport, setEditReport] = useState<ShowReport | null>(null);
+  const BLANK_REPORT = { reportDate: "", venue: "", performance: "", attendance: "", notes: "" };
+  const [reportForm, setReportForm] = useState(BLANK_REPORT);
+
+  async function reloadReports() {
+    const data = await fetch(`/api/productions/${id}/show-reports`).then(r => r.json());
+    if (Array.isArray(data)) setShowReports(data);
+  }
+  useEffect(() => { if (tab === "reports") reloadReports(); }, [tab, id]);
+
+  async function saveReport(e: React.FormEvent) {
+    e.preventDefault();
+    if (editReport) {
+      await fetch(`/api/show-reports/${editReport.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reportForm) });
+    } else {
+      await fetch(`/api/productions/${id}/show-reports`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reportForm) });
+    }
+    setShowReportForm(false);
+    setEditReport(null);
+    setReportForm(BLANK_REPORT);
+    reloadReports();
+  }
+
+  async function deleteReport(rid: number) {
+    if (!confirm("Delete this show report?")) return;
+    await fetch(`/api/show-reports/${rid}`, { method: "DELETE" });
+    reloadReports();
+  }
 
   async function uploadLogo(file: File) {
     setLogoUploading(true);
@@ -341,7 +375,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [eventForm, setEventForm] = useState({ title: "", type: "Rehearsal", startAt: "", endAt: "", location: "", notes: "" });
   const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", budgeted: "", notes: "" });
   const [expenseForm, setExpenseForm] = useState<typeof BLANK_EXPENSE & { id?: number }>(BLANK_EXPENSE);
-  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", color: "", notes: "" });
+  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", color: "", notes: "", reportEmail: "" });
 
   useEffect(() => {
     reload();
@@ -424,7 +458,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       isTour: data.isTour ?? false,
       startDate: data.startDate ? data.startDate.slice(0, 10) : "",
       endDate: data.endDate ? data.endDate.slice(0, 10) : "",
-      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", color: data.color ?? "", notes: data.notes ?? "",
+      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", color: data.color ?? "", notes: data.notes ?? "", reportEmail: data.reportEmail ?? "",
     });
   }
 
@@ -1897,6 +1931,72 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         </div>
       )}
 
+      {/* ── SHOW REPORTS TAB ── */}
+      {tab === "reports" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Show Reports</h3>
+              {prod.reportEmail && (
+                <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Reports sent to: {prod.reportEmail}</p>
+              )}
+            </div>
+            <button onClick={() => { setEditReport(null); setReportForm(BLANK_REPORT); setShowReportForm(true); }}
+              className="text-sm px-3 py-1.5 rounded font-medium text-white hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Report</button>
+          </div>
+
+          {showReportForm && (
+            <div className="rounded-lg border p-4 space-y-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-blue)" }}>
+              <h4 className="text-sm font-semibold text-white">{editReport ? "Edit Report" : "New Show Report"}</h4>
+              <form onSubmit={saveReport} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <F label="Date *"><input required type="date" className={inp} style={inpStyle} value={reportForm.reportDate} onChange={e => setReportForm(f => ({ ...f, reportDate: e.target.value }))} /></F>
+                  <F label="Performance"><input className={inp} style={inpStyle} placeholder="e.g. Evening – 7:30pm" value={reportForm.performance} onChange={e => setReportForm(f => ({ ...f, performance: e.target.value }))} /></F>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <F label="Venue"><input className={inp} style={inpStyle} value={reportForm.venue} onChange={e => setReportForm(f => ({ ...f, venue: e.target.value }))} /></F>
+                  <F label="Attendance"><input type="number" min="0" className={inp} style={inpStyle} value={reportForm.attendance} onChange={e => setReportForm(f => ({ ...f, attendance: e.target.value }))} /></F>
+                </div>
+                <F label="Notes"><textarea rows={4} className={inp} style={inpStyle} value={reportForm.notes} onChange={e => setReportForm(f => ({ ...f, notes: e.target.value }))} /></F>
+                <Btns onCancel={() => { setShowReportForm(false); setEditReport(null); setReportForm(BLANK_REPORT); }} label={editReport ? "Save Changes" : "Save Report"} />
+              </form>
+            </div>
+          )}
+
+          {showReports.length === 0 && !showReportForm ? (
+            <div className="py-12 text-center rounded-lg border" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+              No show reports yet.{prod.reportEmail ? "" : " Add a report email in Edit Production to set a distribution address."}
+            </div>
+          ) : (
+            <div className="rounded-lg border divide-y overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+              {showReports.map(r => (
+                <div key={r.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-white text-sm">{fmtDate(r.reportDate)}</span>
+                        {r.performance && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{r.performance}</span>}
+                        {r.venue && <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>{r.venue}</span>}
+                        {r.attendance != null && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Attendance: {r.attendance.toLocaleString()}</span>}
+                      </div>
+                      {r.notes && <p className="text-sm mt-1 whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{r.notes}</p>}
+                      {r.createdByUser && <p className="text-xs mt-1" style={{ color: "var(--psg-muted)", opacity: 0.6 }}>by {r.createdByUser.name}</p>}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => { setEditReport(r); setReportForm({ reportDate: r.reportDate.slice(0, 10), venue: r.venue ?? "", performance: r.performance ?? "", attendance: r.attendance != null ? String(r.attendance) : "", notes: r.notes ?? "" }); setShowReportForm(true); }}
+                        className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
+                      <button onClick={() => deleteReport(r.id)}
+                        className="text-xs px-2 py-1 rounded" style={{ color: "#f87171", backgroundColor: "rgba(239,68,68,0.1)" }}>Delete</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === "tasks" && prod && (
         <TasksPanel productionId={prod.id} />
       )}
@@ -1937,6 +2037,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Custom colour" style={{ backgroundColor: "transparent" }} />
               </div>
             </F>
+            <F label="Show Report Email"><input type="email" className={inp} style={inpStyle} value={prodForm.reportEmail} onChange={(e) => setProdForm((f) => ({ ...f, reportEmail: e.target.value }))} placeholder="reports@example.com" /></F>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={prodForm.notes} onChange={(e) => setProdForm((f) => ({ ...f, notes: e.target.value }))} /></F>
             <Btns onCancel={() => setEditProd(false)} label="Save Changes" />
           </form>

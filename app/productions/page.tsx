@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import UserAvatar from "@/components/UserAvatar";
 
-type TeamMember = { user: { id: number; name: string; email: string } };
+type TeamMember = { user: { id: number; name: string; email: string; avatarUrl?: string | null } };
 type Production = {
   id: number; name: string; type: string; venue: string | null; status: string;
   announcementStatus?: string;
@@ -64,16 +65,11 @@ export default function ProductionsPage() {
               </div>
               {p.team && p.team.length > 0 && (
                 <div className="flex items-center gap-1 mt-1.5">
-                  {p.team.map((m) => {
-                    const initials = m.user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-                    return (
-                      <span key={m.user.id} title={m.user.name}
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                        style={{ backgroundColor: "var(--psg-blue)" }}>
-                        {initials}
-                      </span>
-                    );
-                  })}
+                  {p.team.map((m) => (
+                    <span key={m.user.id} title={m.user.name}>
+                      <UserAvatar name={m.user.name} avatarUrl={m.user.avatarUrl} size={24} />
+                    </span>
+                  ))}
                   <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>
                     {p.team.map((m) => m.user.name.split(" ")[0]).join(", ")}
                   </span>

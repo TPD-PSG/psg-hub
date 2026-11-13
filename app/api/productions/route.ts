@@ -7,7 +7,7 @@ const include = {
   _count: { select: { events: true, budgetLines: true, crew: true } },
   budgetLines: { include: { expenses: true } },
   events: { orderBy: { startAt: "asc" as const } },
-  team: { include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "asc" as const } },
+  team: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } }, orderBy: { createdAt: "asc" as const } },
 };
 
 export async function GET() {

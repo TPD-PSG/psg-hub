@@ -423,17 +423,21 @@ export default function VenuesPage() {
         </select>
       </div>
 
-      <div className="flex gap-4 items-start min-h-0">
-        {/* Venue list */}
-        <div className="flex-1 min-w-0 space-y-2">
-          {filtered.length === 0 ? (
-            <div className="py-16 text-center rounded-lg border" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
-              {venues.length === 0 ? "No venues yet — add your first." : "No venues match your search."}
-            </div>
-          ) : filtered.map((v) => (
-            <button key={v.id} onClick={() => { setSelected(selected?.id === v.id ? null : v); setDetailTab("info"); }}
-              className="w-full text-left rounded-lg border p-4 transition-all"
-              style={{ backgroundColor: selected?.id === v.id ? "rgba(59,130,246,0.1)" : "var(--psg-card-bg)", borderColor: selected?.id === v.id ? "var(--psg-blue)" : "var(--psg-card-border)" }}>
+      <div className="space-y-2">
+        {/* Venue list with inline detail panel */}
+        {filtered.length === 0 ? (
+          <div className="py-16 text-center rounded-lg border" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+            {venues.length === 0 ? "No venues yet — add your first." : "No venues match your search."}
+          </div>
+        ) : filtered.map((v) => (
+          <div key={v.id}>
+            <button onClick={() => { setSelected(selected?.id === v.id ? null : v); setDetailTab("info"); }}
+              className="w-full text-left border p-4 transition-all"
+              style={{
+                backgroundColor: selected?.id === v.id ? "rgba(59,130,246,0.1)" : "var(--psg-card-bg)",
+                borderColor: selected?.id === v.id ? "var(--psg-blue)" : "var(--psg-card-border)",
+                borderRadius: selected?.id === v.id ? "0.5rem 0.5rem 0 0" : "0.5rem",
+              }}>
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -447,14 +451,13 @@ export default function VenuesPage() {
                     {v._count.contacts > 0 ? ` · ${v._count.contacts} contact${v._count.contacts !== 1 ? "s" : ""}` : ""}
                   </div>
                 </div>
+                <span className="text-xs shrink-0 mt-0.5" style={{ color: "var(--psg-muted)" }}>{selected?.id === v.id ? "▲" : "▼"}</span>
               </div>
             </button>
-          ))}
-        </div>
 
-        {/* Detail panel */}
-        {selected && (
-          <div className="w-96 shrink-0 rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+            {/* Inline detail panel — opens below the selected venue */}
+            {selected?.id === v.id && (
+            <div className="rounded-b-lg border border-t-0 overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-blue)" }}>
             {/* Panel header */}
             <div className="p-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
               <div className="flex items-start justify-between gap-2">
@@ -492,7 +495,7 @@ export default function VenuesPage() {
               ))}
             </div>
 
-            <div className="overflow-y-auto" style={{ maxHeight: "60vh" }}>
+            <div>
               {/* INFO TAB */}
               {detailTab === "info" && (
                 <div className="p-4 space-y-4">
@@ -755,7 +758,9 @@ export default function VenuesPage() {
               )}
             </div>
           </div>
-        )}
+          )}
+          </div>
+        ))}
       </div>
 
       {/* Modal: Add / Edit Venue */}

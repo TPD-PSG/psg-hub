@@ -8,6 +8,7 @@ const include = {
   budgetLines: { include: { expenses: true } },
   events: { orderBy: { startAt: "asc" as const } },
   team: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } }, orderBy: { createdAt: "asc" as const } },
+  venueRef: { select: { name: true, city: true } },
 };
 
 export async function GET() {

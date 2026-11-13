@@ -329,7 +329,7 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
   const [form, setForm] = useState({ userId: "", productionId: "", startDate: "", endDate: "", activityType: "", notes: "" });
 
   useEffect(() => {
-    fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d.map((p: { id: number; name: string; color: string | null; venue: string | null }) => ({ id: p.id, name: p.name, color: p.color, venue: p.venue }))); });
+    fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d.map((p: { id: number; name: string; color: string | null; venue: string | null; venueRef?: { name: string; city: string | null } | null }) => ({ id: p.id, name: p.name, color: p.color, venue: p.venueRef ? `${p.venueRef.name}${p.venueRef.city ? ", " + p.venueRef.city : ""}` : p.venue }))); });
     fetch("/api/users").then(r => r.json()).then(d => { if (Array.isArray(d)) setUsers(d); });
   }, []);
 

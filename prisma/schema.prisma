@@ -449,6 +449,7 @@ model FunSubmission {
   title       String
   story       String
   monthYear   String      // "2026-11" — the month it was submitted
+  approved    Boolean     @default(false)
   roundupId   Int?
   roundup     FunRoundup? @relation(fields: [roundupId], references: [id], onDelete: SetNull)
   media       FunMedia[]

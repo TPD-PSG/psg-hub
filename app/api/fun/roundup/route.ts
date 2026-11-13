@@ -11,12 +11,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const monthYear: string = body.monthYear; // e.g. "2026-11"
 
-  // Check there are pending submissions for this month
+  // Only approved, pending submissions go into the roundup
   const pending = await prisma.funSubmission.findMany({
-    where: { monthYear, roundupId: null },
+    where: { monthYear, roundupId: null, approved: true },
   });
   if (pending.length === 0) {
-    return NextResponse.json({ error: "No pending submissions for this month" }, { status: 400 });
+    return NextResponse.json({ error: "No approved submissions for this month" }, { status: 400 });
   }
 
   // Create (or find) the roundup record
@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
     roundup = await prisma.funRoundup.create({ data: { monthYear, sentAt: new Date() } });
   }
 
-  // Link all pending submissions to it
+  // Link approved submissions to the roundup
   await prisma.funSubmission.updateMany({
-    where: { monthYear, roundupId: null },
+    where: { monthYear, roundupId: null, approved: true },
     data: { roundupId: roundup.id },
   });
 

@@ -1,0 +1,1 @@
+ALTER TABLE "FunSubmission" ADD COLUMN "approved" BOOLEAN NOT NULL DEFAULT false;

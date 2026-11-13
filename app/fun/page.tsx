@@ -6,7 +6,7 @@ import UserAvatar from "@/components/UserAvatar";
 
 type MediaRef = { id: number; name: string; mime: string };
 type Author = { id: number; name: string; avatarUrl?: string | null };
-type Submission = { id: number; title: string; story: string; monthYear: string; author: Author; media: MediaRef[]; createdAt: string };
+type Submission = { id: number; title: string; story: string; monthYear: string; approved: boolean; author: Author; media: MediaRef[]; createdAt: string };
 type Roundup = { id: number; monthYear: string; sentAt: string; submissions: Submission[] };
 
 function fmtMonth(my: string) {
@@ -33,23 +33,42 @@ function MediaTile({ m }: { m: MediaRef }) {
   );
 }
 
-function SubmissionCard({ sub, canDelete, onDelete }: { sub: Submission; canDelete?: boolean; onDelete?: (id: number) => void }) {
+function SubmissionCard({ sub, canDelete, onDelete, onApprove, onReject, isAdmin }: {
+  sub: Submission;
+  canDelete?: boolean;
+  onDelete?: (id: number) => void;
+  onApprove?: (id: number) => void;
+  onReject?: (id: number) => void;
+  isAdmin?: boolean;
+}) {
   return (
-    <div className="rounded-xl border p-5 space-y-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+    <div className="rounded-xl border p-5 space-y-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: sub.approved && isAdmin ? "#16a34a44" : "var(--psg-card-border)" }}>
       <div className="flex items-start gap-3">
         <UserAvatar name={sub.author.name} avatarUrl={sub.author.avatarUrl} size={36} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-white text-sm">{sub.author.name}</span>
             <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{fmtDate(sub.createdAt)}</span>
+            {isAdmin && sub.approved && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#16a34a22", color: "#4ade80" }}>✓ Approved</span>}
           </div>
           <h3 className="text-base font-bold text-white mt-0.5">{sub.title}</h3>
         </div>
-        {canDelete && onDelete && (
-          <button onClick={() => onDelete(sub.id)} className="text-xs px-2 py-1 rounded opacity-50 hover:opacity-100 transition-opacity" style={{ color: "var(--psg-muted)" }}>✕</button>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {isAdmin && !sub.approved && onApprove && (
+            <button onClick={() => onApprove(sub.id)} className="text-xs px-2.5 py-1 rounded font-medium transition-opacity hover:opacity-90" style={{ backgroundColor: "#16a34a", color: "white" }}>Approve</button>
+          )}
+          {isAdmin && sub.approved && onApprove && (
+            <button onClick={() => onApprove(sub.id)} className="text-xs px-2.5 py-1 rounded font-medium transition-opacity hover:opacity-70" style={{ backgroundColor: "#16a34a22", color: "#4ade80" }}>✓ Approved</button>
+          )}
+          {isAdmin && onReject && (
+            <button onClick={() => onReject(sub.id)} className="text-xs px-2 py-1 rounded opacity-40 hover:opacity-100 transition-opacity" style={{ color: "#f87171" }}>Delete</button>
+          )}
+          {!isAdmin && canDelete && onDelete && (
+            <button onClick={() => onDelete(sub.id)} className="text-xs px-2 py-1 rounded opacity-50 hover:opacity-100 transition-opacity" style={{ color: "var(--psg-muted)" }}>✕</button>
+          )}
+        </div>
       </div>
-      <p className="text-sm leading-relaxed" style={{ color: "var(--psg-muted)", whiteSpace: "pre-wrap" }}>{sub.story}</p>
+      {sub.story ? <p className="text-sm leading-relaxed" style={{ color: "var(--psg-muted)", whiteSpace: "pre-wrap" }}>{sub.story}</p> : null}
       {sub.media.length > 0 && (
         <div className="flex flex-wrap gap-3 pt-1">
           {sub.media.map(m => <MediaTile key={m.id} m={m} />)}
@@ -106,6 +125,23 @@ export default function FunPage() {
 
   async function deleteSub(id: number) {
     if (!confirm("Remove your submission?")) return;
+    await fetch(`/api/fun/submissions/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  async function approveSub(id: number) {
+    const sub = pending.find(s => s.id === id);
+    const nowApproved = !sub?.approved;
+    await fetch(`/api/fun/submissions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ approved: nowApproved }),
+    });
+    await load();
+  }
+
+  async function rejectSub(id: number) {
+    if (!confirm("Delete this submission? This cannot be undone.")) return;
     await fetch(`/api/fun/submissions/${id}`, { method: "DELETE" });
     await load();
   }
@@ -211,32 +247,46 @@ export default function FunPage() {
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>{role === "admin" ? "All pending submissions" : "Your pending submissions"} — {fmtMonth(currentMonthYear)}</p>
           <p className="text-xs" style={{ color: "var(--psg-muted)" }}>These will appear in the {fmtMonth(currentMonthYear)} roundup.</p>
           {pending.map(sub => (
-            <SubmissionCard key={sub.id} sub={sub} canDelete={sub.author.id === userId} onDelete={deleteSub} />
+            <SubmissionCard
+              key={sub.id}
+              sub={sub}
+              isAdmin={role === "admin"}
+              onApprove={role === "admin" ? approveSub : undefined}
+              onReject={role === "admin" ? rejectSub : undefined}
+              canDelete={sub.author.id === userId}
+              onDelete={deleteSub}
+            />
           ))}
         </div>
       )}
 
       {/* ── Admin: send roundup ── */}
-      {role === "admin" && (
-        <div className="rounded-xl border p-4 flex items-center justify-between gap-4" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
-          <div>
-            <p className="text-sm font-semibold text-white">Send {fmtMonth(currentMonthYear)} Roundup</p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
-              {pending.length === 0
-                ? "No pending submissions to send."
-                : `${pending.length} submission${pending.length === 1 ? "" : "s"} ready to send to everyone.`}
-            </p>
+      {role === "admin" && (() => {
+        const approvedCount = pending.filter(s => s.approved).length;
+        const totalCount = pending.length;
+        return (
+          <div className="rounded-xl border p-4 flex items-center justify-between gap-4" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
+            <div>
+              <p className="text-sm font-semibold text-white">Send {fmtMonth(currentMonthYear)} Roundup</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                {totalCount === 0
+                  ? "No submissions yet."
+                  : approvedCount === 0
+                  ? `${totalCount} submission${totalCount === 1 ? "" : "s"} pending approval.`
+                  : `${approvedCount} of ${totalCount} approved and ready to send.`}
+              </p>
+            </div>
+            <button
+              onClick={sendRoundup}
+              disabled={sending || approvedCount === 0}
+              className="px-4 py-2 rounded text-sm font-medium text-white shrink-0 transition-opacity"
+              style={{ backgroundColor: approvedCount === 0 ? "rgba(255,255,255,0.1)" : "#16a34a", color: approvedCount === 0 ? "var(--psg-muted)" : "white", opacity: sending ? 0.7 : 1 }}
+            >
+              {sending ? "Sending…" : "🎉 Send Roundup"}
+            </button>
           </div>
-          <button
-            onClick={sendRoundup}
-            disabled={sending || pending.length === 0}
-            className="px-4 py-2 rounded text-sm font-medium text-white shrink-0 transition-opacity"
-            style={{ backgroundColor: pending.length === 0 ? "rgba(255,255,255,0.1)" : "#16a34a", color: pending.length === 0 ? "var(--psg-muted)" : "white", opacity: sending ? 0.7 : 1 }}
-          >
-            {sending ? "Sending…" : "🎉 Send Roundup"}
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Past roundups ── */}
       {roundups.length > 0 && (

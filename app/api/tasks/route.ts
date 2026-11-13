@@ -16,7 +16,9 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = {};
   if (productionId) where.productionId = Number(productionId);
-  if (companyWide === "1") where.productionId = null;
+  // For admins companyWide=1 filters to tasks with no production; for non-admins
+  // it means "all my tasks" so we skip the productionId=null restriction.
+  if (companyWide === "1" && role === "admin") where.productionId = null;
   if (assigneeId) where.assigneeUserId = Number(assigneeId);
   if (taskListId === "null") where.taskListId = null;
   else if (taskListId) where.taskListId = Number(taskListId);

@@ -294,6 +294,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const BLANK_CONTACT = { section: "General", name: "", company: "", role: "", phone: "", email: "", notes: "" };
   const [contactForm, setContactForm] = useState(BLANK_CONTACT);
   const [dragContactId, setDragContactId] = useState<number | null>(null);
+  const [showContra, setShowContra] = useState(false);
 
   async function reloadContacts() {
     const data = await fetch(`/api/productions/${id}/contacts`).then(r => r.json());
@@ -985,8 +986,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           {/* Venue Contra section */}
           {tourStops.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-white mb-3">Venue Contra</h3>
-              <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)" }}>
+              <button onClick={() => setShowContra(v => !v)} className="flex items-center gap-2 mb-3 hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>
+                <span className="text-xs">{showContra ? "▾" : "▸"}</span>
+                <span className="text-sm font-semibold text-white">Venue Contra</span>
+                <span className="text-xs">{fmt(contraEstimateTotal)} est · {fmt(contraActualTotal)} act</span>
+              </button>
+              {showContra && <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)" }}>
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ backgroundColor: "rgba(255,255,255,0.03)", borderBottom: "1px solid var(--psg-card-border)" }}>
@@ -1019,7 +1024,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     </tr>
                   </tfoot>
                 </table>
-              </div>
+              </div>}
             </div>
           )}
         </div>
@@ -1837,10 +1842,43 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <Modal title={editContact ? "Edit Contact" : "Add Contact"} onClose={() => { setShowContactForm(false); setEditContact(null); }}>
               <form onSubmit={saveContact} className="space-y-3">
                 <F label="Section">
-                  <input list="contact-sections" className={inp} style={inpStyle} value={contactForm.section} onChange={e => setContactForm(f => ({ ...f, section: e.target.value }))} placeholder="e.g. Creative Team" />
-                  <datalist id="contact-sections">
-                    {Array.from(new Set(["General", "Creative Team", "Production Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage", ...contacts.map(c => c.section)])).map(s => <option key={s} value={s} />)}
-                  </datalist>
+                  {(() => {
+                    const existingSections = Array.from(new Set(contacts.map(c => c.section)));
+                    const presets = ["General", "Creative Team", "Production Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage"];
+                    const allOptions = Array.from(new Set([...existingSections, ...presets]));
+                    const isCustom = contactForm.section && !allOptions.includes(contactForm.section);
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {allOptions.map(s => (
+                            <button key={s} type="button"
+                              onClick={() => setContactForm(f => ({ ...f, section: s }))}
+                              className="px-2.5 py-1 rounded-full text-xs border transition-colors"
+                              style={{
+                                borderColor: contactForm.section === s ? "var(--psg-blue)" : "var(--psg-card-border)",
+                                backgroundColor: contactForm.section === s ? "rgba(59,130,246,0.15)" : "transparent",
+                                color: contactForm.section === s ? "var(--psg-blue)" : "var(--psg-muted)",
+                              }}>
+                              {s}
+                            </button>
+                          ))}
+                          <button type="button"
+                            onClick={() => setContactForm(f => ({ ...f, section: "" }))}
+                            className="px-2.5 py-1 rounded-full text-xs border transition-colors"
+                            style={{
+                              borderColor: isCustom || contactForm.section === "" ? "var(--psg-blue)" : "var(--psg-card-border)",
+                              backgroundColor: isCustom || contactForm.section === "" ? "rgba(59,130,246,0.15)" : "transparent",
+                              color: isCustom || contactForm.section === "" ? "var(--psg-blue)" : "var(--psg-muted)",
+                            }}>
+                            + Custom
+                          </button>
+                        </div>
+                        {(isCustom || contactForm.section === "") && (
+                          <input autoFocus className={inp} style={inpStyle} value={contactForm.section} onChange={e => setContactForm(f => ({ ...f, section: e.target.value }))} placeholder="Section name…" />
+                        )}
+                      </div>
+                    );
+                  })()}
                 </F>
                 <F label="Name *"><input required className={inp} style={inpStyle} value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} /></F>
                 <div className="grid grid-cols-2 gap-3">
@@ -1926,6 +1964,7 @@ function AdvancingBoard({ tourStops, onStatusChange, onContraChange }: {
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [contraEdits, setContraEdits] = useState<Record<string, string>>({});
+  const [contraOpen, setContraOpen] = useState<Record<number, boolean>>({});;
 
   if (tourStops.length === 0) {
     return <div className="p-6 text-sm" style={{ color: "var(--psg-muted)" }}>No tour stops yet — add them in Tour Stops first.</div>;
@@ -1995,37 +2034,50 @@ function AdvancingBoard({ tourStops, onStatusChange, onContraChange }: {
                         </div>
                       )}
                       {/* Contra fields */}
-                      <div className="mt-2 space-y-1" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-                        {(["contraEstimate", "contraActual"] as const).map(field => {
-                          const key = `${stop.id}-${field}`;
-                          const label = field === "contraEstimate" ? "Est." : "Act.";
-                          const color = field === "contraEstimate" ? "#fde047" : "#fb923c";
-                          const stored = stop[field];
-                          const editing = contraEdits[key] !== undefined;
-                          return (
-                            <div key={field} className="flex items-center gap-1.5">
-                              <span className="text-xs w-6 shrink-0" style={{ color: "var(--psg-muted)" }}>{label}</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                className="flex-1 text-xs rounded px-1.5 py-1 w-full"
-                                style={{ backgroundColor: "rgba(255,255,255,0.07)", border: "1px solid var(--psg-card-border)", color, outline: "none", minWidth: 0 }}
-                                value={editing ? contraEdits[key] : (stored != null ? String(stored) : "")}
-                                placeholder="—"
-                                onFocus={() => setContraEdits(c => ({ ...c, [key]: stored != null ? String(stored) : "" }))}
-                                onChange={e => setContraEdits(c => ({ ...c, [key]: e.target.value }))}
-                                onBlur={async e => {
-                                  const val = contraEdits[key] ?? "";
-                                  setContraEdits(c => { const n = { ...c }; delete n[key]; return n; });
-                                  if (val !== (stored != null ? String(stored) : "")) {
-                                    await onContraChange(stop.id, field, val);
-                                  }
-                                }}
-                                onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                              />
-                            </div>
-                          );
-                        })}
+                      <div className="mt-2" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setContraOpen(o => ({ ...o, [stop.id]: !o[stop.id] }))}
+                          className="flex items-center gap-1 text-xs transition-colors hover:text-white"
+                          style={{ color: (stop.contraEstimate != null || stop.contraActual != null) ? "#fde047" : "var(--psg-muted)" }}
+                        >
+                          <span>{contraOpen[stop.id] ? "▾" : "▸"}</span>
+                          <span>Contra{stop.contraEstimate != null ? ` £${stop.contraEstimate.toLocaleString()}` : ""}{stop.contraActual != null ? ` / £${stop.contraActual.toLocaleString()}` : ""}</span>
+                        </button>
+                        {contraOpen[stop.id] && (
+                          <div className="mt-1.5 space-y-1">
+                            {(["contraEstimate", "contraActual"] as const).map(field => {
+                              const key = `${stop.id}-${field}`;
+                              const label = field === "contraEstimate" ? "Est." : "Act.";
+                              const color = field === "contraEstimate" ? "#fde047" : "#fb923c";
+                              const stored = stop[field];
+                              const editing = contraEdits[key] !== undefined;
+                              return (
+                                <div key={field} className="flex items-center gap-1.5">
+                                  <span className="text-xs w-6 shrink-0" style={{ color: "var(--psg-muted)" }}>{label}</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    className="flex-1 text-xs rounded px-1.5 py-1 w-full"
+                                    style={{ backgroundColor: "rgba(255,255,255,0.07)", border: "1px solid var(--psg-card-border)", color, outline: "none", minWidth: 0 }}
+                                    value={editing ? contraEdits[key] : (stored != null ? String(stored) : "")}
+                                    placeholder="—"
+                                    onFocus={() => setContraEdits(c => ({ ...c, [key]: stored != null ? String(stored) : "" }))}
+                                    onChange={e => setContraEdits(c => ({ ...c, [key]: e.target.value }))}
+                                    onBlur={async () => {
+                                      const val = contraEdits[key] ?? "";
+                                      setContraEdits(c => { const n = { ...c }; delete n[key]; return n; });
+                                      if (val !== (stored != null ? String(stored) : "")) {
+                                        await onContraChange(stop.id, field, val);
+                                      }
+                                    }}
+                                    onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

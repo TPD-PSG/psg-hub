@@ -120,6 +120,7 @@ type Production = {
   notes: string | null;
   reportEmail: string | null;
   sharepointUrl: string | null;
+  haulageBudgetLineId: number | null;
   events: Event[];
   budgetLines: BudgetLine[];
   crew: ProductionCrew[];
@@ -718,6 +719,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     reload();
   }
 
+  async function saveHaulageBudgetLine(lineId: string) {
+    await fetch(`/api/productions/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...prod, haulageBudgetLineId: lineId ? Number(lineId) : null }) });
+    reload();
+  }
+
   function openEditMovement(m: HaulageMovement) {
     setMovementForm({ ...m, id: m.id, driverName: m.driverName ?? "", vehicleInfo: m.vehicleInfo ?? "", departureAt: m.departureAt.slice(0, 16), arrivalAt: m.arrivalAt ? m.arrivalAt.slice(0, 16) : "", cargo: m.cargo ?? "", notes: m.notes ?? "", estimatedCost: m.estimatedCost != null ? String(m.estimatedCost) : "", actualCost: m.actualCost != null ? String(m.actualCost) : "", rechargeable: m.rechargeable });
     setEditMovement(m);
@@ -736,6 +742,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const totalBudgeted = prod.budgetLines.reduce((s, l) => s + l.budgeted, 0);
 
   // Department summary for budget overview
+  const haulageLine = prod.haulageBudgetLineId ? prod.budgetLines.find((l) => l.id === prod.haulageBudgetLineId) : null;
   const deptSummary = prod.budgetLines.reduce((acc, l) => {
     if (!acc[l.department]) acc[l.department] = { budgeted: 0, estimated: 0, committed: 0, spent: 0 };
     acc[l.department].budgeted += l.budgeted;
@@ -746,6 +753,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     });
     return acc;
   }, {} as Record<string, { budgeted: number; estimated: number; committed: number; spent: number }>);
+  // Roll haulage costs into the linked budget line's department
+  if (haulageLine && deptSummary[haulageLine.department]) {
+    deptSummary[haulageLine.department].estimated += haulageEstimated;
+    deptSummary[haulageLine.department].committed += haulageActual;
+  }
 
   return (
     <div className="space-y-6">
@@ -1029,7 +1041,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       </td>
                     </tr>
                   ))}
-                  {(haulageEstimated > 0 || haulageActual > 0) && (
+                  {!haulageLine && (haulageEstimated > 0 || haulageActual > 0) && (
                     <tr className="border-t" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(59,130,246,0.04)" }}>
                       <td className="px-4 py-2.5 text-white/70 text-xs italic">Haulage (from movements)</td>
                       <td className="px-4 py-2.5 text-right text-white/40 text-xs">—</td>
@@ -1061,8 +1073,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="space-y-4">
               {prod.budgetLines.length === 0 && <p className="text-center py-10" style={{ color: "var(--psg-muted)" }}>No budget lines yet.</p>}
               {prod.budgetLines.map((line) => {
-                const lineEst = line.expenses.reduce((s, x) => s + x.estimated, 0);
-                const lineCom = line.expenses.reduce((s, x) => s + x.committed, 0);
+                const isHaulageLine = prod.haulageBudgetLineId === line.id;
+                const lineEst = line.expenses.reduce((s, x) => s + x.estimated, 0) + (isHaulageLine ? haulageEstimated : 0);
+                const lineCom = line.expenses.reduce((s, x) => s + x.committed, 0) + (isHaulageLine ? haulageActual : 0);
                 const lineSpt = line.expenses.reduce((s, x) => s + x.spent, 0);
                 const pct = line.budgeted > 0 ? Math.min((lineCom / line.budgeted) * 100, 100) : 0;
                 const byPhase = PHASES.reduce((acc, p) => {
@@ -1094,6 +1107,33 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <div className="h-1" style={{ backgroundColor: "var(--psg-card-border)" }}>
                       <div className={`h-full transition-all ${pct >= 100 ? "bg-red-500" : pct >= 75 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} />
                     </div>
+
+                    {/* Haulage movements (if this is the linked haulage budget line) */}
+                    {isHaulageLine && prod.haulageMovements.length > 0 && (
+                      <div>
+                        <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.04)" }}>
+                          Haulage Movements
+                        </div>
+                        <table className="w-full text-xs">
+                          <tbody>
+                            {prod.haulageMovements.map((m) => (
+                              <tr key={m.id} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
+                                <td className="px-4 py-2 text-white w-1/4">{m.haulageCompany}</td>
+                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{m.fromLocation} → {m.toLocation}</td>
+                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{fmtDate(m.departureAt)}</td>
+                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{m.cargo || "—"}</td>
+                                <td className="px-3 py-2 text-right text-yellow-300 font-medium">{m.estimatedCost != null ? fmt(m.estimatedCost) : "—"}</td>
+                                <td className="px-3 py-2 text-right text-orange-300 font-medium">{m.actualCost != null ? fmt(m.actualCost) : "—"}</td>
+                                <td className="px-3 py-2 text-right">—</td>
+                                {m.rechargeable && <td className="px-2 py-2"><span className="text-orange-400 border border-orange-400/40 rounded px-1 py-0.5">Invoice</span></td>}
+                                {!m.rechargeable && <td className="px-2 py-2" />}
+                                <td className="px-3 py-2" />
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
 
                     {/* Line items grouped by phase */}
                     {PHASES.map((phase) => {
@@ -1384,6 +1424,21 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       {/* ── HAULAGE TAB ── */}
       {tab === "haulage" && (
         <div className="space-y-4">
+          {/* Budget line link */}
+          <div className="flex items-center gap-3 text-sm">
+            <span style={{ color: "var(--psg-muted)" }}>Link costs to budget line:</span>
+            <select
+              className="rounded border px-2 py-1 text-sm"
+              style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}
+              value={prod.haulageBudgetLineId ?? ""}
+              onChange={(e) => saveHaulageBudgetLine(e.target.value)}
+            >
+              <option value="">— none (show separately in budget) —</option>
+              {prod.budgetLines.map((l) => (
+                <option key={l.id} value={l.id}>{l.department} · {l.description}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex justify-end gap-2">
             <ExportMenu actions={[
               { label: "Export PDF", onClick: () => exportHaulagePDF(prod.name, prod.haulageMovements, false, prod.logoUrl) },

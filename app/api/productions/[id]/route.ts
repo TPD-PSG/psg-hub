@@ -62,6 +62,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       notes: body.notes || null,
       reportEmail: body.reportEmail || null,
       sharepointUrl: body.sharepointUrl || null,
+      haulageBudgetLineId: body.haulageBudgetLineId ? Number(body.haulageBudgetLineId) : null,
     },
   });
   return NextResponse.json(production);

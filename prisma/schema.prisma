@@ -50,6 +50,7 @@ model Production {
   notes         String?
   reportEmail   String?
   sharepointUrl String?
+  haulageBudgetLineId Int?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

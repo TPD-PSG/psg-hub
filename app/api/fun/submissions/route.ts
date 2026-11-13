@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
+
 export async function GET() {
   // Returns all submissions for the current user (pending) + all published (in a roundup)
   const session = await auth();

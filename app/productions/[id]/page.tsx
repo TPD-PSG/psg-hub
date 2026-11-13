@@ -1144,7 +1144,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <span style={{ color: "var(--psg-muted)" }}>/ {fmt(line.budgeted)}</span>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}>+ Spend</button>
+                        <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ Spend</button>
                         <button onClick={() => { setPSGExpenseForm(BLANK_PSG_EXPENSE); setEditingPSGExpense(null); setPsgReceiptFile(null); setShowPSGExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ PSG Expense</button>
                         <button onClick={() => deleteBudgetLine(line.id)} className="text-xs text-red-400 hover:text-red-300">Delete</button>
                       </div>

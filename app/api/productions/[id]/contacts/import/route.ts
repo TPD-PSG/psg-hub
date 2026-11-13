@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import Anthropic from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Claude API can take 15–30s on large documents
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
+  if (file.size > 20_000_000) return NextResponse.json({ error: "File too large (max 20 MB)" }, { status: 413 });
 
   const buffer = await file.arrayBuffer();
   const isDocx = file.name.toLowerCase().endsWith(".docx") || file.name.toLowerCase().endsWith(".doc") || file.type.includes("wordprocessingml") || file.type.includes("msword");
@@ -65,7 +67,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const mammoth = require("mammoth") as { extractRawText: (input: { buffer: Buffer }) => Promise<{ value: string }> };
     const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
     docContent = { type: "text", text: `Contact sheet document:\n\n${result.value}` };
-  } else if (isCsv || isXlsx) {
+  } else if (isXlsx) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const XLSX = require("xlsx") as typeof import("xlsx");
+    const wb = XLSX.read(Buffer.from(buffer), { type: "buffer" });
+    const rows: string[] = [];
+    for (const sheetName of wb.SheetNames) {
+      rows.push(`Sheet: ${sheetName}`);
+      rows.push(XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]));
+    }
+    docContent = { type: "text", text: `Contact sheet data:\n\n${rows.join("\n")}` };
+  } else if (isCsv) {
     const text = Buffer.from(buffer).toString("utf-8");
     docContent = { type: "text", text: `Contact sheet data:\n\n${text}` };
   } else {
@@ -113,7 +125,12 @@ Omit any field if unknown. Include every named person in the document.`,
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
   const cleaned = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-  const extracted = JSON.parse(cleaned);
+  let extracted: { contacts?: unknown[] };
+  try {
+    extracted = JSON.parse(cleaned);
+  } catch {
+    return NextResponse.json({ error: "AI returned an unreadable response — please try again" }, { status: 502 });
+  }
   const contacts = Array.isArray(extracted.contacts) ? extracted.contacts : [];
 
   return NextResponse.json({ contacts });

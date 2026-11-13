@@ -7,6 +7,7 @@ import UserNav from "@/components/UserNav";
 import NotificationBell from "@/components/NotificationBell";
 import Sidebar, { MobileSidebarProvider } from "@/components/Sidebar";
 import MobileMenuButton from "@/components/MobileMenuButton";
+import SeasonalOverlay from "@/components/SeasonalOverlay";
 
 export const metadata: Metadata = {
   title: "PSG Hub",
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </main>
             </div>
           </MobileSidebarProvider>
+          <SeasonalOverlay />
         </AuthProvider>
       </body>
     </html>

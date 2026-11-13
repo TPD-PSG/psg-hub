@@ -435,6 +435,11 @@ model Task {
   createdByUser   User?     @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@index([productionId])
+  @@index([assigneeUserId])
+  @@index([createdByUserId])
+  @@index([status])
 }
 
 model FunRoundup {
@@ -693,6 +698,9 @@ model StaffAssignment {
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+
+  @@index([productionId])
+  @@index([userId])
 }
 
 model SalesBrand {
@@ -823,6 +831,8 @@ model ProductionContact {
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+
+  @@index([productionId])
 }
 
 model HSDocument {

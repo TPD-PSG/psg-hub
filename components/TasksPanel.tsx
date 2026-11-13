@@ -291,7 +291,7 @@ export default function TasksPanel({ productionId }: Props) {
       if (b === "Company-wide") return -1;
       return a.localeCompare(b);
     });
-    for (const [label, tasks] of sorted) groupedTasks.push({ label, tasks });
+    for (const [label, groupItems] of sorted) groupedTasks.push({ label, tasks: groupItems });
   }
 
   const activeListName = activeListId === NO_LIST_ID

@@ -62,6 +62,7 @@ model Production {
   haulageMovements  HaulageMovement[]
   callSheets        CallSheet[]
   tasks             Task[]
+  taskLists         TaskList[]
   team              ProductionTeam[]
   tourStops         TourStop[]
   staffAssignments  StaffAssignment[]
@@ -398,12 +399,24 @@ model ProductionTeam {
   @@unique([productionId, userId])
 }
 
+model TaskList {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  name         String
+  position     Int        @default(0)
+  createdAt    DateTime   @default(now())
+  tasks        Task[]
+}
+
 model Task {
   id              Int       @id @default(autoincrement())
   title           String
   description     String?
   productionId    Int?
   production      Production? @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  taskListId      Int?
+  taskList        TaskList? @relation(fields: [taskListId], references: [id], onDelete: SetNull)
   assigneeUserId  Int?
   assigneeUser    User?     @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
   assigneeName    String?   // free-text if no user account

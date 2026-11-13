@@ -12,10 +12,14 @@ export async function GET(req: NextRequest) {
   const companyWide = searchParams.get("companyWide");
   const assigneeId = searchParams.get("assigneeId");
 
+  const taskListId = searchParams.get("taskListId");
+
   const where: Record<string, unknown> = {};
   if (productionId) where.productionId = Number(productionId);
   if (companyWide === "1") where.productionId = null;
   if (assigneeId) where.assigneeUserId = Number(assigneeId);
+  if (taskListId === "null") where.taskListId = null;
+  else if (taskListId) where.taskListId = Number(taskListId);
 
   // Non-admins only see tasks they are involved in
   if (role !== "admin" && userId) {
@@ -42,7 +46,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
-    title, description, productionId, assigneeUserId, assigneeName,
+    title, description, productionId, taskListId, assigneeUserId, assigneeName,
     status, priority, dueDate, requiresSignoff, signoffUserId, createdByUserId,
   } = body;
 
@@ -51,6 +55,7 @@ export async function POST(req: NextRequest) {
       title,
       description: description || null,
       productionId: productionId ? Number(productionId) : null,
+      taskListId: taskListId ? Number(taskListId) : null,
       assigneeUserId: assigneeUserId ? Number(assigneeUserId) : null,
       assigneeName: assigneeName || null,
       status: status || "todo",

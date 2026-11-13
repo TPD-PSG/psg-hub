@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const {
-    title, description, assigneeUserId, assigneeName,
+    title, description, taskListId, assigneeUserId, assigneeName,
     status, priority, dueDate, requiresSignoff, signoffUserId, signoffAt,
   } = body;
 
@@ -31,6 +31,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     data: {
       title,
       description: description || null,
+      taskListId: taskListId !== undefined ? (taskListId ? Number(taskListId) : null) : undefined,
       assigneeUserId: assigneeUserId ? Number(assigneeUserId) : null,
       assigneeName: assigneeName || null,
       status,

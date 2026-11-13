@@ -1,0 +1,12 @@
+-- CreateTable
+CREATE TABLE "TaskList" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "productionId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "position" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "TaskList_productionId_fkey" FOREIGN KEY ("productionId") REFERENCES "Production" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- AlterTable
+ALTER TABLE "Task" ADD COLUMN "taskListId" INTEGER REFERENCES "TaskList"("id") ON DELETE SET NULL ON UPDATE CASCADE;

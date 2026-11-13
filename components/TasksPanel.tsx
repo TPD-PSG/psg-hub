@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import UserAvatar from "@/components/UserAvatar";
 
 type User = { id: number; name: string; email: string; avatarUrl?: string | null };
+type TaskList = { id: number; name: string; position: number };
 type Task = {
   id: number;
   title: string;
   description: string | null;
   productionId: number | null;
+  taskListId: number | null;
   assigneeUserId: number | null;
   assigneeUser: User | null;
   assigneeName: string | null;
@@ -52,9 +54,7 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
   );
 }
 
-type Props = {
-  productionId?: number; // undefined = company-wide page
-};
+type Props = { productionId?: number };
 
 const BLANK = {
   title: "", description: "", assigneeUserId: "", assigneeName: "",
@@ -62,32 +62,101 @@ const BLANK = {
   requiresSignoff: false, signoffUserId: "",
 };
 
+// Sentinel value for "no list" (tasks not assigned to any list)
+const NO_LIST_ID = "__none__";
+
 export default function TasksPanel({ productionId }: Props) {
+  const [lists, setLists] = useState<TaskList[]>([]);
+  const [activeListId, setActiveListId] = useState<string>(NO_LIST_ID);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [statusFilter, setStatusFilter] = useState("active");
+
+  // Task form
   const [showForm, setShowForm] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [form, setForm] = useState(BLANK);
 
+  // List management
+  const [showNewList, setShowNewList] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [renamingListId, setRenamingListId] = useState<number | null>(null);
+  const [renamingValue, setRenamingValue] = useState("");
+
   useEffect(() => {
-    reload();
-    fetch("/api/users").then((r) => r.json()).then((data) => { if (Array.isArray(data)) setUsers(data); });
+    if (productionId !== undefined) loadLists();
+    loadUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productionId]);
 
-  async function reload() {
-    const qs = productionId !== undefined
-      ? `?productionId=${productionId}`
-      : "?companyWide=1";
-    const data = await fetch(`/api/tasks${qs}`).then((r) => r.json());
+  useEffect(() => {
+    reloadTasks();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productionId, activeListId]);
+
+  async function loadLists() {
+    if (!productionId) return;
+    const data = await fetch(`/api/productions/${productionId}/task-lists`).then(r => r.json());
+    if (Array.isArray(data)) setLists(data);
+  }
+
+  async function loadUsers() {
+    const data = await fetch("/api/users").then(r => r.json());
+    if (Array.isArray(data)) setUsers(data);
+  }
+
+  async function reloadTasks() {
+    let qs: string;
+    if (productionId !== undefined) {
+      qs = `?productionId=${productionId}`;
+      if (activeListId === NO_LIST_ID) qs += "&taskListId=null";
+      else qs += `&taskListId=${activeListId}`;
+    } else {
+      qs = "?companyWide=1";
+    }
+    const data = await fetch(`/api/tasks${qs}`).then(r => r.json());
     if (Array.isArray(data)) setTasks(data);
+  }
+
+  async function addList() {
+    if (!newListName.trim() || !productionId) return;
+    await fetch(`/api/productions/${productionId}/task-lists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newListName.trim() }),
+    });
+    setNewListName(""); setShowNewList(false);
+    await loadLists();
+  }
+
+  async function renameList(id: number) {
+    if (!renamingValue.trim()) return;
+    await fetch(`/api/task-lists/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: renamingValue.trim() }),
+    });
+    setRenamingListId(null); setRenamingValue("");
+    await loadLists();
+  }
+
+  async function deleteList(id: number, name: string) {
+    if (!confirm(`Delete list "${name}"? Tasks in this list will not be deleted but will be unassigned from the list.`)) return;
+    await fetch(`/api/task-lists/${id}`, { method: "DELETE" });
+    if (activeListId === String(id)) setActiveListId(NO_LIST_ID);
+    await loadLists();
+    await reloadTasks();
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    const listIdForTask = productionId !== undefined && activeListId !== NO_LIST_ID
+      ? Number(activeListId)
+      : null;
     const payload = {
       ...form,
       productionId: productionId ?? null,
+      taskListId: listIdForTask,
       assigneeUserId: form.assigneeUserId ? Number(form.assigneeUserId) : null,
       signoffUserId: form.signoffUserId ? Number(form.signoffUserId) : null,
     };
@@ -97,13 +166,13 @@ export default function TasksPanel({ productionId }: Props) {
       await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     }
     setShowForm(false); setEditTask(null); setForm(BLANK);
-    await reload();
+    await reloadTasks();
   }
 
   async function deleteTask(id: number) {
     if (!confirm("Delete this task?")) return;
     await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-    await reload();
+    await reloadTasks();
   }
 
   async function quickStatus(task: Task, status: string) {
@@ -118,7 +187,7 @@ export default function TasksPanel({ productionId }: Props) {
         signoffAt: status === "done" && task.requiresSignoff ? new Date().toISOString() : task.signoffAt,
       }),
     });
-    await reload();
+    await reloadTasks();
   }
 
   const filtered = tasks.filter((t) => {
@@ -129,14 +198,101 @@ export default function TasksPanel({ productionId }: Props) {
   });
 
   const counts = {
-    active: tasks.filter((t) => t.status !== "done").length,
-    signoff: tasks.filter((t) => t.status === "awaiting_signoff").length,
-    done: tasks.filter((t) => t.status === "done").length,
+    active: tasks.filter(t => t.status !== "done").length,
+    signoff: tasks.filter(t => t.status === "awaiting_signoff").length,
+    done: tasks.filter(t => t.status === "done").length,
   };
+
+  const activeListName = activeListId === NO_LIST_ID
+    ? "General"
+    : lists.find(l => String(l.id) === activeListId)?.name ?? "General";
 
   return (
     <div>
-      {/* Header */}
+      {/* ── List tabs ── */}
+      {productionId !== undefined && (
+        <div className="flex items-center gap-1 mb-4 flex-wrap">
+          {/* General (no list) tab */}
+          <button
+            onClick={() => setActiveListId(NO_LIST_ID)}
+            className="text-sm px-3 py-1.5 rounded-md font-medium transition-colors"
+            style={activeListId === NO_LIST_ID
+              ? { backgroundColor: "var(--psg-blue)", color: "white" }
+              : { backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}
+          >
+            General
+          </button>
+
+          {lists.map(list => (
+            <div key={list.id} className="relative group flex items-center gap-0.5">
+              {renamingListId === list.id ? (
+                <form onSubmit={e => { e.preventDefault(); renameList(list.id); }} className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    value={renamingValue}
+                    onChange={e => setRenamingValue(e.target.value)}
+                    onBlur={() => renameList(list.id)}
+                    className="text-sm px-2 py-1 rounded border text-white focus:outline-none"
+                    style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-blue)", width: Math.max(80, renamingValue.length * 8 + 24) }}
+                  />
+                </form>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setActiveListId(String(list.id))}
+                    className="text-sm px-3 py-1.5 rounded-md font-medium transition-colors"
+                    style={activeListId === String(list.id)
+                      ? { backgroundColor: "var(--psg-blue)", color: "white" }
+                      : { backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}
+                  >
+                    {list.name}
+                  </button>
+                  <div className="hidden group-hover:flex items-center gap-0.5 ml-0.5">
+                    <button
+                      onClick={() => { setRenamingListId(list.id); setRenamingValue(list.name); }}
+                      title="Rename list"
+                      className="w-5 h-5 flex items-center justify-center rounded text-xs hover:bg-white/10 transition-colors"
+                      style={{ color: "var(--psg-muted)" }}
+                    >✎</button>
+                    <button
+                      onClick={() => deleteList(list.id, list.name)}
+                      title="Delete list"
+                      className="w-5 h-5 flex items-center justify-center rounded text-xs hover:bg-red-500/20 transition-colors"
+                      style={{ color: "var(--psg-muted)" }}
+                    >✕</button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+
+          {/* New list */}
+          {showNewList ? (
+            <form onSubmit={e => { e.preventDefault(); addList(); }} className="flex items-center gap-1">
+              <input
+                autoFocus
+                value={newListName}
+                onChange={e => setNewListName(e.target.value)}
+                onBlur={() => { if (!newListName.trim()) setShowNewList(false); }}
+                placeholder="List name…"
+                className="text-sm px-2 py-1 rounded border text-white focus:outline-none"
+                style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-blue)", width: 140 }}
+              />
+              <button type="submit" className="text-sm px-2 py-1 rounded font-medium text-white" style={{ backgroundColor: "var(--psg-blue)" }}>Add</button>
+              <button type="button" onClick={() => { setShowNewList(false); setNewListName(""); }} className="text-sm px-2 py-1 rounded" style={{ color: "var(--psg-muted)" }}>✕</button>
+            </form>
+          ) : (
+            <button
+              onClick={() => setShowNewList(true)}
+              className="text-sm px-2.5 py-1.5 rounded-md transition-colors"
+              style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.04)" }}
+              title="New list"
+            >+ List</button>
+          )}
+        </div>
+      )}
+
+      {/* ── Status filter + Add Task ── */}
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="flex gap-2">
           {[
@@ -156,11 +312,11 @@ export default function TasksPanel({ productionId }: Props) {
         </div>
         <button onClick={() => { setEditTask(null); setForm(BLANK); setShowForm(true); }}
           className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
-          + Add Task
+          + Add Task{productionId !== undefined ? ` to ${activeListName}` : ""}
         </button>
       </div>
 
-      {/* Task list */}
+      {/* ── Task list ── */}
       {filtered.length === 0 ? (
         <div className="py-12 text-center rounded-lg border text-sm" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
           {tasks.length === 0 ? "No tasks yet." : "No tasks in this filter."}
@@ -170,7 +326,6 @@ export default function TasksPanel({ productionId }: Props) {
           {filtered.map((task) => (
             <div key={task.id} className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
               <div className="flex items-start gap-3">
-                {/* Quick complete checkbox */}
                 <button
                   onClick={() => quickStatus(task, task.status === "done" ? "todo" : (task.requiresSignoff ? "awaiting_signoff" : "done"))}
                   className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
@@ -219,7 +374,6 @@ export default function TasksPanel({ productionId }: Props) {
                   </div>
                 </div>
 
-                {/* Quick status cycle */}
                 <div className="flex gap-1 shrink-0">
                   {task.status !== "in_progress" && task.status !== "done" && (
                     <button onClick={() => quickStatus(task, "in_progress")} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Start</button>
@@ -236,26 +390,26 @@ export default function TasksPanel({ productionId }: Props) {
         </div>
       )}
 
-      {/* Modal */}
+      {/* ── Task form modal ── */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
           <div className="w-full max-w-lg rounded-xl shadow-2xl overflow-y-auto max-h-[90vh]" style={{ backgroundColor: "var(--psg-card-bg)", border: "1px solid var(--psg-card-border)" }}>
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-              <h2 className="font-semibold">{editTask ? "Edit Task" : "New Task"}</h2>
+              <h2 className="font-semibold">{editTask ? "Edit Task" : `New Task${productionId !== undefined ? ` — ${activeListName}` : ""}`}</h2>
               <button onClick={() => { setShowForm(false); setEditTask(null); setForm(BLANK); }} className="text-xl leading-none" style={{ color: "var(--psg-muted)" }}>×</button>
             </div>
             <form onSubmit={save} className="p-4 space-y-3">
-              <F label="Title *"><input required className={inp} style={inpStyle} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></F>
-              <F label="Description"><textarea rows={2} className={inp} style={inpStyle} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></F>
+              <F label="Title *"><input required className={inp} style={inpStyle} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></F>
+              <F label="Description"><textarea rows={2} className={inp} style={inpStyle} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></F>
 
               <div className="grid grid-cols-2 gap-3">
                 <F label="Status">
-                  <select className={inp} style={inpStyle} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+                  <select className={inp} style={inpStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
                     {Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </F>
                 <F label="Priority">
-                  <select className={inp} style={inpStyle} value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}>
+                  <select className={inp} style={inpStyle} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
@@ -263,33 +417,33 @@ export default function TasksPanel({ productionId }: Props) {
                 </F>
               </div>
 
-              <F label="Due date"><input type="date" className={inp} style={inpStyle} value={form.dueDate} onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))} /></F>
+              <F label="Due date"><input type="date" className={inp} style={inpStyle} value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} /></F>
 
               <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
                 <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Assignment</div>
                 <div className="grid grid-cols-2 gap-3">
                   <F label="Assign to (Hub user)">
-                    <select className={inp} style={inpStyle} value={form.assigneeUserId} onChange={(e) => setForm((f) => ({ ...f, assigneeUserId: e.target.value, assigneeName: e.target.value ? "" : f.assigneeName }))}>
+                    <select className={inp} style={inpStyle} value={form.assigneeUserId} onChange={e => setForm(f => ({ ...f, assigneeUserId: e.target.value, assigneeName: e.target.value ? "" : f.assigneeName }))}>
                       <option value="">— select —</option>
-                      {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </F>
                   <F label="Or assignee name (free text)">
-                    <input className={inp} style={inpStyle} placeholder="External contact…" value={form.assigneeName} onChange={(e) => setForm((f) => ({ ...f, assigneeName: e.target.value, assigneeUserId: e.target.value ? "" : f.assigneeUserId }))} />
+                    <input className={inp} style={inpStyle} placeholder="External contact…" value={form.assigneeName} onChange={e => setForm(f => ({ ...f, assigneeName: e.target.value, assigneeUserId: e.target.value ? "" : f.assigneeUserId }))} />
                   </F>
                 </div>
               </div>
 
               <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
                 <div className="flex items-center gap-2 mb-2">
-                  <input type="checkbox" id="signoff" checked={form.requiresSignoff} onChange={(e) => setForm((f) => ({ ...f, requiresSignoff: e.target.checked }))} className="w-4 h-4" />
+                  <input type="checkbox" id="signoff" checked={form.requiresSignoff} onChange={e => setForm(f => ({ ...f, requiresSignoff: e.target.checked }))} className="w-4 h-4" />
                   <label htmlFor="signoff" className="text-sm font-medium">Requires sign-off</label>
                 </div>
                 {form.requiresSignoff && (
                   <F label="Sign-off from">
-                    <select className={inp} style={inpStyle} value={form.signoffUserId} onChange={(e) => setForm((f) => ({ ...f, signoffUserId: e.target.value }))}>
+                    <select className={inp} style={inpStyle} value={form.signoffUserId} onChange={e => setForm(f => ({ ...f, signoffUserId: e.target.value }))}>
                       <option value="">— select person —</option>
-                      {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </F>
                 )}

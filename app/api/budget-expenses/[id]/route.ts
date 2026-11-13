@@ -21,6 +21,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       approvedBy:       body.approvedBy || null,
       approvedDate:     body.approvedDate ? new Date(body.approvedDate) : null,
       approvalMethod:   body.approvalMethod || null,
+      isPSGExpense:     body.isPSGExpense ?? false,
+      paymentMethod:    body.paymentMethod || null,
     },
   });
   return NextResponse.json(expense);

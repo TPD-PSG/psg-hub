@@ -24,6 +24,8 @@ type Expense = {
   approvedBy: string | null;
   approvedDate: string | null;
   approvalMethod: string | null;
+  isPSGExpense: boolean;
+  paymentMethod: string | null;
   documents: SpendDoc[];
 };
 type BudgetLine = {
@@ -203,7 +205,8 @@ const PHASE_COLORS: Record<string, string> = {
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
 
-const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "" };
+const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "", isPSGExpense: false, paymentMethod: "" };
+const BLANK_PSG_EXPENSE = { description: "", supplier: "", committed: "", spent: "", paymentDue: "", notes: "", paymentMethod: "" };
 
 type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "reports" | "tasks" | "tour";
 
@@ -381,6 +384,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [showEventForm, setShowEventForm] = useState(false);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState<number | null>(null);
+  const [showPSGExpenseForm, setShowPSGExpenseForm] = useState<number | null>(null);
+  const [editingPSGExpense, setEditingPSGExpense] = useState<Expense | null>(null);
+  const [psgExpenseForm, setPSGExpenseForm] = useState<typeof BLANK_PSG_EXPENSE & { id?: number }>(BLANK_PSG_EXPENSE);
+  const [psgReceiptFile, setPsgReceiptFile] = useState<File | null>(null);
   const [editProd, setEditProd] = useState(false);
 
   // Call sheets state
@@ -618,6 +625,34 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   async function deleteExpense(eid: number) {
     if (!confirm("Delete this item?")) return;
+    await fetch(`/api/budget-expenses/${eid}`, { method: "DELETE" });
+    reload();
+  }
+
+  async function savePSGExpense(e: React.FormEvent) {
+    e.preventDefault();
+    const payload = { ...psgExpenseForm, isPSGExpense: true, phase: "Capitalisation", estimated: 0, issuedForPayment: false, vatExempt: false };
+    if (editingPSGExpense) {
+      await fetch(`/api/budget-expenses/${editingPSGExpense.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      // upload receipt if any
+      if (psgReceiptFile) {
+        const fd = new FormData(); fd.append("file", psgReceiptFile); fd.append("type", "invoice");
+        await fetch(`/api/budget-expenses/${editingPSGExpense.id}/documents`, { method: "POST", body: fd });
+      }
+    } else {
+      const res = await fetch(`/api/budget-lines/${showPSGExpenseForm}/expenses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const created = await res.json();
+      if (psgReceiptFile) {
+        const fd = new FormData(); fd.append("file", psgReceiptFile); fd.append("type", "invoice");
+        await fetch(`/api/budget-expenses/${created.id}/documents`, { method: "POST", body: fd });
+      }
+    }
+    setShowPSGExpenseForm(null); setEditingPSGExpense(null); setPSGExpenseForm(BLANK_PSG_EXPENSE); setPsgReceiptFile(null);
+    reload();
+  }
+
+  async function deletePSGExpense(eid: number) {
+    if (!confirm("Delete this PSG expense?")) return;
     await fetch(`/api/budget-expenses/${eid}`, { method: "DELETE" });
     reload();
   }
@@ -1088,9 +1123,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 const lineSpt = line.expenses.reduce((s, x) => s + x.spent, 0);
                 const pct = line.budgeted > 0 ? Math.min((lineCom / line.budgeted) * 100, 100) : 0;
                 const byPhase = PHASES.reduce((acc, p) => {
-                  acc[p] = line.expenses.filter((x) => x.phase === p);
+                  acc[p] = line.expenses.filter((x) => !x.isPSGExpense && x.phase === p);
                   return acc;
                 }, {} as Record<string, Expense[]>);
+                const psgExpenses = line.expenses.filter((x) => x.isPSGExpense);
 
                 return (
                   <div key={line.id} className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
@@ -1109,6 +1145,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       </div>
                       <div className="flex gap-2 shrink-0">
                         <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}>+ Spend</button>
+                        <button onClick={() => { setPSGExpenseForm(BLANK_PSG_EXPENSE); setEditingPSGExpense(null); setPsgReceiptFile(null); setShowPSGExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ PSG Expense</button>
                         <button onClick={() => deleteBudgetLine(line.id)} className="text-xs text-red-400 hover:text-red-300">Delete</button>
                       </div>
                     </div>
@@ -1185,6 +1222,35 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         </div>
                       );
                     })}
+
+                    {/* PSG Expenses section */}
+                    {psgExpenses.length > 0 && (
+                      <div>
+                        <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: "rgb(165,180,252)", backgroundColor: "rgba(99,102,241,0.06)" }}>
+                          PSG Expenses
+                        </div>
+                        <table className="w-full text-xs">
+                          <tbody>
+                            {psgExpenses.map((x) => (
+                              <tr key={x.id} className="border-t hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
+                                <td className="px-4 py-2 text-white w-1/4">{x.description}</td>
+                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.supplier || "—"}</td>
+                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.paymentMethod || "—"}</td>
+                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.paymentDue ? fmtShortDate(x.paymentDue) : ""}</td>
+                                <td className="px-3 py-2 text-right" />
+                                <td className="px-3 py-2 text-right text-orange-300 font-medium">{x.committed > 0 ? fmt(x.committed) : "—"}</td>
+                                <td className="px-3 py-2 text-right text-green-400 font-medium">{x.spent > 0 ? fmt(x.spent) : "—"}</td>
+                                <td className="px-3 py-2" />
+                                <td className="px-3 py-2 opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
+                                  <button onClick={() => { setPSGExpenseForm({ description: x.description, supplier: x.supplier ?? "", committed: String(x.committed), spent: String(x.spent), paymentDue: x.paymentDue ? x.paymentDue.slice(0, 10) : "", notes: x.notes ?? "", paymentMethod: x.paymentMethod ?? "", id: x.id }); setEditingPSGExpense(x); setPsgReceiptFile(null); setShowPSGExpenseForm(null); }} className="text-blue-400 hover:text-blue-300">Edit</button>
+                                  <button onClick={() => deletePSGExpense(x.id)} className="text-red-400 hover:text-red-300">×</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1998,6 +2064,35 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               )}
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* Modal: Add / Edit PSG Expense */}
+      {(showPSGExpenseForm !== null || editingPSGExpense !== null) && (
+        <Modal title={editingPSGExpense ? "Edit PSG Expense" : "Add PSG Expense"} onClose={() => { setShowPSGExpenseForm(null); setEditingPSGExpense(null); setPSGExpenseForm(BLANK_PSG_EXPENSE); setPsgReceiptFile(null); }}>
+          <form onSubmit={savePSGExpense} className="space-y-3">
+            <F label="Description *"><input required className={inp} style={inpStyle} value={psgExpenseForm.description} onChange={(e) => setPSGExpenseForm(f => ({ ...f, description: e.target.value }))} /></F>
+            <F label="Supplier"><input className={inp} style={inpStyle} value={psgExpenseForm.supplier} onChange={(e) => setPSGExpenseForm(f => ({ ...f, supplier: e.target.value }))} /></F>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Net Cost (£)"><input type="number" min="0" step="0.01" className={inp} style={inpStyle} value={psgExpenseForm.committed} onChange={(e) => setPSGExpenseForm(f => ({ ...f, committed: e.target.value }))} placeholder="0.00" /></F>
+              <F label="Gross Cost (£)"><input type="number" min="0" step="0.01" className={inp} style={inpStyle} value={psgExpenseForm.spent} onChange={(e) => setPSGExpenseForm(f => ({ ...f, spent: e.target.value }))} placeholder="0.00" /></F>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Payment Date"><input type="date" className={inp} style={inpStyle} value={psgExpenseForm.paymentDue} onChange={(e) => setPSGExpenseForm(f => ({ ...f, paymentDue: e.target.value }))} /></F>
+              <F label="Payment Method">
+                <select className={inp} style={inpStyle} value={psgExpenseForm.paymentMethod} onChange={(e) => setPSGExpenseForm(f => ({ ...f, paymentMethod: e.target.value }))}>
+                  <option value="">— select —</option>
+                  {["BACS", "Card", "Cash", "Cheque", "Direct Debit", "PayPal", "Other"].map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </F>
+            </div>
+            <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={psgExpenseForm.notes} onChange={(e) => setPSGExpenseForm(f => ({ ...f, notes: e.target.value }))} /></F>
+            <F label="Receipt / Invoice">
+              <input type="file" accept="image/*,application/pdf" className={inp} style={inpStyle} onChange={(e) => setPsgReceiptFile(e.target.files?.[0] ?? null)} />
+              {psgReceiptFile && <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>{psgReceiptFile.name}</p>}
+            </F>
+            <Btns onCancel={() => { setShowPSGExpenseForm(null); setEditingPSGExpense(null); setPSGExpenseForm(BLANK_PSG_EXPENSE); setPsgReceiptFile(null); }} label={editingPSGExpense ? "Save Changes" : "Add PSG Expense"} />
+          </form>
         </Modal>
       )}
 

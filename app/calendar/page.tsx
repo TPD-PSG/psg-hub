@@ -177,7 +177,7 @@ function CalendarInner() {
           <h1 className="text-2xl font-bold text-white">Calendar</h1>
           <div className="flex-1" />
           <div className="flex gap-1 rounded-lg overflow-hidden border text-xs" style={{ borderColor: "var(--psg-card-border)" }}>
-            {(["month", "list", "team", "schedule"] as const).map(v => (
+            {(["month", "list", "schedule"] as const).map(v => (
               <button key={v} onClick={() => setView(v)}
                 className="px-3 py-1.5 capitalize transition-colors"
                 style={view === v ? { backgroundColor: "var(--psg-blue)", color: "#fff" } : { backgroundColor: "transparent", color: "var(--psg-muted)" }}>
@@ -276,9 +276,6 @@ function CalendarInner() {
               </Link>
             ))}
           </div>
-        ) : view === "team" ? (
-          /* ── Team view ── */
-          <TeamView year={year} month={month} assignments={assignments} onRefresh={() => fetch("/api/staff-assignments").then(r => r.json()).then(d => { if (Array.isArray(d)) setAssignments(d); })} />
         ) : (
           /* ── Schedule view ── */
           <ScheduleView year={year} month={month} assignments={assignments} onRefresh={() => fetch("/api/staff-assignments").then(r => r.json()).then(d => { if (Array.isArray(d)) setAssignments(d); })} />
@@ -316,252 +313,6 @@ function CalendarInner() {
 
 // ── Team View ─────────────────────────────────────────────────────────────────
 
-function TeamView({ year, month, assignments, onRefresh }: {
-  year: number; month: number;
-  assignments: StaffAssignment[];
-  onRefresh: () => void;
-}) {
-  const [productions, setProductions] = useState<{ id: number; name: string }[]>([]);
-  const [users, setUsers] = useState<{ id: number; name: string }[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ userId: "", productionId: "", startDate: "", endDate: "", activityType: "", notes: "" });
-  const [editId, setEditId] = useState<number | null>(null);
-
-  useEffect(() => {
-    fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d.map((p: { id: number; name: string }) => ({ id: p.id, name: p.name }))); });
-    fetch("/api/users").then(r => r.json()).then(d => { if (Array.isArray(d)) setUsers(d.map((u: { id: number; name: string }) => ({ id: u.id, name: u.name }))); });
-  }, []);
-
-  const daysInMonth = getDaysInMonth(year, month);
-  const days = Array.from({ length: daysInMonth }, (_, i) => {
-    const d = i + 1;
-    return `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  });
-
-  // All staff with assignments + any users loaded
-  const assignedUserIds = new Set(assignments.map(a => a.userId));
-  const assignedUsers = assignments
-    .map(a => a.user)
-    .filter((u, i, arr) => arr.findIndex(x => x.id === u.id) === i);
-  const allStaff = users.length > 0
-    ? users.filter(u => assignedUserIds.has(u.id) || users.length <= 10)
-    : assignedUsers;
-
-  // Build prod→colour map
-  const prodIds = [...new Set(assignments.map(a => a.production.id))];
-  const prodColor: Record<number, string> = {};
-  prodIds.forEach((id, i) => { prodColor[id] = PROD_COLORS[i % PROD_COLORS.length]; });
-
-  // Month assignments only
-  const monthStart = days[0];
-  const monthEnd = days[days.length - 1];
-  const monthAssignments = assignments.filter(a => {
-    const s = a.startDate.slice(0, 10);
-    const e = a.endDate.slice(0, 10);
-    return s <= monthEnd && e >= monthStart;
-  });
-
-  async function saveAssignment() {
-    if (!form.userId || !form.productionId || !form.startDate || !form.endDate) return;
-    if (editId) {
-      await fetch(`/api/staff-assignments/${editId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-    } else {
-      await fetch("/api/staff-assignments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-    }
-    setShowForm(false);
-    setEditId(null);
-    onRefresh();
-  }
-
-  async function deleteAssignment(id: number) {
-    await fetch(`/api/staff-assignments/${id}`, { method: "DELETE" });
-    onRefresh();
-  }
-
-  const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
-  const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
-          {monthAssignments.length === 0 ? "No staff assigned this month." : `${monthAssignments.length} assignment${monthAssignments.length !== 1 ? "s" : ""} this month`}
-        </p>
-        <button
-          onClick={() => { setEditId(null); setForm({ userId: "", productionId: "", startDate: "", endDate: "", activityType: "", notes: "" }); setShowForm(true); }}
-          className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
-          style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-          + Assign Staff
-        </button>
-      </div>
-
-      {allStaff.length === 0 ? (
-        <div className="text-center py-16 rounded-xl border" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-          No staff assigned yet. Click &ldquo;Assign Staff&rdquo; to get started.
-        </div>
-      ) : (
-        <div className="rounded-xl border overflow-x-auto" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-          <table className="w-full text-xs border-collapse" style={{ minWidth: 500 }}>
-            <thead>
-              <tr className="border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-                <th className="text-left px-4 py-3 font-semibold w-28 sticky left-0" style={{ color: "var(--psg-muted)", backgroundColor: "var(--psg-card-bg)" }}>Staff</th>
-                {days.map(d => {
-                  const date = new Date(d + "T12:00:00");
-                  const isToday = d === new Date().toISOString().slice(0, 10);
-                  const dow = date.getDay();
-                  const isWeekend = dow === 0 || dow === 6;
-                  return (
-                    <th key={d} className="text-center py-2 font-normal" style={{ width: 26, color: isToday ? "var(--psg-blue)" : isWeekend ? "var(--psg-muted)" : "var(--psg-muted)", opacity: isWeekend && !isToday ? 0.5 : 1, backgroundColor: isToday ? "var(--psg-blue)22" : "transparent" }}>
-                      {date.getDate()}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {allStaff.map((staff, si) => {
-                const staffAssignments = monthAssignments.filter(a => a.userId === staff.id);
-                return (
-                  <tr key={staff.id} className={si > 0 ? "border-t" : ""} style={{ borderColor: "var(--psg-card-border)" }}>
-                    <td className="px-4 py-1 font-medium text-white whitespace-nowrap sticky left-0" style={{ backgroundColor: "var(--psg-card-bg)" }}>{staff.name}</td>
-                    {days.map(d => {
-                      const dayAssignments = staffAssignments.filter(a => {
-                        const s = a.startDate.slice(0, 10);
-                        const e = a.endDate.slice(0, 10);
-                        return d >= s && d <= e;
-                      });
-                      const isToday = d === new Date().toISOString().slice(0, 10);
-                      const hasClash = dayAssignments.length > 1;
-                      return (
-                        <td key={d} className="p-0 relative" style={{ backgroundColor: isToday ? "var(--psg-blue)11" : "transparent" }}>
-                          {dayAssignments.length > 0 ? (
-                            <div className="relative group h-7 flex flex-col gap-px py-0.5">
-                              {dayAssignments.map(a => (
-                                <div
-                                  key={a.id}
-                                  className="flex-1 cursor-pointer"
-                                  style={{ backgroundColor: (prodColor[a.production.id] ?? "#3b82f6") + (hasClash ? "99" : "cc") }}
-                                  onClick={() => { setEditId(a.id); setForm({ userId: String(a.userId), productionId: String(a.production.id), startDate: a.startDate.slice(0, 10), endDate: a.endDate.slice(0, 10), activityType: a.activityType ?? "", notes: a.notes ?? "" }); setShowForm(true); }}
-                                />
-                              ))}
-                              {/* Hover tooltip */}
-                              <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-full mb-1 hidden group-hover:flex flex-col gap-0.5 bg-gray-900 border rounded px-2 py-1.5 shadow-xl pointer-events-none" style={{ borderColor: "var(--psg-card-border)", fontSize: 11, whiteSpace: "nowrap" }}>
-                                {dayAssignments.map(a => (
-                                  <span key={a.id} style={{ color: prodColor[a.production.id] ?? "#3b82f6" }}>{a.production.name}</span>
-                                ))}
-                                {hasClash && <span className="text-yellow-400 text-xs">⚠ clash</span>}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="h-7" />
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Legend */}
-      {prodIds.length > 0 && (
-        <div className="flex gap-4 flex-wrap">
-          {prodIds.map(id => {
-            const a = assignments.find(x => x.production.id === id);
-            return a ? (
-              <div key={id} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--psg-muted)" }}>
-                <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: prodColor[id] }} />
-                {a.production.name}
-              </div>
-            ) : null;
-          })}
-        </div>
-      )}
-
-      {/* Assignment list */}
-      {monthAssignments.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Assignments this month</div>
-          {monthAssignments.map(a => (
-            <div key={a.id} className="flex items-center gap-3 rounded-lg border px-4 py-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: prodColor[a.production.id] ?? "#3b82f6" }} />
-              <div className="flex-1 min-w-0">
-                <span className="text-sm text-white font-medium">{a.user.name}</span>
-                <span className="text-xs mx-2" style={{ color: "var(--psg-muted)" }}>·</span>
-                <span className="text-xs" style={{ color: prodColor[a.production.id] ?? "#3b82f6" }}>{a.production.name}</span>
-                {a.tourStop && <span className="text-xs ml-2" style={{ color: "var(--psg-muted)" }}>@ {a.tourStop.venue.name}</span>}
-                {a.notes && <span className="text-xs ml-2 italic" style={{ color: "var(--psg-muted)" }}>{a.notes}</span>}
-              </div>
-              <div className="text-xs shrink-0" style={{ color: "var(--psg-muted)" }}>
-                {new Date(a.startDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })} → {new Date(a.endDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-              </div>
-              <div className="flex gap-3 shrink-0">
-                <button
-                  onClick={() => { setEditId(a.id); setForm({ userId: String(a.userId), productionId: String(a.production.id), startDate: a.startDate.slice(0, 10), endDate: a.endDate.slice(0, 10), activityType: a.activityType ?? "", notes: a.notes ?? "" }); setShowForm(true); }}
-                  className="text-xs hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>Edit</button>
-                <button onClick={() => deleteAssignment(a.id)} className="text-xs hover:text-red-400 transition-colors" style={{ color: "var(--psg-muted)" }}>×</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Form modal */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
-          <div className="w-full max-w-md rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-            <h2 className="text-lg font-semibold text-white">{editId ? "Edit Assignment" : "Assign Staff"}</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>Staff member *</label>
-                <select className={inp} style={inpStyle} value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}>
-                  <option value="">Select…</option>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>Production *</label>
-                <select className={inp} style={inpStyle} value={form.productionId} onChange={e => setForm(f => ({ ...f, productionId: e.target.value }))}>
-                  <option value="">Select…</option>
-                  {productions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>From *</label>
-                  <input type="date" className={inp} style={inpStyle} value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>To *</label>
-                  <input type="date" className={inp} style={inpStyle} value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>Activity type</label>
-                <select className={inp} style={inpStyle} value={form.activityType} onChange={e => setForm(f => ({ ...f, activityType: e.target.value }))}>
-                  <option value="">— None —</option>
-                  {ACTIVITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>Notes</label>
-                <input className={inp} style={inpStyle} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => { setShowForm(false); setEditId(null); }} className="px-4 py-2 text-sm rounded-lg border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
-              <button onClick={saveAssignment} className="px-4 py-2 text-sm rounded-lg font-medium text-white transition-colors" style={{ backgroundColor: "var(--psg-blue)" }}>Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Schedule View ──────────────────────────────────────────────────────────────
 
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -573,9 +324,9 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
 }) {
   const [productions, setProductions] = useState<{ id: number; name: string; color: string | null; venue: string | null }[]>([]);
   const [users, setUsers] = useState<{ id: number; name: string }[]>([]);
-  const [modal, setModal] = useState<{ date: string; productionId: number } | null>(null);
+  const [showModal, setShowModal] = useState(false);
   const [editAssignment, setEditAssignment] = useState<StaffAssignment | null>(null);
-  const [form, setForm] = useState({ userId: "", activityType: "", notes: "" });
+  const [form, setForm] = useState({ userId: "", productionId: "", startDate: "", endDate: "", activityType: "", notes: "" });
 
   useEffect(() => {
     fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d.map((p: { id: number; name: string; color: string | null; venue: string | null }) => ({ id: p.id, name: p.name, color: p.color, venue: p.venue }))); });
@@ -596,13 +347,8 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
     return s <= monthEnd && e >= monthStart;
   });
 
-  const activeProdIds = [...new Set(monthAssignments.map(a => a.production.id))];
-  // Derive from assignments directly (they carry production name); enrich with color from separate fetch if available
-  const activeProductions = activeProdIds.map(pid => {
-    const fromAssignment = monthAssignments.find(a => a.production.id === pid)!.production;
-    const fromFetch = productions.find(p => p.id === pid);
-    return { id: pid, name: fromAssignment.name, color: fromFetch?.color ?? null, venue: fromFetch?.venue ?? null };
-  });
+  // Show ALL productions (not just ones with assignments)
+  const allProductions = productions;
 
   // Build lookup: prodId → date → assignments[]
   const lookup: Record<number, Record<string, StaffAssignment[]>> = {};
@@ -620,41 +366,41 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
     }
   });
 
-  function openAdd(date: string, productionId: number) {
+  function openAdd(date?: string, productionId?: number) {
     setEditAssignment(null);
-    setForm({ userId: "", activityType: "", notes: "" });
-    setModal({ date, productionId });
+    setForm({ userId: "", productionId: productionId ? String(productionId) : "", startDate: date ?? "", endDate: date ?? "", activityType: "", notes: "" });
+    setShowModal(true);
   }
 
   function openEdit(a: StaffAssignment) {
     setEditAssignment(a);
-    setForm({ userId: String(a.userId), activityType: a.activityType ?? "", notes: a.notes ?? "" });
-    setModal({ date: a.startDate.slice(0, 10), productionId: a.production.id });
+    setForm({ userId: String(a.userId), productionId: String(a.production.id), startDate: a.startDate.slice(0, 10), endDate: a.endDate.slice(0, 10), activityType: a.activityType ?? "", notes: a.notes ?? "" });
+    setShowModal(true);
   }
 
   async function saveModal() {
-    if (!modal || !form.userId) return;
+    if (!form.userId || !form.productionId || !form.startDate || !form.endDate) return;
     if (editAssignment) {
       await fetch(`/api/staff-assignments/${editAssignment.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: form.userId, productionId: modal.productionId, startDate: modal.date, endDate: modal.date, activityType: form.activityType || null, notes: form.notes || null }),
+        body: JSON.stringify({ userId: form.userId, productionId: form.productionId, startDate: form.startDate, endDate: form.endDate, activityType: form.activityType || null, notes: form.notes || null }),
       });
     } else {
       await fetch("/api/staff-assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: form.userId, productionId: modal.productionId, startDate: modal.date, endDate: modal.date, activityType: form.activityType || null, notes: form.notes || null }),
+        body: JSON.stringify({ userId: form.userId, productionId: form.productionId, startDate: form.startDate, endDate: form.endDate, activityType: form.activityType || null, notes: form.notes || null }),
       });
     }
-    setModal(null);
+    setShowModal(false);
     onRefresh();
   }
 
-  async function deleteModal() {
+  async function deleteAssignment() {
     if (!editAssignment) return;
     await fetch(`/api/staff-assignments/${editAssignment.id}`, { method: "DELETE" });
-    setModal(null);
+    setShowModal(false);
     onRefresh();
   }
 
@@ -664,22 +410,26 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
-        Click any cell to assign a team member.{" "}
-        {activeProductions.length === 0 ? "No productions with assignments this month." : `${activeProductions.length} production${activeProductions.length !== 1 ? "s" : ""} scheduled.`}
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
+          Click any cell to assign a team member, or use the button for a full date range.
+        </p>
+        <button onClick={() => openAdd()} className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+          + Assign Staff
+        </button>
+      </div>
 
-      {activeProductions.length === 0 ? (
+      {allProductions.length === 0 ? (
         <div className="text-center py-16 rounded-xl border" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-          No staff scheduled this month. Use the Team view to add assignments first.
+          No productions found. Add productions first.
         </div>
       ) : (
         <div className="rounded-xl border overflow-x-auto" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-          <table className="text-xs border-collapse" style={{ minWidth: 300 + activeProductions.length * 160 }}>
+          <table className="text-xs border-collapse" style={{ minWidth: 300 + allProductions.length * 160 }}>
             <thead>
               <tr>
                 <th className="sticky left-0 z-10 px-3 py-2 text-left border-b border-r w-28" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }} />
-                {activeProductions.map(p => (
+                {allProductions.map(p => (
                   <th key={p.id} colSpan={2} className="border-b border-r px-2 py-2 text-center font-bold text-white" style={{ borderColor: "var(--psg-card-border)", backgroundColor: p.color ? p.color + "33" : "rgba(255,255,255,0.04)", minWidth: 160 }}>
                     <div className="truncate" title={p.name}>{p.name}</div>
                     {p.venue && <div className="font-normal truncate mt-0.5" style={{ color: "var(--psg-muted)", fontSize: 10 }}>{p.venue}</div>}
@@ -688,7 +438,7 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
               </tr>
               <tr className="border-b" style={{ borderColor: "var(--psg-card-border)" }}>
                 <th className="sticky left-0 z-10 px-3 py-1 border-r" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }} />
-                {activeProductions.map(p => (
+                {allProductions.map(p => (
                   <>
                     <th key={`${p.id}-act`} className="px-2 py-1 font-normal text-center border-r w-16" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Activity</th>
                     <th key={`${p.id}-st`} className="px-2 py-1 font-normal text-center border-r" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Staff</th>
@@ -708,13 +458,13 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
                       <span className="font-semibold" style={{ color: isToday ? "var(--psg-blue)" : isWeekend ? "rgba(255,255,255,0.3)" : "white" }}>{DOW[dow]}</span>
                       <span className="ml-1.5" style={{ color: isToday ? "var(--psg-blue)" : "var(--psg-muted)" }}>{date.getDate()}/{date.getMonth()+1}</span>
                     </td>
-                    {activeProductions.map(p => {
+                    {allProductions.map(p => {
                       const cellItems = lookup[p.id]?.[dateStr] ?? [];
                       const actType = cellItems[0]?.activityType;
                       const actColor = actType ? (ACTIVITY_COLORS[actType] ?? "#6b7280") : null;
                       return (
                         <>
-                          <td key={`${p.id}-act-${dateStr}`} className="border-r text-center cursor-pointer hover:opacity-80 transition-opacity" style={{ borderColor: "var(--psg-card-border)", backgroundColor: actColor ? actColor + "dd" : "transparent", width: 64, minWidth: 64 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
+                          <td key={`${p.id}-act-${dateStr}`} className="border-r text-center cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", backgroundColor: actColor ? actColor + "dd" : "transparent", width: 64, minWidth: 64 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
                             {actType && <span className="font-bold text-white px-1 py-0.5 block leading-5" style={{ fontSize: 10 }}>{actType}</span>}
                           </td>
                           <td key={`${p.id}-st-${dateStr}`} className="border-r cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", minWidth: 72 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
@@ -747,17 +497,10 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
       </div>
 
       {/* Modal */}
-      {modal && (
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
-          <div className="w-full max-w-sm rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-            <div className="space-y-0.5">
-              <h2 className="text-base font-semibold text-white">{editAssignment ? "Edit Assignment" : "Assign Staff"}</h2>
-              <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
-                {new Date(modal.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
-                {" · "}
-                {activeProductions.find(p => p.id === modal.productionId)?.name}
-              </p>
-            </div>
+          <div className="w-full max-w-md rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+            <h2 className="text-base font-semibold text-white">{editAssignment ? "Edit Assignment" : "Assign Staff"}</h2>
             <div className="space-y-3">
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>Staff member *</label>
@@ -765,6 +508,23 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
                   <option value="">Select…</option>
                   {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>Production *</label>
+                <select className={inp} style={inpStyle} value={form.productionId} onChange={e => setForm(f => ({ ...f, productionId: e.target.value }))}>
+                  <option value="">Select…</option>
+                  {allProductions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>From *</label>
+                  <input type="date" className={inp} style={inpStyle} value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>To *</label>
+                  <input type="date" className={inp} style={inpStyle} value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+                </div>
               </div>
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>Activity type</label>
@@ -781,12 +541,12 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
             <div className="flex justify-between gap-3 pt-2">
               <div>
                 {editAssignment && (
-                  <button onClick={deleteModal} className="px-3 py-2 text-sm rounded-lg transition-colors hover:bg-red-900/30" style={{ color: "#f87171" }}>Delete</button>
+                  <button onClick={deleteAssignment} className="px-3 py-2 text-sm rounded-lg transition-colors hover:bg-red-900/30" style={{ color: "#f87171" }}>Delete</button>
                 )}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setModal(null)} className="px-4 py-2 text-sm rounded-lg border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
-                <button onClick={saveModal} disabled={!form.userId} className="px-4 py-2 text-sm rounded-lg font-medium text-white transition-colors disabled:opacity-50" style={{ backgroundColor: "var(--psg-blue)" }}>Save</button>
+                <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm rounded-lg border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+                <button onClick={saveModal} disabled={!form.userId || !form.productionId || !form.startDate || !form.endDate} className="px-4 py-2 text-sm rounded-lg font-medium text-white transition-colors disabled:opacity-50" style={{ backgroundColor: "var(--psg-blue)" }}>Save</button>
               </div>
             </div>
           </div>

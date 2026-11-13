@@ -7,7 +7,7 @@ import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF } from "@/lib/exports";
 
-type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; issuedForPayment: boolean; createdAt: string };
+type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
 type Expense = {
   id: number;
   phase: string;
@@ -229,13 +229,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Spend document state
-  type PendingInvoice = { file: File; invoiceDate: string; invoiceAmount: string; issuedForPayment: boolean };
+  type PendingInvoice = { file: File; invoiceDate: string; invoiceAmount: string; invoiceNumber: string; issuedForPayment: boolean; extracting?: boolean };
   const [existingDocs, setExistingDocs] = useState<SpendDoc[]>([]);
   const [pendingQuotes, setPendingQuotes] = useState<File[]>([]);
   const [pendingPO, setPendingPO] = useState<File[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [docsUploading, setDocsUploading] = useState(false);
+  const [invoiceDragOver, setInvoiceDragOver] = useState(false);
 
   const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   const [showTeamPicker, setShowTeamPicker] = useState(false);
@@ -512,6 +513,29 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     setPendingQuotes([]);
     setPendingPO([]);
     setPendingInvoices([]);
+    setInvoiceDragOver(false);
+  }
+
+  async function addInvoiceFiles(files: File[]) {
+    const newItems: PendingInvoice[] = files.map(f => ({ file: f, invoiceDate: "", invoiceAmount: "", invoiceNumber: "", issuedForPayment: false, extracting: true }));
+    setPendingInvoices(prev => [...prev, ...newItems]);
+    for (const item of newItems) {
+      try {
+        const fd = new FormData(); fd.append("file", item.file);
+        const res = await fetch("/api/extract-invoice", { method: "POST", body: fd });
+        if (res.ok) {
+          const data = await res.json();
+          setPendingInvoices(prev => prev.map(x => x.file === item.file
+            ? { ...x, extracting: false, invoiceDate: data.dueDate ?? x.invoiceDate, invoiceAmount: data.grossAmount != null ? String(data.grossAmount) : x.invoiceAmount, invoiceNumber: data.invoiceNumber ?? x.invoiceNumber }
+            : x));
+          if (data.supplier) setExpenseForm(f => f.supplier ? f : { ...f, supplier: data.supplier });
+        } else {
+          setPendingInvoices(prev => prev.map(x => x.file === item.file ? { ...x, extracting: false } : x));
+        }
+      } catch {
+        setPendingInvoices(prev => prev.map(x => x.file === item.file ? { ...x, extracting: false } : x));
+      }
+    }
   }
 
   async function uploadPendingDocs(expenseId: number) {
@@ -529,6 +553,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       fd.append("file", inv.file); fd.append("type", "invoice");
       if (inv.invoiceDate) fd.append("invoiceDate", inv.invoiceDate);
       if (inv.invoiceAmount) fd.append("invoiceAmount", inv.invoiceAmount);
+      if (inv.invoiceNumber) fd.append("invoiceNumber", inv.invoiceNumber);
       fd.append("issuedForPayment", String(inv.issuedForPayment));
       uploads.push(fetch(`/api/budget-expenses/${expenseId}/documents`, { method: "POST", body: fd }).then(() => {}));
     }
@@ -538,12 +563,17 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   async function saveExpense(e: React.FormEvent) {
     e.preventDefault();
     setDocsUploading(true);
+    // Auto-calculate gross cost (spent) from invoice totals
+    const existingInvoiceTotal = existingDocs.filter(d => d.type === "invoice").reduce((s, d) => s + (d.invoiceAmount ?? 0), 0);
+    const pendingInvoiceTotal = pendingInvoices.reduce((s, inv) => s + (Number(inv.invoiceAmount) || 0), 0);
+    const autoSpent = existingInvoiceTotal + pendingInvoiceTotal;
+    const payload = { ...expenseForm, spent: autoSpent };
     let expenseId: number;
     if (expenseForm.id) {
-      await fetch(`/api/budget-expenses/${expenseForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm) });
+      await fetch(`/api/budget-expenses/${expenseForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       expenseId = expenseForm.id;
     } else {
-      const res = await fetch(`/api/budget-lines/${showExpenseForm}/expenses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm) });
+      const res = await fetch(`/api/budget-lines/${showExpenseForm}/expenses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       expenseId = data.id;
     }
@@ -807,9 +837,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Allocation", value: totalBudgeted, color: "text-white" },
-          { label: "Estimated", value: totalEstimated, color: "text-yellow-300" },
-          { label: "Committed", value: totalCommitted, color: "text-orange-300" },
-          { label: "Spent", value: totalSpent, color: totalSpent > totalBudgeted ? "text-red-400" : "text-green-400" },
+          { label: "PM Budget", value: totalEstimated, color: "text-yellow-300" },
+          { label: "Net Cost", value: totalCommitted, color: "text-orange-300" },
+          { label: "Gross Cost", value: totalSpent, color: totalSpent > totalBudgeted ? "text-red-400" : "text-green-400" },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
             <p className="text-xs uppercase tracking-wide mb-1" style={{ color: "var(--psg-muted)" }}>{label}</p>
@@ -973,9 +1003,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   <tr style={{ borderBottom: "1px solid var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
                     <th className="px-4 py-3 text-left font-medium text-white">Department</th>
                     <th className="px-4 py-3 text-right font-medium text-white">Allocation</th>
-                    <th className="px-4 py-3 text-right font-medium text-yellow-300">Estimated</th>
-                    <th className="px-4 py-3 text-right font-medium text-orange-300">Committed</th>
-                    <th className="px-4 py-3 text-right font-medium text-green-400">Spent</th>
+                    <th className="px-4 py-3 text-right font-medium text-yellow-300">PM Budget</th>
+                    <th className="px-4 py-3 text-right font-medium text-orange-300">Net Cost</th>
+                    <th className="px-4 py-3 text-right font-medium text-green-400">Gross Cost</th>
                     <th className="px-4 py-3 text-right font-medium" style={{ color: "var(--psg-muted)" }}>Variance</th>
                   </tr>
                 </thead>
@@ -1648,14 +1678,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             </F>
             <F label="Description *"><input required className={inp} style={inpStyle} value={expenseForm.description} onChange={(e) => setExpenseForm((f) => ({ ...f, description: e.target.value }))} /></F>
             <F label="Supplier"><input className={inp} style={inpStyle} value={expenseForm.supplier} onChange={(e) => setExpenseForm((f) => ({ ...f, supplier: e.target.value }))} /></F>
-            <div className="grid grid-cols-3 gap-3">
-              <F label="Estimated (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={expenseForm.estimated} onChange={(e) => setExpenseForm((f) => ({ ...f, estimated: e.target.value }))} /></F>
-              <F label="Committed (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={expenseForm.committed} onChange={(e) => setExpenseForm((f) => ({ ...f, committed: e.target.value }))} /></F>
-              <F label="Spent (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={expenseForm.spent} onChange={(e) => setExpenseForm((f) => ({ ...f, spent: e.target.value }))} /></F>
-            </div>
             <div className="grid grid-cols-2 gap-3">
-              <F label="PO Number"><input className={inp} style={inpStyle} value={expenseForm.poNumber} onChange={(e) => setExpenseForm((f) => ({ ...f, poNumber: e.target.value }))} /></F>
-              <F label="Payment Due"><input type="date" className={inp} style={inpStyle} value={expenseForm.paymentDue} onChange={(e) => setExpenseForm((f) => ({ ...f, paymentDue: e.target.value }))} /></F>
+              <F label="PM Budget (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={expenseForm.estimated} onChange={(e) => setExpenseForm((f) => ({ ...f, estimated: e.target.value }))} /></F>
+              <F label="Net Cost (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={expenseForm.committed} onChange={(e) => setExpenseForm((f) => ({ ...f, committed: e.target.value }))} /></F>
             </div>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={expenseForm.notes} onChange={(e) => setExpenseForm((f) => ({ ...f, notes: e.target.value }))} /></F>
 
@@ -1682,7 +1707,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               ))}
             </div>
 
-            {/* Approval */}
+            {/* Approval + PO Number */}
             <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>Approval</span>
@@ -1690,14 +1715,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   {expenseForm.approvedBy ? "Edit" : "+ Add Approval"}
                 </button>
               </div>
+              <F label="PO Number"><input className={inp} style={inpStyle} value={expenseForm.poNumber} onChange={(e) => setExpenseForm((f) => ({ ...f, poNumber: e.target.value }))} /></F>
               {expenseForm.approvedBy ? (
-                <div className="text-xs rounded px-2 py-1.5 space-y-0.5" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                <div className="text-xs rounded px-2 py-1.5 space-y-0.5 mt-2" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
                   <p className="text-white">Approved by: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvedBy}</span></p>
                   {expenseForm.approvedDate && <p className="text-white">Date: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvedDate}</span></p>}
                   {expenseForm.approvalMethod && <p className="text-white">Method: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvalMethod}</span></p>}
                 </div>
               ) : (
-                <p className="text-xs" style={{ color: "var(--psg-muted)" }}>No approval recorded</p>
+                <p className="text-xs mt-2" style={{ color: "var(--psg-muted)" }}>No approval recorded</p>
               )}
             </div>
 
@@ -1730,8 +1756,18 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>Invoices</span>
                 <label className="cursor-pointer text-xs px-2 py-1 rounded border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
                   + Upload
-                  <input type="file" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); setPendingInvoices(inv => [...inv, ...files.map(f => ({ file: f, invoiceDate: "", invoiceAmount: "", issuedForPayment: false }))]); e.target.value = ""; }} />
+                  <input type="file" multiple className="hidden" accept="application/pdf,image/*" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) addInvoiceFiles(files); e.target.value = ""; }} />
                 </label>
+              </div>
+              {/* Drag-and-drop zone */}
+              <div
+                className="rounded border-2 border-dashed mb-3 py-4 text-center text-xs transition-colors"
+                style={{ borderColor: invoiceDragOver ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: invoiceDragOver ? "rgba(59,130,246,0.08)" : "transparent", color: "var(--psg-muted)" }}
+                onDragOver={(e) => { e.preventDefault(); setInvoiceDragOver(true); }}
+                onDragLeave={() => setInvoiceDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setInvoiceDragOver(false); const files = Array.from(e.dataTransfer.files).filter(f => f.type === "application/pdf" || f.type.startsWith("image/")); if (files.length) addInvoiceFiles(files); }}
+              >
+                Drop PDF or image invoices here — data will be extracted automatically
               </div>
               {existingDocs.filter(d => d.type === "invoice").map(d => (
                 <div key={d.id} className="rounded p-2 mb-2 space-y-1.5" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid var(--psg-card-border)" }}>
@@ -1739,13 +1775,25 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <a href={`/api/spend-documents/${d.id}`} target="_blank" rel="noopener noreferrer" className="text-xs truncate hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>{d.name}</a>
                     <button type="button" onClick={() => deleteSpendDoc(d.id)} className="ml-2 shrink-0 text-xs text-red-400 hover:text-red-300">×</button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="date" placeholder="Invoice date" className={inp + " text-xs py-1"} style={inpStyle}
-                      value={d.invoiceDate ? d.invoiceDate.slice(0, 10) : ""}
-                      onChange={(e) => patchSpendDoc(d.id, { invoiceDate: e.target.value || null } as any)} />
-                    <input type="number" step="0.01" placeholder="Amount (£)" className={inp + " text-xs py-1"} style={inpStyle}
-                      value={d.invoiceAmount ?? ""}
-                      onChange={(e) => patchSpendDoc(d.id, { invoiceAmount: e.target.value ? Number(e.target.value) : null } as any)} />
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <p className="text-xs mb-0.5" style={{ color: "var(--psg-muted)" }}>Invoice No.</p>
+                      <input type="text" placeholder="e.g. INV-001" className={inp + " text-xs py-1"} style={inpStyle}
+                        value={d.invoiceNumber ?? ""}
+                        onChange={(e) => patchSpendDoc(d.id, { invoiceNumber: e.target.value || null } as any)} />
+                    </div>
+                    <div>
+                      <p className="text-xs mb-0.5" style={{ color: "var(--psg-muted)" }}>Payment Due Date</p>
+                      <input type="date" className={inp + " text-xs py-1"} style={inpStyle}
+                        value={d.invoiceDate ? d.invoiceDate.slice(0, 10) : ""}
+                        onChange={(e) => patchSpendDoc(d.id, { invoiceDate: e.target.value || null } as any)} />
+                    </div>
+                    <div>
+                      <p className="text-xs mb-0.5" style={{ color: "var(--psg-muted)" }}>Gross Amount (£)</p>
+                      <input type="number" step="0.01" className={inp + " text-xs py-1"} style={inpStyle}
+                        value={d.invoiceAmount ?? ""}
+                        onChange={(e) => patchSpendDoc(d.id, { invoiceAmount: e.target.value ? Number(e.target.value) : null } as any)} />
+                    </div>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
                     <input type="checkbox" checked={d.issuedForPayment}
@@ -1755,18 +1803,33 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 </div>
               ))}
               {pendingInvoices.map((inv, i) => (
-                <div key={i} className="rounded p-2 mb-2 space-y-1.5" style={{ backgroundColor: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.2)" }}>
+                <div key={i} className="rounded p-2 mb-2 space-y-1.5" style={{ backgroundColor: inv.extracting ? "rgba(234,179,8,0.06)" : "rgba(59,130,246,0.06)", border: `1px solid ${inv.extracting ? "rgba(234,179,8,0.25)" : "rgba(59,130,246,0.2)"}` }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-blue-300 truncate">{inv.file.name} <span style={{ color: "var(--psg-muted)" }}>(pending)</span></span>
+                    <span className="text-xs truncate" style={{ color: inv.extracting ? "rgb(234,179,8)" : "rgb(147,197,253)" }}>
+                      {inv.file.name}
+                      {inv.extracting ? <span className="ml-1 opacity-70">— extracting data…</span> : <span className="ml-1 opacity-60">(pending)</span>}
+                    </span>
                     <button type="button" onClick={() => setPendingInvoices(a => a.filter((_, j) => j !== i))} className="ml-2 shrink-0 text-xs text-red-400 hover:text-red-300">×</button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="date" placeholder="Invoice date" className={inp + " text-xs py-1"} style={inpStyle}
-                      value={inv.invoiceDate}
-                      onChange={(e) => setPendingInvoices(a => a.map((x, j) => j === i ? { ...x, invoiceDate: e.target.value } : x))} />
-                    <input type="number" step="0.01" placeholder="Amount (£)" className={inp + " text-xs py-1"} style={inpStyle}
-                      value={inv.invoiceAmount}
-                      onChange={(e) => setPendingInvoices(a => a.map((x, j) => j === i ? { ...x, invoiceAmount: e.target.value } : x))} />
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <p className="text-xs mb-0.5" style={{ color: "var(--psg-muted)" }}>Invoice No.</p>
+                      <input type="text" placeholder="e.g. INV-001" className={inp + " text-xs py-1"} style={inpStyle}
+                        value={inv.invoiceNumber}
+                        onChange={(e) => setPendingInvoices(a => a.map((x, j) => j === i ? { ...x, invoiceNumber: e.target.value } : x))} />
+                    </div>
+                    <div>
+                      <p className="text-xs mb-0.5" style={{ color: "var(--psg-muted)" }}>Payment Due Date</p>
+                      <input type="date" className={inp + " text-xs py-1"} style={inpStyle}
+                        value={inv.invoiceDate}
+                        onChange={(e) => setPendingInvoices(a => a.map((x, j) => j === i ? { ...x, invoiceDate: e.target.value } : x))} />
+                    </div>
+                    <div>
+                      <p className="text-xs mb-0.5" style={{ color: "var(--psg-muted)" }}>Gross Amount (£)</p>
+                      <input type="number" step="0.01" className={inp + " text-xs py-1"} style={inpStyle}
+                        value={inv.invoiceAmount}
+                        onChange={(e) => setPendingInvoices(a => a.map((x, j) => j === i ? { ...x, invoiceAmount: e.target.value } : x))} />
+                    </div>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
                     <input type="checkbox" checked={inv.issuedForPayment}
@@ -1775,6 +1838,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   </label>
                 </div>
               ))}
+              {(existingDocs.filter(d => d.type === "invoice").length > 0 || pendingInvoices.length > 0) && (
+                <div className="text-xs text-right pt-1 font-medium text-white/60">
+                  Gross Cost: £{(existingDocs.filter(d => d.type === "invoice").reduce((s, d) => s + (d.invoiceAmount ?? 0), 0) + pendingInvoices.reduce((s, inv) => s + (Number(inv.invoiceAmount) || 0), 0)).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              )}
             </div>
 
             <Btns onCancel={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); }} label={docsUploading ? "Saving…" : editingExpense ? "Save Changes" : "Add Spend"} />

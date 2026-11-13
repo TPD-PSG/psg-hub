@@ -22,9 +22,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data: {
       invoiceDate: body.invoiceDate ? new Date(body.invoiceDate) : null,
       invoiceAmount: body.invoiceAmount != null ? Number(body.invoiceAmount) : null,
+      invoiceNumber: body.invoiceNumber !== undefined ? (body.invoiceNumber || null) : undefined,
       issuedForPayment: body.issuedForPayment ?? false,
     },
-    select: { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, issuedForPayment: true, createdAt: true },
+    select: { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, invoiceNumber: true, issuedForPayment: true, createdAt: true },
   });
   return NextResponse.json(doc);
 }

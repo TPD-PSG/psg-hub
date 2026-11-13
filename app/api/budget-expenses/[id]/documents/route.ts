@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+const DOC_SELECT = { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, invoiceNumber: true, issuedForPayment: true, createdAt: true };
+
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const docs = await prisma.spendDocument.findMany({
     where: { expenseId: Number(id) },
-    select: { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, issuedForPayment: true, createdAt: true },
+    select: DOC_SELECT,
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json(docs);
@@ -22,6 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const type = (formData.get("type") as string) || "quote";
   const invoiceDateRaw = formData.get("invoiceDate") as string | null;
   const invoiceAmountRaw = formData.get("invoiceAmount") as string | null;
+  const invoiceNumberRaw = formData.get("invoiceNumber") as string | null;
   const issuedForPayment = formData.get("issuedForPayment") === "true";
 
   const doc = await prisma.spendDocument.create({
@@ -33,9 +36,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       file: base64,
       invoiceDate: invoiceDateRaw ? new Date(invoiceDateRaw) : null,
       invoiceAmount: invoiceAmountRaw ? Number(invoiceAmountRaw) : null,
+      invoiceNumber: invoiceNumberRaw || null,
       issuedForPayment,
     },
-    select: { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, issuedForPayment: true, createdAt: true },
+    select: DOC_SELECT,
   });
   return NextResponse.json(doc, { status: 201 });
 }

@@ -433,6 +433,7 @@ model SpendDocument {
   file             String   // base64
   invoiceDate      DateTime?
   invoiceAmount    Float?
+  invoiceNumber    String?
   issuedForPayment Boolean  @default(false)
   createdAt        DateTime @default(now())
 }

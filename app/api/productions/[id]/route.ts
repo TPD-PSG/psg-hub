@@ -14,7 +14,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
             orderBy: { createdAt: "asc" },
             include: {
               documents: {
-                select: { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, issuedForPayment: true, createdAt: true },
+                select: { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, invoiceNumber: true, issuedForPayment: true, createdAt: true },
                 orderBy: { createdAt: "asc" },
               },
             },

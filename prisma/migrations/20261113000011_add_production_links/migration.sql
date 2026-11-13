@@ -1,0 +1,10 @@
+CREATE TABLE "ProductionLink" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "productionId" INTEGER NOT NULL,
+  "title" TEXT NOT NULL,
+  "url" TEXT NOT NULL,
+  "description" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "ProductionLink_productionId_fkey" FOREIGN KEY ("productionId") REFERENCES "Production" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);

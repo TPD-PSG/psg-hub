@@ -71,6 +71,18 @@ model Production {
   contacts          ProductionContact[]
   showReports       ShowReport[]
   productionDocuments ProductionDocument[]
+  productionLinks     ProductionLink[]
+}
+
+model ProductionLink {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  title        String
+  url          String
+  description  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model ProductionDocument {

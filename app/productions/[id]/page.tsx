@@ -9,6 +9,7 @@ import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLS
 
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
 type ProdDoc = { id: number; name: string; mime: string; folder: string; createdAt: string };
+type ProdLink = { id: number; title: string; url: string; description: string | null; createdAt: string };
 type Expense = {
   id: number;
   phase: string;
@@ -131,6 +132,7 @@ type Production = {
   hotelBookings: HotelBooking[];
   haulageMovements: HaulageMovement[];
   productionDocuments: ProdDoc[];
+  productionLinks: ProdLink[];
   team: TeamMember[];
 };
 
@@ -210,7 +212,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "", isPSGExpense: false, paymentMethod: "" };
 const BLANK_PSG_EXPENSE = { description: "", supplier: "", committed: "", spent: "", paymentDue: "", notes: "", paymentMethod: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "reports" | "tasks" | "tour";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "reports" | "tasks" | "tour";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -396,6 +398,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [newFolderName, setNewFolderName] = useState("");
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set(["General"]));
+  const BLANK_LINK = { title: "", url: "", description: "" };
+  const [showLinkForm, setShowLinkForm] = useState(false);
+  const [editingLink, setEditingLink] = useState<ProdLink | null>(null);
+  const [linkForm, setLinkForm] = useState(BLANK_LINK);
   const [editProd, setEditProd] = useState(false);
 
   // Call sheets state
@@ -622,6 +628,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       approvedBy: exp.approvedBy ?? "",
       approvedDate: exp.approvedDate ? exp.approvedDate.slice(0, 10) : "",
       approvalMethod: exp.approvalMethod ?? "",
+      paymentMethod: exp.paymentMethod ?? "",
     });
     setExistingDocs(exp.documents ?? []);
     setPendingQuotes([]);
@@ -678,6 +685,23 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   async function deleteProdDoc(docId: number) {
     if (!confirm("Delete this document?")) return;
     await fetch(`/api/production-documents/${docId}`, { method: "DELETE" });
+    reload();
+  }
+
+  async function saveLink(e: React.FormEvent) {
+    e.preventDefault();
+    if (editingLink) {
+      await fetch(`/api/production-links/${editingLink.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(linkForm) });
+    } else {
+      await fetch(`/api/productions/${id}/links`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(linkForm) });
+    }
+    setShowLinkForm(false); setEditingLink(null); setLinkForm(BLANK_LINK);
+    reload();
+  }
+
+  async function deleteLink(lid: number) {
+    if (!confirm("Remove this link?")) return;
+    await fetch(`/api/production-links/${lid}`, { method: "DELETE" });
     reload();
   }
 
@@ -2594,6 +2618,79 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 </div>
               );
             })}
+          </div>
+        );
+      })()}
+
+      {/* ── LINKS TAB ── */}
+      {tab === "links" && (() => {
+        const serviceInfo = (url: string): { label: string; color: string; bg: string } => {
+          try {
+            const host = new URL(url).hostname.toLowerCase();
+            if (host.includes("dropbox")) return { label: "Dropbox", color: "#0061FF", bg: "rgba(0,97,255,0.12)" };
+            if (host.includes("sharepoint") || host.includes("onedrive")) return { label: "SharePoint", color: "#0078D4", bg: "rgba(0,120,212,0.12)" };
+            if (host.includes("drive.google") || host.includes("docs.google") || host.includes("sheets.google") || host.includes("slides.google")) return { label: "Google Drive", color: "#34A853", bg: "rgba(52,168,83,0.12)" };
+            if (host.includes("notion")) return { label: "Notion", color: "#ffffff", bg: "rgba(255,255,255,0.08)" };
+            if (host.includes("github")) return { label: "GitHub", color: "#f0f6fc", bg: "rgba(240,246,252,0.08)" };
+            if (host.includes("figma")) return { label: "Figma", color: "#F24E1E", bg: "rgba(242,78,30,0.12)" };
+            if (host.includes("slack")) return { label: "Slack", color: "#4A154B", bg: "rgba(74,21,75,0.2)" };
+            if (host.includes("trello")) return { label: "Trello", color: "#0052CC", bg: "rgba(0,82,204,0.12)" };
+            if (host.includes("airtable")) return { label: "Airtable", color: "#18BFFF", bg: "rgba(24,191,255,0.12)" };
+            if (host.includes("wetransfer")) return { label: "WeTransfer", color: "#00bcd4", bg: "rgba(0,188,212,0.12)" };
+          } catch { /* invalid url */ }
+          return { label: "Link", color: "var(--psg-muted)", bg: "rgba(255,255,255,0.05)" };
+        };
+
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button onClick={() => { setLinkForm(BLANK_LINK); setEditingLink(null); setShowLinkForm(true); }} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
+                + Add Link
+              </button>
+            </div>
+
+            {prod.productionLinks.length === 0 && !showLinkForm && (
+              <p className="text-center py-16" style={{ color: "var(--psg-muted)" }}>No links added yet.</p>
+            )}
+
+            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+              {prod.productionLinks.map((link) => {
+                const svc = serviceInfo(link.url);
+                return (
+                  <div key={link.id} className="rounded-lg border overflow-hidden group" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                    {/* Coloured service band */}
+                    <div className="px-4 py-2 flex items-center justify-between" style={{ backgroundColor: svc.bg }}>
+                      <span className="text-xs font-semibold" style={{ color: svc.color }}>{svc.label}</span>
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => { setLinkForm({ title: link.title, url: link.url, description: link.description ?? "" }); setEditingLink(link); setShowLinkForm(true); }} className="text-xs text-blue-400 hover:text-blue-300">Edit</button>
+                        <button onClick={() => deleteLink(link.id)} className="text-xs text-red-400 hover:text-red-300">×</button>
+                      </div>
+                    </div>
+                    <a href={link.url} target="_blank" rel="noopener noreferrer" className="block px-4 py-3 hover:bg-white/5 transition-colors">
+                      <p className="font-semibold text-sm text-white">{link.title}</p>
+                      {link.description && <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{link.description}</p>}
+                      <p className="text-xs mt-1 truncate" style={{ color: "var(--psg-muted)" }}>{link.url}</p>
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Inline add/edit form */}
+            {showLinkForm && (
+              <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-blue)" }}>
+                <p className="text-sm font-semibold text-white mb-3">{editingLink ? "Edit Link" : "New Link"}</p>
+                <form onSubmit={saveLink} className="space-y-3">
+                  <F label="Title *"><input required className={inp} style={inpStyle} value={linkForm.title} onChange={(e) => setLinkForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Show Dropbox Folder" /></F>
+                  <F label="URL *"><input required type="url" className={inp} style={inpStyle} value={linkForm.url} onChange={(e) => setLinkForm(f => ({ ...f, url: e.target.value }))} placeholder="https://…" /></F>
+                  <F label="Description"><input className={inp} style={inpStyle} value={linkForm.description} onChange={(e) => setLinkForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional note about this link" /></F>
+                  <div className="flex gap-2 pt-1">
+                    <button type="submit" className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "var(--psg-blue)" }}>{editingLink ? "Save Changes" : "Add Link"}</button>
+                    <button type="button" onClick={() => { setShowLinkForm(false); setEditingLink(null); setLinkForm(BLANK_LINK); }} className="text-sm border px-4 py-2 rounded hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         );
       })()}

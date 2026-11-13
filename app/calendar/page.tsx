@@ -597,7 +597,12 @@ function ScheduleView({ year, month, assignments, onRefresh }: {
   });
 
   const activeProdIds = [...new Set(monthAssignments.map(a => a.production.id))];
-  const activeProductions = productions.filter(p => activeProdIds.includes(p.id));
+  // Derive from assignments directly (they carry production name); enrich with color from separate fetch if available
+  const activeProductions = activeProdIds.map(pid => {
+    const fromAssignment = monthAssignments.find(a => a.production.id === pid)!.production;
+    const fromFetch = productions.find(p => p.id === pid);
+    return { id: pid, name: fromAssignment.name, color: fromFetch?.color ?? null, venue: fromFetch?.venue ?? null };
+  });
 
   // Build lookup: prodId → date → assignments[]
   const lookup: Record<number, Record<string, StaffAssignment[]>> = {};

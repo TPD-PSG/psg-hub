@@ -2900,48 +2900,141 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           </div>
         );
 
-        // Build QR API URLs
-        const generalQrUrl = `/api/productions/${id}/toolbox-qr`;
+        // Available sign-off dates for the filter
+        const allSigDates = Array.from(new Set(prod.toolboxSignatures.map(s => s.signeeDate))).sort().reverse();
+
+        // Export filtered sigs as CSV
+        function exportCSV(sigs: ToolboxSig[]) {
+          const rows = [
+            ["Name", "Employer", "Position", "Date", "Venue", "CDM Briefing", "Safety Agreement", "Submitted At"],
+            ...sigs.map(s => [
+              s.signeeName, s.employer ?? "", s.position ?? "", s.signeeDate,
+              s.venueName ?? "", s.agreedBriefing ? "Yes" : "No", s.agreedSafety ? "Yes" : "No",
+              new Date(s.createdAt).toLocaleString("en-GB"),
+            ]),
+          ];
+          const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+          const blob = new Blob([csv], { type: "text/csv" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a"); a.href = url; a.download = `cdm-signoffs-${prod?.name.replace(/\s+/g, "-") ?? "export"}.csv`; a.click();
+          URL.revokeObjectURL(url);
+        }
 
         return (
           <div className="space-y-6">
 
             {/* ── Documents section ── */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold text-white">H&S Documents</h2>
-              </div>
+              <h2 className="text-base font-semibold text-white mb-3">H&S Documents</h2>
 
-              {/* General documents */}
+              {/* General documents (always shown) */}
               <div className="rounded-lg border overflow-hidden mb-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
                 <button onClick={() => setHsOpenFolders(p => { const n = new Set(p); n.has("General") ? n.delete("General") : n.add("General"); return n; })} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: hsOpenFolders.has("General") ? "1px solid var(--psg-card-border)" : "none" }}>
                   <span className="text-lg">📁</span>
                   <span className="font-semibold text-white text-sm">General</span>
-                  <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{prod.hsDocuments.filter(d => !d.tourStopId && d.folder === "General").length} files</span>
+                  <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{prod.hsDocuments.filter(d => !d.tourStopId).length} files</span>
                   <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{hsOpenFolders.has("General") ? "▾" : "▸"}</span>
                 </button>
                 {hsOpenFolders.has("General") && (
                   <div className="p-4">
-                    <HSDocs docs={prod.hsDocuments.filter(d => !d.tourStopId && d.folder === "General")} stopId={null} folderKey="General" />
+                    <HSDocs docs={prod.hsDocuments.filter(d => !d.tourStopId)} stopId={null} folderKey="General" />
                   </div>
                 )}
               </div>
 
-              {/* Venue-specific for tours */}
+              {/* Tour venues — docs + QR + sign-off records per venue */}
               {prod.isTour && tourStops.length > 0 && tourStops.map(stop => {
                 const key = `stop_${stop.id}`;
                 const stopDocs = prod.hsDocuments.filter(d => d.tourStopId === stop.id);
+                const stopSigs = prod.toolboxSignatures.filter(s => s.tourStopId === stop.id);
+                const stopDates = Array.from(new Set(stopSigs.map(s => s.signeeDate))).sort().reverse();
+                const [selDates, setSelDates] = [
+                  hsOpenFolders.has(`${key}_dates`) ? new Set(stopDates) : new Set<string>(),
+                  (d: string) => setHsOpenFolders(p => {
+                    const n = new Set(p);
+                    const dk = `${key}_date_${d}`;
+                    n.has(dk) ? n.delete(dk) : n.add(dk);
+                    return n;
+                  }),
+                ];
+                const activeDateFilter = stopDates.filter(d => hsOpenFolders.has(`${key}_date_${d}`));
+                const filteredStopSigs = activeDateFilter.length > 0 ? stopSigs.filter(s => activeDateFilter.includes(s.signeeDate)) : stopSigs;
+
                 return (
                   <div key={stop.id} className="rounded-lg border overflow-hidden mb-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                    {/* Accordion header */}
                     <button onClick={() => setHsOpenFolders(p => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; })} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: hsOpenFolders.has(key) ? "1px solid var(--psg-card-border)" : "none" }}>
                       <span className="text-lg">📍</span>
                       <span className="font-semibold text-white text-sm">{stop.venue.name}</span>
-                      <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{stopDocs.length} files</span>
+                      <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{stopDocs.length} files · {stopSigs.length} sign-offs</span>
                       <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{hsOpenFolders.has(key) ? "▾" : "▸"}</span>
                     </button>
+
                     {hsOpenFolders.has(key) && (
-                      <div className="p-4">
-                        <HSDocs docs={stopDocs} stopId={stop.id} folderKey="General" />
+                      <div className="p-4 space-y-5">
+                        {/* Documents */}
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Documents</p>
+                          <HSDocs docs={stopDocs} stopId={stop.id} folderKey="General" />
+                        </div>
+
+                        {/* QR code — inline within venue */}
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>CDM Toolbox Talk</p>
+                          <QRCard
+                            title={`${stop.venue.name} — sign-off`}
+                            qrUrl={`/api/productions/${id}/toolbox-qr?stopId=${stop.id}`}
+                            formUrl={`/toolbox-talk/${id}?stopId=${stop.id}`}
+                          />
+                        </div>
+
+                        {/* Sign-off records for this venue */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Sign-off Records ({filteredStopSigs.length})</p>
+                            {stopSigs.length > 0 && (
+                              <button onClick={() => exportCSV(filteredStopSigs)} className="text-xs border px-2.5 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                                Export CSV
+                              </button>
+                            )}
+                          </div>
+                          {/* Date filter chips */}
+                          {stopDates.length > 1 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {stopDates.map(d => {
+                                const active = hsOpenFolders.has(`${key}_date_${d}`);
+                                return (
+                                  <button key={d} onClick={() => setSelDates(d)} className="text-xs px-2.5 py-1 rounded-full border transition-colors" style={{ borderColor: active ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: active ? "rgba(59,130,246,0.15)" : "transparent", color: active ? "var(--psg-blue)" : "var(--psg-muted)" }}>
+                                    {d}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {stopSigs.length === 0 ? (
+                            <p className="text-xs py-3 text-center" style={{ color: "var(--psg-muted)" }}>No sign-offs yet</p>
+                          ) : (
+                            <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "var(--psg-card-border)" }}>
+                              <table className="w-full text-xs">
+                                <thead><tr style={{ borderBottom: "1px solid var(--psg-card-border)" }}>
+                                  {["Name", "Employer", "Position", "Date", "Briefing", "Safety"].map(h => <th key={h} className="px-3 py-2 text-left font-semibold" style={{ color: "var(--psg-muted)" }}>{h}</th>)}
+                                </tr></thead>
+                                <tbody>
+                                  {filteredStopSigs.map(sig => (
+                                    <tr key={sig.id} style={{ borderBottom: "1px solid var(--psg-card-border)" }} className="hover:bg-white/5">
+                                      <td className="px-3 py-2 text-white font-medium">{sig.signeeName}</td>
+                                      <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{sig.employer ?? "—"}</td>
+                                      <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{sig.position ?? "—"}</td>
+                                      <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{sig.signeeDate}</td>
+                                      <td className="px-3 py-2 text-center">{sig.agreedBriefing ? "✓" : "✗"}</td>
+                                      <td className="px-3 py-2 text-center">{sig.agreedSafety ? "✓" : "✗"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2949,73 +3042,63 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               })}
             </div>
 
-            {/* ── CDM Toolbox Talk QR Codes ── */}
-            <div>
-              <h2 className="text-base font-semibold text-white mb-3">CDM Toolbox Talk Sign-off</h2>
-              <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
-                {prod.isTour && tourStops.length > 0 ? (
-                  tourStops.map(stop => (
-                    <QRCard
-                      key={stop.id}
-                      title={stop.venue.name}
-                      qrUrl={`/api/productions/${id}/toolbox-qr?stopId=${stop.id}`}
-                      formUrl={`/toolbox-talk/${id}?stopId=${stop.id}`}
-                    />
-                  ))
-                ) : (
-                  <QRCard title={prod.name} qrUrl={generalQrUrl} formUrl={`/toolbox-talk/${id}`} />
-                )}
-              </div>
-
-              {/* Signatures table */}
-              <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-                <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--psg-card-border)" }}>
-                  <p className="text-sm font-semibold text-white">Sign-off Records</p>
-                  <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{prod.toolboxSignatures.length} total</span>
+            {/* ── CDM Toolbox Talk (single-venue / non-tour) ── */}
+            {!prod.isTour && (
+              <div>
+                <h2 className="text-base font-semibold text-white mb-3">CDM Toolbox Talk Sign-off</h2>
+                <div className="grid gap-4 mb-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+                  <QRCard title={prod.name} qrUrl={`/api/productions/${id}/toolbox-qr`} formUrl={`/toolbox-talk/${id}`} />
                 </div>
 
-                {/* Venue tabs for tours */}
-                {prod.isTour && tourStops.length > 0 && (
-                  <div className="flex gap-1 px-4 pt-3 overflow-x-auto">
-                    <button onClick={() => setSigTab("general")} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-colors" style={{ backgroundColor: sigTab === "general" ? "var(--psg-blue)" : "rgba(255,255,255,0.08)", color: sigTab === "general" ? "white" : "var(--psg-muted)" }}>All</button>
-                    {tourStops.map(stop => (
-                      <button key={stop.id} onClick={() => setSigTab(stop.id)} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-colors" style={{ backgroundColor: sigTab === stop.id ? "var(--psg-blue)" : "rgba(255,255,255,0.08)", color: sigTab === stop.id ? "white" : "var(--psg-muted)" }}>{stop.venue.name}</button>
-                    ))}
+                {/* Sign-off records */}
+                <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <div className="px-4 py-3 border-b flex items-center gap-3 flex-wrap" style={{ borderColor: "var(--psg-card-border)" }}>
+                    <p className="text-sm font-semibold text-white flex-1">Sign-off Records</p>
+                    {/* Date filter chips */}
+                    {allSigDates.map(d => {
+                      const active = hsOpenFolders.has(`sigdate_${d}`);
+                      return (
+                        <button key={d} onClick={() => setHsOpenFolders(p => { const n = new Set(p); active ? n.delete(`sigdate_${d}`) : n.add(`sigdate_${d}`); return n; })} className="text-xs px-2.5 py-1 rounded-full border transition-colors" style={{ borderColor: active ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: active ? "rgba(59,130,246,0.15)" : "transparent", color: active ? "var(--psg-blue)" : "var(--psg-muted)" }}>
+                          {d}
+                        </button>
+                      );
+                    })}
+                    {prod.toolboxSignatures.length > 0 && (
+                      <button onClick={() => { const activeDates = allSigDates.filter(d => hsOpenFolders.has(`sigdate_${d}`)); const toExport = activeDates.length > 0 ? prod.toolboxSignatures.filter(s => activeDates.includes(s.signeeDate)) : prod.toolboxSignatures; exportCSV(toExport); }} className="text-xs border px-2.5 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                        Export CSV
+                      </button>
+                    )}
                   </div>
-                )}
-
-                {prod.toolboxSignatures.length === 0 ? (
-                  <p className="text-center py-8 text-xs" style={{ color: "var(--psg-muted)" }}>No sign-offs yet</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid var(--psg-card-border)" }}>
-                          {["Name", "Employer", "Position", "Date", "Venue", "Briefing", "Safety"].map(h => (
-                            <th key={h} className="px-4 py-2 text-left font-semibold" style={{ color: "var(--psg-muted)" }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {prod.toolboxSignatures
-                          .filter(s => sigTab === "general" || s.tourStopId === sigTab)
-                          .map(sig => (
-                            <tr key={sig.id} style={{ borderBottom: "1px solid var(--psg-card-border)" }} className="hover:bg-white/5">
-                              <td className="px-4 py-2 text-white font-medium">{sig.signeeName}</td>
-                              <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.employer ?? "—"}</td>
-                              <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.position ?? "—"}</td>
-                              <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.signeeDate}</td>
-                              <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.venueName ?? "—"}</td>
-                              <td className="px-4 py-2 text-center">{sig.agreedBriefing ? "✓" : "✗"}</td>
-                              <td className="px-4 py-2 text-center">{sig.agreedSafety ? "✓" : "✗"}</td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                  {prod.toolboxSignatures.length === 0 ? (
+                    <p className="text-center py-8 text-xs" style={{ color: "var(--psg-muted)" }}>No sign-offs yet</p>
+                  ) : (() => {
+                    const activeDates = allSigDates.filter(d => hsOpenFolders.has(`sigdate_${d}`));
+                    const filtered = activeDates.length > 0 ? prod.toolboxSignatures.filter(s => activeDates.includes(s.signeeDate)) : prod.toolboxSignatures;
+                    return (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead><tr style={{ borderBottom: "1px solid var(--psg-card-border)" }}>
+                            {["Name", "Employer", "Position", "Date", "Briefing", "Safety"].map(h => <th key={h} className="px-4 py-2 text-left font-semibold" style={{ color: "var(--psg-muted)" }}>{h}</th>)}
+                          </tr></thead>
+                          <tbody>
+                            {filtered.map(sig => (
+                              <tr key={sig.id} style={{ borderBottom: "1px solid var(--psg-card-border)" }} className="hover:bg-white/5">
+                                <td className="px-4 py-2 text-white font-medium">{sig.signeeName}</td>
+                                <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.employer ?? "—"}</td>
+                                <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.position ?? "—"}</td>
+                                <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.signeeDate}</td>
+                                <td className="px-4 py-2 text-center">{sig.agreedBriefing ? "✓" : "✗"}</td>
+                                <td className="px-4 py-2 text-center">{sig.agreedSafety ? "✓" : "✗"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
-            </div>
+            )}
 
           </div>
         );

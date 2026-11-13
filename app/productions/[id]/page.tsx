@@ -927,7 +927,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <span style={{ color: "var(--psg-muted)" }}>/ {fmt(line.budgeted)}</span>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <button onClick={() => { setExpenseForm(BLANK_EXPENSE); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}>+ Item</button>
+                        <button onClick={() => { setExpenseForm(BLANK_EXPENSE); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}>+ PO</button>
                         <button onClick={() => deleteBudgetLine(line.id)} className="text-xs text-red-400 hover:text-red-300">Delete</button>
                       </div>
                     </div>
@@ -967,7 +967,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                                   {x.vatExempt && <td className="px-2 py-2 text-white/30 text-xs">No VAT</td>}
                                   {!x.vatExempt && <td className="px-2 py-2" />}
                                   <td className="px-3 py-2 opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
-                                    <button onClick={() => openEditExpense(x, line.id)} className="text-blue-400 hover:text-blue-300">Edit</button>
+                                    <button onClick={() => openEditExpense(x, line.id)} className="text-blue-400 hover:text-blue-300">Edit PO</button>
                                     <button onClick={() => deleteExpense(x.id)} className="text-red-400 hover:text-red-300">×</button>
                                   </td>
                                 </tr>
@@ -1525,7 +1525,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Modal: Add / Edit Expense Item */}
       {showExpenseForm !== null && (
-        <Modal title={editingExpense ? "Edit Item" : "Add Budget Item"} onClose={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); }}>
+        <Modal title={editingExpense ? "Edit Purchase Order" : "Add Purchase Order"} onClose={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); }}>
           <form onSubmit={saveExpense} className="space-y-3">
             <F label="Phase">
               <select className={inp} style={inpStyle} value={expenseForm.phase} onChange={(e) => setExpenseForm((f) => ({ ...f, phase: e.target.value }))}>
@@ -1554,7 +1554,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               </label>
             </div>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={expenseForm.notes} onChange={(e) => setExpenseForm((f) => ({ ...f, notes: e.target.value }))} /></F>
-            <Btns onCancel={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); }} label={editingExpense ? "Save Changes" : "Add Item"} />
+            <Btns onCancel={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); }} label={editingExpense ? "Save Changes" : "Add PO"} />
           </form>
         </Modal>
       )}

@@ -8,6 +8,7 @@ import TasksPanel from "@/components/TasksPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF } from "@/lib/exports";
 
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
+type ProdDoc = { id: number; name: string; mime: string; folder: string; createdAt: string };
 type Expense = {
   id: number;
   phase: string;
@@ -129,6 +130,7 @@ type Production = {
   crew: ProductionCrew[];
   hotelBookings: HotelBooking[];
   haulageMovements: HaulageMovement[];
+  productionDocuments: ProdDoc[];
   team: TeamMember[];
 };
 
@@ -208,7 +210,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "", isPSGExpense: false, paymentMethod: "" };
 const BLANK_PSG_EXPENSE = { description: "", supplier: "", committed: "", spent: "", paymentDue: "", notes: "", paymentMethod: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "reports" | "tasks" | "tour";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "reports" | "tasks" | "tour";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -388,6 +390,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [editingPSGExpense, setEditingPSGExpense] = useState<Expense | null>(null);
   const [psgExpenseForm, setPSGExpenseForm] = useState<typeof BLANK_PSG_EXPENSE & { id?: number }>(BLANK_PSG_EXPENSE);
   const [psgReceiptFile, setPsgReceiptFile] = useState<File | null>(null);
+  const [docUploadFolder, setDocUploadFolder] = useState("General");
+  const [docUploadFiles, setDocUploadFiles] = useState<File[]>([]);
+  const [docUploading, setDocUploading] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set(["General"]));
   const [editProd, setEditProd] = useState(false);
 
   // Call sheets state
@@ -654,6 +662,27 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   async function deletePSGExpense(eid: number) {
     if (!confirm("Delete this PSG expense?")) return;
     await fetch(`/api/budget-expenses/${eid}`, { method: "DELETE" });
+    reload();
+  }
+
+  async function uploadProdDocs(files: File[], folder: string) {
+    setDocUploading(true);
+    for (const file of files) {
+      const fd = new FormData(); fd.append("file", file); fd.append("folder", folder);
+      await fetch(`/api/productions/${id}/documents`, { method: "POST", body: fd });
+    }
+    setDocUploadFiles([]); setDocUploading(false);
+    reload();
+  }
+
+  async function deleteProdDoc(docId: number) {
+    if (!confirm("Delete this document?")) return;
+    await fetch(`/api/production-documents/${docId}`, { method: "DELETE" });
+    reload();
+  }
+
+  async function moveProdDoc(docId: number, folder: string) {
+    await fetch(`/api/production-documents/${docId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folder }) });
     reload();
   }
 
@@ -2436,6 +2465,136 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           )}
         </div>
       )}
+
+      {/* ── DOCUMENTS TAB ── */}
+      {tab === "documents" && (() => {
+        // Gather budget documents grouped by budget line
+        const budgetDocs: { lineName: string; dept: string; expDesc: string; doc: SpendDoc; expId: number }[] = [];
+        prod.budgetLines.forEach((l) => {
+          l.expenses.forEach((x) => {
+            x.documents.forEach((d) => {
+              budgetDocs.push({ lineName: l.description, dept: l.department, expDesc: x.description, doc: d, expId: x.id });
+            });
+          });
+        });
+
+        // User folders from productionDocuments
+        const allFolders = Array.from(new Set(["General", ...prod.productionDocuments.map((d) => d.folder)]));
+
+        const fileIcon = (mime: string) => {
+          if (mime.includes("pdf")) return "📄";
+          if (mime.includes("image")) return "🖼️";
+          if (mime.includes("spreadsheet") || mime.includes("excel") || mime.includes("csv")) return "📊";
+          if (mime.includes("word") || mime.includes("document")) return "📝";
+          return "📎";
+        };
+
+        const fmtSize = (name: string) => name.length > 32 ? name.slice(0, 30) + "…" : name;
+
+        const toggleFolder = (f: string) => setOpenFolders(prev => { const n = new Set(prev); n.has(f) ? n.delete(f) : n.add(f); return n; });
+
+        return (
+          <div className="space-y-4">
+            {/* Header row */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm" style={{ color: "var(--psg-muted)" }}>All documents for this production</p>
+              <button onClick={() => setShowNewFolder(v => !v)} className="text-xs border px-3 py-1.5 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>+ New Folder</button>
+            </div>
+
+            {/* New folder input */}
+            {showNewFolder && (
+              <div className="flex gap-2 items-center">
+                <input
+                  className="flex-1 rounded border px-3 py-1.5 text-sm"
+                  style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}
+                  placeholder="Folder name…"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && newFolderName.trim()) { setOpenFolders(p => new Set([...p, newFolderName.trim()])); setDocUploadFolder(newFolderName.trim()); setNewFolderName(""); setShowNewFolder(false); } }}
+                />
+                <button onClick={() => { if (newFolderName.trim()) { setOpenFolders(p => new Set([...p, newFolderName.trim()])); setDocUploadFolder(newFolderName.trim()); setNewFolderName(""); setShowNewFolder(false); } }} className="text-white px-3 py-1.5 rounded text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>Create</button>
+                <button onClick={() => { setShowNewFolder(false); setNewFolderName(""); }} className="text-sm" style={{ color: "var(--psg-muted)" }}>Cancel</button>
+              </div>
+            )}
+
+            {/* Budget Documents folder (auto-populated) */}
+            {budgetDocs.length > 0 && (
+              <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                <button onClick={() => toggleFolder("__budget")} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: openFolders.has("__budget") ? "1px solid var(--psg-card-border)" : "none" }}>
+                  <span className="text-lg">📁</span>
+                  <span className="font-semibold text-white text-sm">Budget Documents</span>
+                  <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{budgetDocs.length} file{budgetDocs.length !== 1 ? "s" : ""}</span>
+                  <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{openFolders.has("__budget") ? "▾" : "▸"}</span>
+                </button>
+                {openFolders.has("__budget") && (
+                  <div className="p-4 grid grid-cols-2 gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+                    {budgetDocs.map(({ doc, lineName, dept, expDesc, expId }) => (
+                      <a key={doc.id} href={`/api/spend-documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 p-3 rounded-lg border hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
+                        <span className="text-2xl shrink-0">{fileIcon(doc.mime)}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-white truncate" title={doc.name}>{fmtSize(doc.name)}</p>
+                          <p className="text-xs mt-0.5 truncate" style={{ color: "var(--psg-muted)" }}>{dept} · {expDesc}</p>
+                          <p className="text-xs" style={{ color: "var(--psg-muted)" }}>{doc.type} · {new Date(doc.createdAt).toLocaleDateString("en-GB")}</p>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* User folders */}
+            {allFolders.map((folder) => {
+              const docs = prod.productionDocuments.filter((d) => d.folder === folder);
+              const isOpen = openFolders.has(folder);
+              return (
+                <div key={folder} className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <button onClick={() => toggleFolder(folder)} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: isOpen ? "1px solid var(--psg-card-border)" : "none" }}>
+                    <span className="text-lg">📁</span>
+                    <span className="font-semibold text-white text-sm">{folder}</span>
+                    <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{docs.length} file{docs.length !== 1 ? "s" : ""}</span>
+                    <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{isOpen ? "▾" : "▸"}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="p-4 space-y-3">
+                      {/* File grid */}
+                      {docs.length > 0 && (
+                        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+                          {docs.map((doc) => (
+                            <div key={doc.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-white/5 transition-colors group relative" style={{ borderColor: "var(--psg-card-border)" }}>
+                              <a href={`/api/production-documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 flex-1 min-w-0">
+                                <span className="text-2xl shrink-0">{fileIcon(doc.mime)}</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium text-white truncate" title={doc.name}>{fmtSize(doc.name)}</p>
+                                  <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{new Date(doc.createdAt).toLocaleDateString("en-GB")}</p>
+                                </div>
+                              </a>
+                              <button onClick={() => deleteProdDoc(doc.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 text-xs shrink-0">×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {docs.length === 0 && <p className="text-xs text-center py-4" style={{ color: "var(--psg-muted)" }}>No files yet — upload below</p>}
+                      {/* Upload area */}
+                      <div
+                        className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-blue-400/50 transition-colors"
+                        style={{ borderColor: "var(--psg-card-border)" }}
+                        onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.onchange = (e) => { const files = Array.from((e.target as HTMLInputElement).files ?? []); if (files.length) { uploadProdDocs(files, folder); } }; inp.click(); }}
+                      >
+                        {docUploading && docUploadFolder === folder ? (
+                          <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Uploading…</p>
+                        ) : (
+                          <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Click to upload files</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* ── SHOW REPORTS TAB ── */}
       {tab === "reports" && (

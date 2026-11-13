@@ -70,6 +70,19 @@ model Production {
   invoiceTodos      InvoiceTodo[]      @relation("InvoiceTodos")
   contacts          ProductionContact[]
   showReports       ShowReport[]
+  productionDocuments ProductionDocument[]
+}
+
+model ProductionDocument {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  name         String
+  mime         String
+  data         String     // base64
+  folder       String     @default("General")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model ShowReport {

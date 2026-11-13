@@ -1,0 +1,11 @@
+CREATE TABLE "ProductionDocument" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "productionId" INTEGER NOT NULL,
+  "name" TEXT NOT NULL,
+  "mime" TEXT NOT NULL,
+  "data" TEXT NOT NULL,
+  "folder" TEXT NOT NULL DEFAULT 'General',
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "ProductionDocument_productionId_fkey" FOREIGN KEY ("productionId") REFERENCES "Production" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);

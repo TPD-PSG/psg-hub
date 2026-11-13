@@ -8,7 +8,7 @@ import { parsePerms, canAccess } from "@/lib/permissions";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Production = { id: number; name: string; status: string; startDate: string | null; endDate: string | null; announcementStatus?: string };
-type CalEvent = { id: string; type: string; title: string; production: string | null; productionId: number | null; startDate: string; color: string; href?: string };
+type CalEvent = { id: string; type: string; kdType?: string; title: string; production: string | null; productionId: number | null; startDate: string; endDate?: string | null; color: string; href?: string; venue?: string };
 type Task = { id: number; title: string; status: string; dueDate: string | null; assigneeUserId: number | null; production?: { name: string } | null };
 type Maintenance = { id: number; status: string; priority: string; title: string };
 type QuickLink = { id: number; label: string; url: string; icon: string };
@@ -89,6 +89,80 @@ function SectionHeading({ title }: { title: string }) {
     <div className="flex items-center gap-3 mt-8 mb-3">
       <h2 className="text-xs font-bold tracking-widest uppercase text-white/60">{title}</h2>
       <div className="flex-1 h-px" style={{ backgroundColor: "var(--psg-card-border)" }} />
+    </div>
+  );
+}
+
+// ── Today strip ───────────────────────────────────────────────────────────────
+
+const KD_ACTIVITY: Record<string, string> = {
+  load_in: "Fit Up", fit_up: "Fit Up", technical_rehearsal: "Tech Week",
+  tech_week: "Tech Week", dress_rehearsal: "Dress Rehearsal",
+  preview: "Previews", press_night: "Press Night",
+  performance: "Performances", opening_night: "Opening Night",
+  closing_night: "Closing Night", get_out: "Get Out",
+  rehearsal_period: "Rehearsals", first_rehearsal: "Rehearsals",
+  pre_production: "Pre-Production", other: "On Stage",
+};
+
+function todayActivity(ev: CalEvent): string {
+  if (ev.type === "tour_stop") {
+    if (ev.title.includes("Load in")) return "Fit Up";
+    if (ev.title.includes("Get out")) return "Get Out";
+    return "Performances";
+  }
+  return KD_ACTIVITY[ev.kdType ?? ""] ?? ev.title.split(" — ")[1] ?? "Active";
+}
+
+function TodayStrip({ events }: { events: CalEvent[] }) {
+  const now = new Date();
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999);
+
+  // Keep only key_date and tour_stop events that span today
+  const todayEvents = events.filter(ev => {
+    if (ev.type !== "key_date" && ev.type !== "tour_stop") return false;
+    const start = new Date(ev.startDate);
+    const end = ev.endDate ? new Date(ev.endDate) : start;
+    return start <= endOfToday && end >= startOfToday;
+  });
+
+  // Deduplicate: one row per production, pick the most specific event
+  const byProd = new Map<number, CalEvent>();
+  const PRIORITY = ["get_out", "press_night", "opening_night", "closing_night", "fit_up", "load_in", "tech_week", "technical_rehearsal", "dress_rehearsal", "preview", "performance", "rehearsal_period", "first_rehearsal", "pre_production", "other"];
+  for (const ev of todayEvents) {
+    if (!ev.productionId) continue;
+    const existing = byProd.get(ev.productionId);
+    if (!existing) { byProd.set(ev.productionId, ev); continue; }
+    const newPri = PRIORITY.indexOf(ev.kdType ?? "");
+    const exPri = PRIORITY.indexOf(existing.kdType ?? "");
+    if (newPri !== -1 && (exPri === -1 || newPri < exPri)) byProd.set(ev.productionId, ev);
+  }
+
+  const rows = Array.from(byProd.values());
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+      <div className="px-4 py-2.5 border-b flex items-center gap-2" style={{ borderColor: "var(--psg-card-border)" }}>
+        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+        <span className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--psg-muted)" }}>What's going on today</span>
+      </div>
+      <div className="divide-y" style={{ borderColor: "var(--psg-card-border)" }}>
+        {rows.map(ev => (
+          <Link key={ev.id} href={ev.href ?? `/productions/${ev.productionId}`}
+            className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ev.color }} />
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors">{ev.production}</span>
+              {ev.venue && <span className="text-sm" style={{ color: "var(--psg-muted)" }}> · {ev.venue}</span>}
+            </div>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "var(--psg-muted)" }}>
+              {todayActivity(ev)}
+            </span>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
@@ -301,6 +375,9 @@ export default function HomePage() {
 
           {/* Search */}
           <QuickSearch productions={productions} tasks={tasks} />
+
+          {/* What's on today */}
+          <TodayStrip events={calEvents} />
         </div>
 
         {/* Right: Upcoming + Quick links */}

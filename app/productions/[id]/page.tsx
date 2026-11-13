@@ -1077,7 +1077,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     </div>
                     {/* Budget bar */}
                     <div className="h-1" style={{ backgroundColor: "var(--psg-card-border)" }}>
-                      <div className={`h-full transition-all ${pct > 90 ? "bg-red-500" : pct > 70 ? "bg-yellow-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} />
+                      <div className={`h-full transition-all ${pct >= 100 ? "bg-red-500" : pct >= 75 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} />
                     </div>
 
                     {/* Line items grouped by phase */}

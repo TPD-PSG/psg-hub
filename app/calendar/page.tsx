@@ -107,6 +107,8 @@ const ACTIVITY_COLORS: Record<string, string> = {
   "TBC":    "#6b7280",
 };
 
+type ProductionSummary = { id: number; name: string; color: string | null; venue: string | null };
+
 function CalendarInner() {
   const searchParams = useSearchParams();
   const today = new Date();
@@ -114,12 +116,21 @@ function CalendarInner() {
   const [month, setMonth] = useState(today.getMonth());
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [assignments, setAssignments] = useState<StaffAssignment[]>([]);
+  const [allProductions, setAllProductions] = useState<ProductionSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [view, setView] = useState<"month" | "list" | "team" | "schedule">("month");
+  const [view, setView] = useState<"month" | "list" | "schedule">("month");
+
+  const refreshAssignments = () => fetch("/api/staff-assignments").then(r => r.json()).then(d => { if (Array.isArray(d)) setAssignments(d); });
 
   useEffect(() => {
     fetch("/api/calendar").then(r => r.json()).then(d => { if (Array.isArray(d)) setEvents(d); });
-    fetch("/api/staff-assignments").then(r => r.json()).then(d => { if (Array.isArray(d)) setAssignments(d); });
+    fetch("/api/productions").then(r => r.json()).then(d => {
+      if (Array.isArray(d)) setAllProductions(d.map((p: { id: number; name: string; color: string | null; venue: string | null; venueRef?: { name: string; city: string | null } | null }) => ({
+        id: p.id, name: p.name, color: p.color,
+        venue: p.venueRef ? `${p.venueRef.name}${p.venueRef.city ? ", " + p.venueRef.city : ""}` : p.venue,
+      })));
+    });
+    refreshAssignments();
   }, []);
 
   function prevMonth() {
@@ -278,7 +289,7 @@ function CalendarInner() {
           </div>
         ) : (
           /* ── Schedule view ── */
-          <ScheduleView year={year} month={month} assignments={assignments} onRefresh={() => fetch("/api/staff-assignments").then(r => r.json()).then(d => { if (Array.isArray(d)) setAssignments(d); })} />
+          <ScheduleView year={year} month={month} assignments={assignments} productions={allProductions} onRefresh={refreshAssignments} />
         )}
 
         {/* Selected day panel — month view only */}
@@ -317,19 +328,18 @@ function CalendarInner() {
 
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-function ScheduleView({ year, month, assignments, onRefresh }: {
+function ScheduleView({ year, month, assignments, productions, onRefresh }: {
   year: number; month: number;
   assignments: StaffAssignment[];
+  productions: ProductionSummary[];
   onRefresh: () => void;
 }) {
-  const [productions, setProductions] = useState<{ id: number; name: string; color: string | null; venue: string | null }[]>([]);
   const [users, setUsers] = useState<{ id: number; name: string }[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editAssignment, setEditAssignment] = useState<StaffAssignment | null>(null);
   const [form, setForm] = useState({ userId: "", productionId: "", startDate: "", endDate: "", activityType: "", notes: "" });
 
   useEffect(() => {
-    fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setProductions(d.map((p: { id: number; name: string; color: string | null; venue: string | null; venueRef?: { name: string; city: string | null } | null }) => ({ id: p.id, name: p.name, color: p.color, venue: p.venueRef ? `${p.venueRef.name}${p.venueRef.city ? ", " + p.venueRef.city : ""}` : p.venue }))); });
     fetch("/api/users").then(r => r.json()).then(d => { if (Array.isArray(d)) setUsers(d); });
   }, []);
 

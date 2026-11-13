@@ -6,7 +6,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // Allow auth routes and public assets
-  if (pathname.startsWith("/api/auth") || pathname === "/api/users/public" || pathname.startsWith("/_next") || pathname === "/login") {
+  if (pathname.startsWith("/api/auth") || pathname === "/api/users/public" || pathname.startsWith("/_next") || pathname === "/login" || pathname.startsWith("/toolbox-talk") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-signatures") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-qr")) {
     return NextResponse.next();
   }
 

@@ -72,6 +72,8 @@ model Production {
   showReports       ShowReport[]
   productionDocuments ProductionDocument[]
   productionLinks     ProductionLink[]
+  hsDocuments         HSDocument[]
+  toolboxSignatures   ToolboxTalkSignature[]
 }
 
 model ProductionLink {
@@ -771,4 +773,32 @@ model ProductionContact {
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+}
+
+model HSDocument {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  name         String
+  mime         String
+  data         String
+  tourStopId   Int?
+  folder       String     @default("General")
+  createdAt    DateTime   @default(now())
+}
+
+model ToolboxTalkSignature {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  tourStopId   Int?
+  venueName    String?
+  signeeName   String
+  signeeDate   String
+  employer     String?
+  position     String?
+  signature    String
+  agreedBriefing Boolean  @default(false)
+  agreedSafety   Boolean  @default(false)
+  createdAt    DateTime   @default(now())
 }

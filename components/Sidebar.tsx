@@ -122,6 +122,7 @@ const PRODUCTION_SECTIONS_ALL: NavItem[] = [
   { label: "Contacts", href: "", section: "contacts" },
   { label: "Documents", href: "", section: "documents" },
   { label: "Links", href: "", section: "links" },
+  { label: "Health & Safety", href: "", section: "hs" },
   { label: "Show Reports", href: "", section: "reports" },
   { label: "Tasks", href: "", section: "tasks" },
 ];

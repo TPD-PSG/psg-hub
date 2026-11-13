@@ -39,6 +39,18 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       productionLinks: {
         orderBy: { createdAt: "asc" },
       },
+      tourStops: {
+        orderBy: { stopNumber: "asc" },
+        include: { venue: { select: { id: true, name: true, city: true } } },
+      },
+      hsDocuments: {
+        select: { id: true, name: true, mime: true, folder: true, tourStopId: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      },
+      toolboxSignatures: {
+        select: { id: true, tourStopId: true, venueName: true, signeeName: true, signeeDate: true, employer: true, position: true, agreedBriefing: true, agreedSafety: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      },
       team: {
         include: { user: { select: { id: true, name: true, email: true, role: true } } },
         orderBy: { createdAt: "asc" },

@@ -10,6 +10,8 @@ import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLS
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
 type ProdDoc = { id: number; name: string; mime: string; folder: string; createdAt: string };
 type ProdLink = { id: number; title: string; url: string; description: string | null; createdAt: string };
+type HSDoc = { id: number; name: string; mime: string; folder: string; tourStopId: number | null; createdAt: string };
+type ToolboxSig = { id: number; tourStopId: number | null; venueName: string | null; signeeName: string; signeeDate: string; employer: string | null; position: string | null; agreedBriefing: boolean; agreedSafety: boolean; createdAt: string };
 type Expense = {
   id: number;
   phase: string;
@@ -133,6 +135,9 @@ type Production = {
   haulageMovements: HaulageMovement[];
   productionDocuments: ProdDoc[];
   productionLinks: ProdLink[];
+  hsDocuments: HSDoc[];
+  toolboxSignatures: ToolboxSig[];
+  tourStops: { id: number; stopNumber: number; venue: { id: number; name: string; city: string | null } }[];
   team: TeamMember[];
 };
 
@@ -212,7 +217,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "", isPSGExpense: false, paymentMethod: "" };
 const BLANK_PSG_EXPENSE = { description: "", supplier: "", committed: "", spent: "", paymentDue: "", notes: "", paymentMethod: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "reports" | "tasks" | "tour";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -403,6 +408,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [editingLink, setEditingLink] = useState<ProdLink | null>(null);
   const [linkForm, setLinkForm] = useState(BLANK_LINK);
   const [editProd, setEditProd] = useState(false);
+
+  // H&S state
+  const [hsUploading, setHsUploading] = useState(false);
+  const [hsUploadStop, setHsUploadStop] = useState<number | null>(null);
+  const [hsOpenFolders, setHsOpenFolders] = useState<Set<string>>(new Set(["General"]));
+  const [hsNewFolder, setHsNewFolder] = useState("");
+  const [hsShowNewFolder, setHsShowNewFolder] = useState(false);
+  const [sigTab, setSigTab] = useState<number | "general">("general");
 
   // Call sheets state
   type CSEntry = { id: number; discipline: string; name: string | null; role: string | null; callTime: string | null; notes: string | null; sortOrder: number };
@@ -685,6 +698,27 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   async function deleteProdDoc(docId: number) {
     if (!confirm("Delete this document?")) return;
     await fetch(`/api/production-documents/${docId}`, { method: "DELETE" });
+    reload();
+  }
+
+  async function uploadHSDocs(files: File[], folder: string, tourStopId: number | null) {
+    setHsUploading(true);
+    setHsUploadStop(tourStopId);
+    for (const f of files) {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("folder", folder);
+      if (tourStopId != null) fd.append("tourStopId", String(tourStopId));
+      await fetch(`/api/productions/${id}/hs-documents`, { method: "POST", body: fd });
+    }
+    setHsUploading(false);
+    setHsUploadStop(null);
+    reload();
+  }
+
+  async function deleteHSDoc(docId: number) {
+    if (!confirm("Delete this document?")) return;
+    await fetch(`/api/hs-documents/${docId}`, { method: "DELETE" });
     reload();
   }
 
@@ -2800,6 +2834,189 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 </form>
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {/* ── HEALTH & SAFETY TAB ── */}
+      {tab === "hs" && (() => {
+        const fileIcon = (mime: string) => {
+          if (mime.includes("pdf")) return "📄";
+          if (mime.includes("image")) return "🖼️";
+          if (mime.includes("spreadsheet") || mime.includes("excel") || mime.includes("csv")) return "📊";
+          if (mime.includes("word") || mime.includes("document")) return "📝";
+          return "📎";
+        };
+        const fmtName = (name: string) => name.length > 32 ? name.slice(0, 30) + "…" : name;
+
+        const tourStops = prod.isTour ? prod.tourStops : [];
+
+        // Render a file section (upload + list) for given docs
+        const HSDocs = ({ docs, stopId, folderKey }: { docs: HSDoc[]; stopId: number | null; folderKey: string }) => (
+          <div className="space-y-3">
+            {docs.length > 0 && (
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+                {docs.map((doc) => (
+                  <div key={doc.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-white/5 transition-colors group relative" style={{ borderColor: "var(--psg-card-border)" }}>
+                    <a href={`/api/hs-documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 flex-1 min-w-0">
+                      <span className="text-2xl shrink-0">{fileIcon(doc.mime)}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-white truncate" title={doc.name}>{fmtName(doc.name)}</p>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{new Date(doc.createdAt).toLocaleDateString("en-GB")}</p>
+                      </div>
+                    </a>
+                    <button onClick={() => deleteHSDoc(doc.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 text-xs shrink-0">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {docs.length === 0 && <p className="text-xs text-center py-4" style={{ color: "var(--psg-muted)" }}>No files yet</p>}
+            <div
+              className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-blue-400/50 transition-colors"
+              style={{ borderColor: "var(--psg-card-border)" }}
+              onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.onchange = (e) => { const files = Array.from((e.target as HTMLInputElement).files ?? []); if (files.length) uploadHSDocs(files, folderKey, stopId); }; inp.click(); }}
+            >
+              {hsUploading && hsUploadStop === stopId
+                ? <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Uploading…</p>
+                : <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Click to upload files</p>}
+            </div>
+          </div>
+        );
+
+        // Render a QR card for a given URL
+        const QRCard = ({ title, qrUrl, formUrl }: { title: string; qrUrl: string; formUrl: string }) => (
+          <div className="rounded-lg border p-4 flex flex-col items-center gap-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+            <p className="text-sm font-semibold text-white text-center">{title}</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrUrl} alt="QR Code" width={160} height={160} style={{ imageRendering: "pixelated" }} />
+            <div className="flex gap-2 w-full">
+              <a href={qrUrl} download="cdm-toolbox-qr.png" className="flex-1 text-center text-xs border px-3 py-1.5 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                Download
+              </a>
+              <a href={formUrl} target="_blank" rel="noopener noreferrer" className="flex-1 text-center text-xs border px-3 py-1.5 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                Open form
+              </a>
+            </div>
+          </div>
+        );
+
+        // Build QR API URLs
+        const generalQrUrl = `/api/productions/${id}/toolbox-qr`;
+
+        return (
+          <div className="space-y-6">
+
+            {/* ── Documents section ── */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-semibold text-white">H&S Documents</h2>
+              </div>
+
+              {/* General documents */}
+              <div className="rounded-lg border overflow-hidden mb-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                <button onClick={() => setHsOpenFolders(p => { const n = new Set(p); n.has("General") ? n.delete("General") : n.add("General"); return n; })} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: hsOpenFolders.has("General") ? "1px solid var(--psg-card-border)" : "none" }}>
+                  <span className="text-lg">📁</span>
+                  <span className="font-semibold text-white text-sm">General</span>
+                  <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{prod.hsDocuments.filter(d => !d.tourStopId && d.folder === "General").length} files</span>
+                  <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{hsOpenFolders.has("General") ? "▾" : "▸"}</span>
+                </button>
+                {hsOpenFolders.has("General") && (
+                  <div className="p-4">
+                    <HSDocs docs={prod.hsDocuments.filter(d => !d.tourStopId && d.folder === "General")} stopId={null} folderKey="General" />
+                  </div>
+                )}
+              </div>
+
+              {/* Venue-specific for tours */}
+              {prod.isTour && tourStops.length > 0 && tourStops.map(stop => {
+                const key = `stop_${stop.id}`;
+                const stopDocs = prod.hsDocuments.filter(d => d.tourStopId === stop.id);
+                return (
+                  <div key={stop.id} className="rounded-lg border overflow-hidden mb-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                    <button onClick={() => setHsOpenFolders(p => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; })} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: hsOpenFolders.has(key) ? "1px solid var(--psg-card-border)" : "none" }}>
+                      <span className="text-lg">📍</span>
+                      <span className="font-semibold text-white text-sm">{stop.venue.name}</span>
+                      <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{stopDocs.length} files</span>
+                      <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{hsOpenFolders.has(key) ? "▾" : "▸"}</span>
+                    </button>
+                    {hsOpenFolders.has(key) && (
+                      <div className="p-4">
+                        <HSDocs docs={stopDocs} stopId={stop.id} folderKey="General" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── CDM Toolbox Talk QR Codes ── */}
+            <div>
+              <h2 className="text-base font-semibold text-white mb-3">CDM Toolbox Talk Sign-off</h2>
+              <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+                {prod.isTour && tourStops.length > 0 ? (
+                  tourStops.map(stop => (
+                    <QRCard
+                      key={stop.id}
+                      title={stop.venue.name}
+                      qrUrl={`/api/productions/${id}/toolbox-qr?stopId=${stop.id}`}
+                      formUrl={`/toolbox-talk/${id}?stopId=${stop.id}`}
+                    />
+                  ))
+                ) : (
+                  <QRCard title={prod.name} qrUrl={generalQrUrl} formUrl={`/toolbox-talk/${id}`} />
+                )}
+              </div>
+
+              {/* Signatures table */}
+              <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--psg-card-border)" }}>
+                  <p className="text-sm font-semibold text-white">Sign-off Records</p>
+                  <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{prod.toolboxSignatures.length} total</span>
+                </div>
+
+                {/* Venue tabs for tours */}
+                {prod.isTour && tourStops.length > 0 && (
+                  <div className="flex gap-1 px-4 pt-3 overflow-x-auto">
+                    <button onClick={() => setSigTab("general")} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-colors" style={{ backgroundColor: sigTab === "general" ? "var(--psg-blue)" : "rgba(255,255,255,0.08)", color: sigTab === "general" ? "white" : "var(--psg-muted)" }}>All</button>
+                    {tourStops.map(stop => (
+                      <button key={stop.id} onClick={() => setSigTab(stop.id)} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-colors" style={{ backgroundColor: sigTab === stop.id ? "var(--psg-blue)" : "rgba(255,255,255,0.08)", color: sigTab === stop.id ? "white" : "var(--psg-muted)" }}>{stop.venue.name}</button>
+                    ))}
+                  </div>
+                )}
+
+                {prod.toolboxSignatures.length === 0 ? (
+                  <p className="text-center py-8 text-xs" style={{ color: "var(--psg-muted)" }}>No sign-offs yet</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid var(--psg-card-border)" }}>
+                          {["Name", "Employer", "Position", "Date", "Venue", "Briefing", "Safety"].map(h => (
+                            <th key={h} className="px-4 py-2 text-left font-semibold" style={{ color: "var(--psg-muted)" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {prod.toolboxSignatures
+                          .filter(s => sigTab === "general" || s.tourStopId === sigTab)
+                          .map(sig => (
+                            <tr key={sig.id} style={{ borderBottom: "1px solid var(--psg-card-border)" }} className="hover:bg-white/5">
+                              <td className="px-4 py-2 text-white font-medium">{sig.signeeName}</td>
+                              <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.employer ?? "—"}</td>
+                              <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.position ?? "—"}</td>
+                              <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.signeeDate}</td>
+                              <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.venueName ?? "—"}</td>
+                              <td className="px-4 py-2 text-center">{sig.agreedBriefing ? "✓" : "✗"}</td>
+                              <td className="px-4 py-2 text-center">{sig.agreedSafety ? "✓" : "✗"}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
         );
       })()}

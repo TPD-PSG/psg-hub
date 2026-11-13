@@ -923,20 +923,22 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </div>
 
-      {/* Budget summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "Allocation", value: totalBudgeted, color: "text-white" },
-          { label: "PM Budget", value: totalEstimated, color: "text-yellow-300" },
-          { label: "Net Cost", value: totalCommitted, color: "text-orange-300" },
-          { label: "Gross Cost", value: totalSpent, color: totalSpent > totalBudgeted ? "text-red-400" : "text-green-400" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-            <p className="text-xs uppercase tracking-wide mb-1" style={{ color: "var(--psg-muted)" }}>{label}</p>
-            <p className={`text-xl font-bold ${color}`}>{fmt(value)}</p>
-          </div>
-        ))}
-      </div>
+      {/* Budget summary cards — budget tab only */}
+      {tab === "budget" && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Allocation", value: totalBudgeted, color: "text-white" },
+            { label: "PM Budget", value: totalEstimated, color: "text-yellow-300" },
+            { label: "Net Cost", value: totalCommitted, color: "text-orange-300" },
+            { label: "Gross Cost", value: totalSpent, color: totalSpent > totalBudgeted ? "text-red-400" : "text-green-400" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+              <p className="text-xs uppercase tracking-wide mb-1" style={{ color: "var(--psg-muted)" }}>{label}</p>
+              <p className={`text-xl font-bold ${color}`}>{fmt(value)}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
 
       {/* ── SCHEDULE TAB ── */}

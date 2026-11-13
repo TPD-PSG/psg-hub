@@ -133,6 +133,7 @@ model HaulageMovement {
   estimatedCost    Float?
   actualCost       Float?
   rechargeable     Boolean    @default(false)
+  budgetLineId     Int?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 }

@@ -99,6 +99,7 @@ type HaulageMovement = {
   estimatedCost: number | null;
   actualCost: number | null;
   rechargeable: boolean;
+  budgetLineId: number | null;
 };
 type TeamMember = { user: { id: number; name: string; email: string; role: string } };
 type VenueRef = { id: number; name: string; city: string | null; capacity: number | null };
@@ -217,7 +218,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [showKdForm, setShowKdForm] = useState(false);
   const [editKd, setEditKd] = useState<KeyDate | null>(null);
   const [kdForm, setKdForm] = useState(BLANK_KD);
-  const BLANK_MOVEMENT = { haulageCompany: "", driverName: "", vehicleInfo: "", fromLocation: "", toLocation: "", departureAt: "", arrivalAt: "", cargo: "", notes: "", estimatedCost: "", actualCost: "", rechargeable: false };
+  const BLANK_MOVEMENT = { haulageCompany: "", driverName: "", vehicleInfo: "", fromLocation: "", toLocation: "", departureAt: "", arrivalAt: "", cargo: "", notes: "", estimatedCost: "", actualCost: "", rechargeable: false, budgetLineId: "" };
   const [showMovementForm, setShowMovementForm] = useState(false);
   const [editMovement, setEditMovement] = useState<HaulageMovement | null>(null);
   const [movementForm, setMovementForm] = useState<typeof BLANK_MOVEMENT & { id?: number }>(BLANK_MOVEMENT);
@@ -725,7 +726,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   function openEditMovement(m: HaulageMovement) {
-    setMovementForm({ ...m, id: m.id, driverName: m.driverName ?? "", vehicleInfo: m.vehicleInfo ?? "", departureAt: m.departureAt.slice(0, 16), arrivalAt: m.arrivalAt ? m.arrivalAt.slice(0, 16) : "", cargo: m.cargo ?? "", notes: m.notes ?? "", estimatedCost: m.estimatedCost != null ? String(m.estimatedCost) : "", actualCost: m.actualCost != null ? String(m.actualCost) : "", rechargeable: m.rechargeable });
+    setMovementForm({ ...m, id: m.id, driverName: m.driverName ?? "", vehicleInfo: m.vehicleInfo ?? "", departureAt: m.departureAt.slice(0, 16), arrivalAt: m.arrivalAt ? m.arrivalAt.slice(0, 16) : "", cargo: m.cargo ?? "", notes: m.notes ?? "", estimatedCost: m.estimatedCost != null ? String(m.estimatedCost) : "", actualCost: m.actualCost != null ? String(m.actualCost) : "", rechargeable: m.rechargeable, budgetLineId: m.budgetLineId != null ? String(m.budgetLineId) : "" });
     setEditMovement(m);
     setShowMovementForm(true);
   }
@@ -734,15 +735,17 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   const contraEstimateTotal = tourStops.reduce((s, t) => s + (t.contraEstimate ?? 0), 0);
   const contraActualTotal = tourStops.reduce((s, t) => s + (t.contraActual ?? 0), 0);
-  const haulageEstimated = prod.haulageMovements.reduce((s, m) => s + (m.estimatedCost ?? 0), 0);
-  const haulageActual = prod.haulageMovements.reduce((s, m) => s + (m.actualCost ?? 0), 0);
-  const totalEstimated = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0) + contraEstimateTotal + haulageEstimated;
-  const totalCommitted = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0) + contraActualTotal + haulageActual;
+  const unlinkedHaulageMovements = prod.haulageMovements.filter((m) => !m.budgetLineId);
+  const haulageEstimated = unlinkedHaulageMovements.reduce((s, m) => s + (m.estimatedCost ?? 0), 0);
+  const haulageActual = unlinkedHaulageMovements.reduce((s, m) => s + (m.actualCost ?? 0), 0);
+  const allHaulageEstimated = prod.haulageMovements.reduce((s, m) => s + (m.estimatedCost ?? 0), 0);
+  const allHaulageActual = prod.haulageMovements.reduce((s, m) => s + (m.actualCost ?? 0), 0);
+  const totalEstimated = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0) + contraEstimateTotal + allHaulageEstimated;
+  const totalCommitted = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0) + contraActualTotal + allHaulageActual;
   const totalSpent = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.spent, 0), 0);
   const totalBudgeted = prod.budgetLines.reduce((s, l) => s + l.budgeted, 0);
 
   // Department summary for budget overview
-  const haulageLine = prod.haulageBudgetLineId ? prod.budgetLines.find((l) => l.id === prod.haulageBudgetLineId) : null;
   const deptSummary = prod.budgetLines.reduce((acc, l) => {
     if (!acc[l.department]) acc[l.department] = { budgeted: 0, estimated: 0, committed: 0, spent: 0 };
     acc[l.department].budgeted += l.budgeted;
@@ -753,11 +756,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     });
     return acc;
   }, {} as Record<string, { budgeted: number; estimated: number; committed: number; spent: number }>);
-  // Roll haulage costs into the linked budget line's department
-  if (haulageLine && deptSummary[haulageLine.department]) {
-    deptSummary[haulageLine.department].estimated += haulageEstimated;
-    deptSummary[haulageLine.department].committed += haulageActual;
-  }
+  // Roll each linked movement's costs into its budget line's department
+  prod.haulageMovements.forEach((m) => {
+    if (!m.budgetLineId) return;
+    const line = prod.budgetLines.find((l) => l.id === m.budgetLineId);
+    if (line && deptSummary[line.department]) {
+      deptSummary[line.department].estimated += m.estimatedCost ?? 0;
+      deptSummary[line.department].committed += m.actualCost ?? 0;
+    }
+  });
 
   return (
     <div className="space-y-6">
@@ -1041,7 +1048,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       </td>
                     </tr>
                   ))}
-                  {!haulageLine && (haulageEstimated > 0 || haulageActual > 0) && (
+                  {(haulageEstimated > 0 || haulageActual > 0) && (
                     <tr className="border-t" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(59,130,246,0.04)" }}>
                       <td className="px-4 py-2.5 text-white/70 text-xs italic">Haulage (from movements)</td>
                       <td className="px-4 py-2.5 text-right text-white/40 text-xs">—</td>
@@ -1073,9 +1080,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="space-y-4">
               {prod.budgetLines.length === 0 && <p className="text-center py-10" style={{ color: "var(--psg-muted)" }}>No budget lines yet.</p>}
               {prod.budgetLines.map((line) => {
-                const isHaulageLine = prod.haulageBudgetLineId === line.id;
-                const lineEst = line.expenses.reduce((s, x) => s + x.estimated, 0) + (isHaulageLine ? haulageEstimated : 0);
-                const lineCom = line.expenses.reduce((s, x) => s + x.committed, 0) + (isHaulageLine ? haulageActual : 0);
+                const lineMovements = prod.haulageMovements.filter((m) => m.budgetLineId === line.id);
+                const lineHaulageEst = lineMovements.reduce((s, m) => s + (m.estimatedCost ?? 0), 0);
+                const lineHaulageAct = lineMovements.reduce((s, m) => s + (m.actualCost ?? 0), 0);
+                const lineEst = line.expenses.reduce((s, x) => s + x.estimated, 0) + lineHaulageEst;
+                const lineCom = line.expenses.reduce((s, x) => s + x.committed, 0) + lineHaulageAct;
                 const lineSpt = line.expenses.reduce((s, x) => s + x.spent, 0);
                 const pct = line.budgeted > 0 ? Math.min((lineCom / line.budgeted) * 100, 100) : 0;
                 const byPhase = PHASES.reduce((acc, p) => {
@@ -1108,15 +1117,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       <div className={`h-full transition-all ${pct >= 100 ? "bg-red-500" : pct >= 75 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} />
                     </div>
 
-                    {/* Haulage movements (if this is the linked haulage budget line) */}
-                    {isHaulageLine && prod.haulageMovements.length > 0 && (
+                    {/* Haulage movements linked to this budget line */}
+                    {lineMovements.length > 0 && (
                       <div>
                         <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.04)" }}>
                           Haulage Movements
                         </div>
                         <table className="w-full text-xs">
                           <tbody>
-                            {prod.haulageMovements.map((m) => (
+                            {lineMovements.map((m) => (
                               <tr key={m.id} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
                                 <td className="px-4 py-2 text-white w-1/4">{m.haulageCompany}</td>
                                 <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{m.fromLocation} → {m.toLocation}</td>
@@ -1424,21 +1433,6 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       {/* ── HAULAGE TAB ── */}
       {tab === "haulage" && (
         <div className="space-y-4">
-          {/* Budget line link */}
-          <div className="flex items-center gap-3 text-sm">
-            <span style={{ color: "var(--psg-muted)" }}>Link costs to budget line:</span>
-            <select
-              className="rounded border px-2 py-1 text-sm"
-              style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}
-              value={prod.haulageBudgetLineId ?? ""}
-              onChange={(e) => saveHaulageBudgetLine(e.target.value)}
-            >
-              <option value="">— none (show separately in budget) —</option>
-              {prod.budgetLines.map((l) => (
-                <option key={l.id} value={l.id}>{l.department} · {l.description}</option>
-              ))}
-            </select>
-          </div>
           <div className="flex justify-end gap-2">
             <ExportMenu actions={[
               { label: "Export PDF", onClick: () => exportHaulagePDF(prod.name, prod.haulageMovements, false, prod.logoUrl) },
@@ -1673,6 +1667,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               <F label="Estimated Cost (£)"><input type="number" min="0" step="0.01" className={inp} style={inpStyle} value={movementForm.estimatedCost} onChange={(e) => setMovementForm((f) => ({ ...f, estimatedCost: e.target.value }))} placeholder="0.00" /></F>
               <F label="Actual Cost (£)"><input type="number" min="0" step="0.01" className={inp} style={inpStyle} value={movementForm.actualCost} onChange={(e) => setMovementForm((f) => ({ ...f, actualCost: e.target.value }))} placeholder="0.00" /></F>
             </div>
+            <F label="Budget Line">
+              <select className={inp} style={inpStyle} value={movementForm.budgetLineId} onChange={(e) => setMovementForm((f) => ({ ...f, budgetLineId: e.target.value }))}>
+                <option value="">— not linked to a budget line —</option>
+                {prod.budgetLines.map((l) => (
+                  <option key={l.id} value={l.id}>{l.department} · {l.description}</option>
+                ))}
+              </select>
+            </F>
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" className="w-4 h-4 rounded accent-orange-400" checked={movementForm.rechargeable} onChange={(e) => setMovementForm((f) => ({ ...f, rechargeable: e.target.checked }))} />
               <span className="text-sm font-medium" style={{ color: "var(--psg-muted)" }}>Rechargeable to client</span>

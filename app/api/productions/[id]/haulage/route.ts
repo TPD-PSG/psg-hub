@@ -19,6 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       estimatedCost:  body.estimatedCost != null ? Number(body.estimatedCost) : null,
       actualCost:     body.actualCost != null ? Number(body.actualCost) : null,
       rechargeable:   body.rechargeable ?? false,
+      budgetLineId:   body.budgetLineId ? Number(body.budgetLineId) : null,
     },
   });
   return NextResponse.json(movement, { status: 201 });

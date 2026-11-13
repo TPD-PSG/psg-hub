@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
       tourStopId: body.tourStopId ? Number(body.tourStopId) : null,
       startDate: new Date(body.startDate),
       endDate: new Date(body.endDate),
+      activityType: body.activityType || null,
       notes: body.notes || null,
     },
     include: {

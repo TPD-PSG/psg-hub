@@ -686,6 +686,7 @@ model StaffAssignment {
   tourStop     TourStop?  @relation(fields: [tourStopId], references: [id], onDelete: SetNull)
   startDate    DateTime
   endDate      DateTime
+  activityType String?    // GET IN | FIT UP | TECH | DRESS | PREVIEW | PERF | PERF+OUT | REH | IN | OUT | TBC
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

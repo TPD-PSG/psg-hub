@@ -17,6 +17,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       tourStopId: body.tourStopId ? Number(body.tourStopId) : null,
       startDate: new Date(body.startDate),
       endDate: new Date(body.endDate),
+      activityType: body.activityType || null,
       notes: body.notes || null,
     },
     include: {

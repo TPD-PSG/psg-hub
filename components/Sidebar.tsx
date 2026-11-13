@@ -124,7 +124,7 @@ const PRODUCTION_SECTIONS_ALL: NavItem[] = [
   { label: "Tasks", href: "", section: "tasks" },
 ];
 
-const TOUR_ONLY_SECTIONS = new Set(["tour", "accommodation", "haulage", "advancing"]);
+const TOUR_ONLY_SECTIONS = new Set(["tour"]);
 
 type CalProduction = { id: number; name: string; color: string };
 

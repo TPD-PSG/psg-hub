@@ -2494,18 +2494,26 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
       {/* ── DOCUMENTS TAB ── */}
       {tab === "documents" && (() => {
-        // Gather budget documents grouped by budget line
-        const budgetDocs: { lineName: string; dept: string; expDesc: string; doc: SpendDoc; expId: number }[] = [];
+        // Gather budget documents grouped by doc type
+        type BudgetDocEntry = { dept: string; expDesc: string; doc: SpendDoc };
+        const budgetDocsByType: Record<string, BudgetDocEntry[]> = { Quotes: [], "Purchase Orders": [], Invoices: [], Other: [] };
         prod.budgetLines.forEach((l) => {
           l.expenses.forEach((x) => {
             x.documents.forEach((d) => {
-              budgetDocs.push({ lineName: l.description, dept: l.department, expDesc: x.description, doc: d, expId: x.id });
+              const entry = { dept: l.department, expDesc: x.description, doc: d };
+              if (d.type === "quote") budgetDocsByType["Quotes"].push(entry);
+              else if (d.type === "po") budgetDocsByType["Purchase Orders"].push(entry);
+              else if (d.type === "invoice") budgetDocsByType["Invoices"].push(entry);
+              else budgetDocsByType["Other"].push(entry);
             });
           });
         });
+        const totalBudgetDocs = Object.values(budgetDocsByType).reduce((s, arr) => s + arr.length, 0);
 
-        // User folders from productionDocuments
-        const allFolders = Array.from(new Set(["General", ...prod.productionDocuments.map((d) => d.folder)]));
+        // User folders — support "Parent/Sub" paths
+        const rawFolders = Array.from(new Set(["General", ...prod.productionDocuments.map((d) => d.folder)]));
+        // top-level folders are those with no "/" or whose prefix doesn't appear as another folder
+        const topFolders = Array.from(new Set(rawFolders.map(f => f.split("/")[0])));
 
         const fileIcon = (mime: string) => {
           if (mime.includes("pdf")) return "📄";
@@ -2516,8 +2524,39 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         };
 
         const fmtSize = (name: string) => name.length > 32 ? name.slice(0, 30) + "…" : name;
-
         const toggleFolder = (f: string) => setOpenFolders(prev => { const n = new Set(prev); n.has(f) ? n.delete(f) : n.add(f); return n; });
+
+        // Render a file grid for an array of prodDocs
+        const FileGrid = ({ docs, folderPath }: { docs: typeof prod.productionDocuments; folderPath: string }) => (
+          <div className="space-y-3">
+            {docs.length > 0 && (
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+                {docs.map((doc) => (
+                  <div key={doc.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-white/5 transition-colors group relative" style={{ borderColor: "var(--psg-card-border)" }}>
+                    <a href={`/api/production-documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 flex-1 min-w-0">
+                      <span className="text-2xl shrink-0">{fileIcon(doc.mime)}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-white truncate" title={doc.name}>{fmtSize(doc.name)}</p>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{new Date(doc.createdAt).toLocaleDateString("en-GB")}</p>
+                      </div>
+                    </a>
+                    <button onClick={() => deleteProdDoc(doc.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 text-xs shrink-0">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {docs.length === 0 && <p className="text-xs text-center py-4" style={{ color: "var(--psg-muted)" }}>No files yet</p>}
+            <div
+              className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-blue-400/50 transition-colors"
+              style={{ borderColor: "var(--psg-card-border)" }}
+              onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.onchange = (e) => { const files = Array.from((e.target as HTMLInputElement).files ?? []); if (files.length) uploadProdDocs(files, folderPath); }; inp.click(); }}
+            >
+              {docUploading && docUploadFolder === folderPath
+                ? <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Uploading…</p>
+                : <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Click to upload files</p>}
+            </div>
+          </div>
+        );
 
         return (
           <div className="space-y-4">
@@ -2528,91 +2567,124 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             </div>
 
             {/* New folder input */}
-            {showNewFolder && (
-              <div className="flex gap-2 items-center">
-                <input
-                  className="flex-1 rounded border px-3 py-1.5 text-sm"
-                  style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}
-                  placeholder="Folder name…"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && newFolderName.trim()) { setOpenFolders(p => new Set([...p, newFolderName.trim()])); setDocUploadFolder(newFolderName.trim()); setNewFolderName(""); setShowNewFolder(false); } }}
-                />
-                <button onClick={() => { if (newFolderName.trim()) { setOpenFolders(p => new Set([...p, newFolderName.trim()])); setDocUploadFolder(newFolderName.trim()); setNewFolderName(""); setShowNewFolder(false); } }} className="text-white px-3 py-1.5 rounded text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>Create</button>
-                <button onClick={() => { setShowNewFolder(false); setNewFolderName(""); }} className="text-sm" style={{ color: "var(--psg-muted)" }}>Cancel</button>
-              </div>
-            )}
+            {showNewFolder && (() => {
+              const parentOptions = ["(top level)", ...topFolders];
+              const [selParent, setSelParent] = [newFolderName.includes("__parent__") ? newFolderName.split("__parent__")[0] : "(top level)", (v: string) => setNewFolderName(prev => { const name = prev.includes("__parent__") ? prev.split("__parent__")[1] : prev; return v === "(top level)" ? name : `${v}__parent__${name}`; })];
+              const folderLabel = newFolderName.includes("__parent__") ? newFolderName.split("__parent__")[1] : newFolderName;
+              const finalPath = selParent === "(top level)" ? folderLabel : `${selParent}/${folderLabel}`;
+              return (
+                <div className="rounded-lg border p-4 space-y-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-blue)" }}>
+                  <p className="text-sm font-semibold text-white">New Folder</p>
+                  <div className="flex gap-2">
+                    <select className="rounded border px-3 py-1.5 text-sm" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }} value={selParent} onChange={(e) => setSelParent(e.target.value)}>
+                      {parentOptions.map(o => <option key={o} value={o}>{o === "(top level)" ? "Top level" : `Inside: ${o}`}</option>)}
+                    </select>
+                    <input
+                      className="flex-1 rounded border px-3 py-1.5 text-sm"
+                      style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}
+                      placeholder="Folder name…"
+                      value={folderLabel}
+                      onChange={(e) => { const v = e.target.value; setNewFolderName(selParent === "(top level)" ? v : `${selParent}__parent__${v}`); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" && folderLabel.trim()) { setOpenFolders(p => new Set([...p, finalPath, selParent])); setDocUploadFolder(finalPath); setNewFolderName(""); setShowNewFolder(false); } }}
+                    />
+                  </div>
+                  {folderLabel.trim() && <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Will create: {finalPath}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={() => { if (folderLabel.trim()) { setOpenFolders(p => new Set([...p, finalPath, selParent])); setDocUploadFolder(finalPath); setNewFolderName(""); setShowNewFolder(false); } }} className="text-white px-3 py-1.5 rounded text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>Create</button>
+                    <button onClick={() => { setShowNewFolder(false); setNewFolderName(""); }} className="text-sm border px-3 py-1.5 rounded hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+                  </div>
+                </div>
+              );
+            })()}
 
-            {/* Budget Documents folder (auto-populated) */}
-            {budgetDocs.length > 0 && (
+            {/* Budget Documents folder with sub-folders by type */}
+            {totalBudgetDocs > 0 && (
               <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
                 <button onClick={() => toggleFolder("__budget")} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: openFolders.has("__budget") ? "1px solid var(--psg-card-border)" : "none" }}>
                   <span className="text-lg">📁</span>
                   <span className="font-semibold text-white text-sm">Budget Documents</span>
-                  <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{budgetDocs.length} file{budgetDocs.length !== 1 ? "s" : ""}</span>
+                  <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{totalBudgetDocs} file{totalBudgetDocs !== 1 ? "s" : ""}</span>
+                  <span className="text-xs ml-1 px-1.5 py-0.5 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>auto-populated</span>
                   <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{openFolders.has("__budget") ? "▾" : "▸"}</span>
                 </button>
                 {openFolders.has("__budget") && (
-                  <div className="p-4 grid grid-cols-2 gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-                    {budgetDocs.map(({ doc, lineName, dept, expDesc, expId }) => (
-                      <a key={doc.id} href={`/api/spend-documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 p-3 rounded-lg border hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
-                        <span className="text-2xl shrink-0">{fileIcon(doc.mime)}</span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-white truncate" title={doc.name}>{fmtSize(doc.name)}</p>
-                          <p className="text-xs mt-0.5 truncate" style={{ color: "var(--psg-muted)" }}>{dept} · {expDesc}</p>
-                          <p className="text-xs" style={{ color: "var(--psg-muted)" }}>{doc.type} · {new Date(doc.createdAt).toLocaleDateString("en-GB")}</p>
+                  <div className="p-4 space-y-3">
+                    {(["Quotes", "Purchase Orders", "Invoices", "Other"] as const).map((subName) => {
+                      const entries = budgetDocsByType[subName];
+                      if (entries.length === 0) return null;
+                      const subKey = `__budget_${subName}`;
+                      const isSubOpen = openFolders.has(subKey);
+                      return (
+                        <div key={subName} className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)" }}>
+                          <button onClick={() => toggleFolder(subKey)} className="w-full px-3 py-2.5 flex items-center gap-2 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: isSubOpen ? "1px solid var(--psg-card-border)" : "none" }}>
+                            <span className="text-base">📂</span>
+                            <span className="text-sm font-medium text-white">{subName}</span>
+                            <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{entries.length}</span>
+                            <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{isSubOpen ? "▾" : "▸"}</span>
+                          </button>
+                          {isSubOpen && (
+                            <div className="p-3 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+                              {entries.map(({ doc, dept, expDesc }) => (
+                                <a key={doc.id} href={`/api/spend-documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 p-3 rounded-lg border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)" }}>
+                                  <span className="text-2xl shrink-0">{fileIcon(doc.mime)}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-medium text-white truncate" title={doc.name}>{fmtSize(doc.name)}</p>
+                                    <p className="text-xs mt-0.5 truncate" style={{ color: "var(--psg-muted)" }}>{dept} · {expDesc}</p>
+                                    <p className="text-xs" style={{ color: "var(--psg-muted)" }}>{new Date(doc.createdAt).toLocaleDateString("en-GB")}</p>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </a>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
             )}
 
-            {/* User folders */}
-            {allFolders.map((folder) => {
-              const docs = prod.productionDocuments.filter((d) => d.folder === folder);
-              const isOpen = openFolders.has(folder);
+            {/* User folders — render top-level, with sub-folders nested inside */}
+            {topFolders.map((topFolder) => {
+              const directDocs = prod.productionDocuments.filter((d) => d.folder === topFolder);
+              const subFolderNames = Array.from(new Set(
+                prod.productionDocuments
+                  .filter((d) => d.folder.startsWith(topFolder + "/"))
+                  .map((d) => d.folder)
+              ));
+              const totalInFolder = directDocs.length + prod.productionDocuments.filter(d => d.folder.startsWith(topFolder + "/")).length;
+              const isOpen = openFolders.has(topFolder);
               return (
-                <div key={folder} className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-                  <button onClick={() => toggleFolder(folder)} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: isOpen ? "1px solid var(--psg-card-border)" : "none" }}>
+                <div key={topFolder} className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <button onClick={() => toggleFolder(topFolder)} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: isOpen ? "1px solid var(--psg-card-border)" : "none" }}>
                     <span className="text-lg">📁</span>
-                    <span className="font-semibold text-white text-sm">{folder}</span>
-                    <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{docs.length} file{docs.length !== 1 ? "s" : ""}</span>
+                    <span className="font-semibold text-white text-sm">{topFolder}</span>
+                    <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{totalInFolder} file{totalInFolder !== 1 ? "s" : ""}</span>
                     <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{isOpen ? "▾" : "▸"}</span>
                   </button>
                   {isOpen && (
-                    <div className="p-4 space-y-3">
-                      {/* File grid */}
-                      {docs.length > 0 && (
-                        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-                          {docs.map((doc) => (
-                            <div key={doc.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-white/5 transition-colors group relative" style={{ borderColor: "var(--psg-card-border)" }}>
-                              <a href={`/api/production-documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 flex-1 min-w-0">
-                                <span className="text-2xl shrink-0">{fileIcon(doc.mime)}</span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-medium text-white truncate" title={doc.name}>{fmtSize(doc.name)}</p>
-                                  <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{new Date(doc.createdAt).toLocaleDateString("en-GB")}</p>
-                                </div>
-                              </a>
-                              <button onClick={() => deleteProdDoc(doc.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 text-xs shrink-0">×</button>
-                            </div>
-                          ))}
-                        </div>
+                    <div className="p-4 space-y-4">
+                      {/* Sub-folders */}
+                      {subFolderNames.map((subPath) => {
+                        const subDocs = prod.productionDocuments.filter(d => d.folder === subPath);
+                        const subLabel = subPath.split("/").slice(1).join("/");
+                        const isSubOpen = openFolders.has(subPath);
+                        return (
+                          <div key={subPath} className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)" }}>
+                            <button onClick={() => toggleFolder(subPath)} className="w-full px-3 py-2.5 flex items-center gap-2 text-left hover:bg-white/5 transition-colors" style={{ borderBottom: isSubOpen ? "1px solid var(--psg-card-border)" : "none" }}>
+                              <span className="text-base">📂</span>
+                              <span className="text-sm font-medium text-white">{subLabel}</span>
+                              <span className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>{subDocs.length}</span>
+                              <span className="ml-auto text-xs" style={{ color: "var(--psg-muted)" }}>{isSubOpen ? "▾" : "▸"}</span>
+                            </button>
+                            {isSubOpen && <div className="p-3"><FileGrid docs={subDocs} folderPath={subPath} /></div>}
+                          </div>
+                        );
+                      })}
+                      {/* Direct files in this top-level folder */}
+                      {(directDocs.length > 0 || subFolderNames.length === 0) && (
+                        <FileGrid docs={directDocs} folderPath={topFolder} />
                       )}
-                      {docs.length === 0 && <p className="text-xs text-center py-4" style={{ color: "var(--psg-muted)" }}>No files yet — upload below</p>}
-                      {/* Upload area */}
-                      <div
-                        className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-blue-400/50 transition-colors"
-                        style={{ borderColor: "var(--psg-card-border)" }}
-                        onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.onchange = (e) => { const files = Array.from((e.target as HTMLInputElement).files ?? []); if (files.length) { uploadProdDocs(files, folder); } }; inp.click(); }}
-                      >
-                        {docUploading && docUploadFolder === folder ? (
-                          <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Uploading…</p>
-                        ) : (
-                          <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Click to upload files</p>
-                        )}
-                      </div>
                     </div>
                   )}
                 </div>

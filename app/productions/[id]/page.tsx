@@ -96,6 +96,8 @@ type HaulageMovement = {
   arrivalAt: string | null;
   cargo: string | null;
   notes: string | null;
+  estimatedCost: number | null;
+  actualCost: number | null;
 };
 type TeamMember = { user: { id: number; name: string; email: string; role: string } };
 type VenueRef = { id: number; name: string; city: string | null; capacity: number | null };
@@ -213,7 +215,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [showKdForm, setShowKdForm] = useState(false);
   const [editKd, setEditKd] = useState<KeyDate | null>(null);
   const [kdForm, setKdForm] = useState(BLANK_KD);
-  const BLANK_MOVEMENT = { haulageCompany: "", driverName: "", vehicleInfo: "", fromLocation: "", toLocation: "", departureAt: "", arrivalAt: "", cargo: "", notes: "" };
+  const BLANK_MOVEMENT = { haulageCompany: "", driverName: "", vehicleInfo: "", fromLocation: "", toLocation: "", departureAt: "", arrivalAt: "", cargo: "", notes: "", estimatedCost: "", actualCost: "" };
   const [showMovementForm, setShowMovementForm] = useState(false);
   const [editMovement, setEditMovement] = useState<HaulageMovement | null>(null);
   const [movementForm, setMovementForm] = useState<typeof BLANK_MOVEMENT & { id?: number }>(BLANK_MOVEMENT);
@@ -716,7 +718,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   function openEditMovement(m: HaulageMovement) {
-    setMovementForm({ ...m, id: m.id, driverName: m.driverName ?? "", vehicleInfo: m.vehicleInfo ?? "", departureAt: m.departureAt.slice(0, 16), arrivalAt: m.arrivalAt ? m.arrivalAt.slice(0, 16) : "", cargo: m.cargo ?? "", notes: m.notes ?? "" });
+    setMovementForm({ ...m, id: m.id, driverName: m.driverName ?? "", vehicleInfo: m.vehicleInfo ?? "", departureAt: m.departureAt.slice(0, 16), arrivalAt: m.arrivalAt ? m.arrivalAt.slice(0, 16) : "", cargo: m.cargo ?? "", notes: m.notes ?? "", estimatedCost: m.estimatedCost != null ? String(m.estimatedCost) : "", actualCost: m.actualCost != null ? String(m.actualCost) : "" });
     setEditMovement(m);
     setShowMovementForm(true);
   }
@@ -725,8 +727,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   const contraEstimateTotal = tourStops.reduce((s, t) => s + (t.contraEstimate ?? 0), 0);
   const contraActualTotal = tourStops.reduce((s, t) => s + (t.contraActual ?? 0), 0);
-  const totalEstimated = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0) + contraEstimateTotal;
-  const totalCommitted = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0) + contraActualTotal;
+  const haulageEstimated = prod.haulageMovements.reduce((s, m) => s + (m.estimatedCost ?? 0), 0);
+  const haulageActual = prod.haulageMovements.reduce((s, m) => s + (m.actualCost ?? 0), 0);
+  const totalEstimated = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0) + contraEstimateTotal + haulageEstimated;
+  const totalCommitted = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0) + contraActualTotal + haulageActual;
   const totalSpent = prod.budgetLines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.spent, 0), 0);
   const totalBudgeted = prod.budgetLines.reduce((s, l) => s + l.budgeted, 0);
 
@@ -1024,6 +1028,16 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       </td>
                     </tr>
                   ))}
+                  {(haulageEstimated > 0 || haulageActual > 0) && (
+                    <tr className="border-t" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(59,130,246,0.04)" }}>
+                      <td className="px-4 py-2.5 text-white/70 text-xs italic">Haulage (from movements)</td>
+                      <td className="px-4 py-2.5 text-right text-white/40 text-xs">—</td>
+                      <td className="px-4 py-2.5 text-right text-yellow-300/70 text-xs">{haulageEstimated > 0 ? fmt(haulageEstimated) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right text-orange-300/70 text-xs">{haulageActual > 0 ? fmt(haulageActual) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right text-green-400/70 text-xs">—</td>
+                      <td className="px-4 py-2.5 text-right text-white/40 text-xs">—</td>
+                    </tr>
+                  )}
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: "2px solid var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.05)" }}>
@@ -1356,6 +1370,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <th className="px-4 py-3 text-left font-medium text-white">Arrival</th>
                     <th className="px-4 py-3 text-left font-medium text-white">Driver / Vehicle</th>
                     <th className="px-4 py-3 text-left font-medium text-white">Cargo</th>
+                    <th className="px-4 py-3 text-right font-medium text-white">Estimated</th>
+                    <th className="px-4 py-3 text-right font-medium text-white">Actual</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -1383,6 +1399,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         {!m.driverName && !m.vehicleInfo && "—"}
                       </td>
                       <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{m.cargo || "—"}</td>
+                      <td className="px-4 py-3 text-right text-sm" style={{ color: "var(--psg-muted)" }}>{m.estimatedCost != null ? fmt(m.estimatedCost) : "—"}</td>
+                      <td className="px-4 py-3 text-right text-sm" style={{ color: "var(--psg-muted)" }}>{m.actualCost != null ? fmt(m.actualCost) : "—"}</td>
                       <td className="px-4 py-3 opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="flex gap-2">
                           <button onClick={() => openEditMovement(m)} className="text-xs text-blue-400 hover:text-blue-300">Edit</button>
@@ -1557,6 +1575,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             </div>
             <F label="Cargo / Description"><input className={inp} style={inpStyle} value={movementForm.cargo} onChange={(e) => setMovementForm((f) => ({ ...f, cargo: e.target.value }))} placeholder="e.g. Scenery and rigging" /></F>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={movementForm.notes} onChange={(e) => setMovementForm((f) => ({ ...f, notes: e.target.value }))} /></F>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Estimated Cost (£)"><input type="number" min="0" step="0.01" className={inp} style={inpStyle} value={movementForm.estimatedCost} onChange={(e) => setMovementForm((f) => ({ ...f, estimatedCost: e.target.value }))} placeholder="0.00" /></F>
+              <F label="Actual Cost (£)"><input type="number" min="0" step="0.01" className={inp} style={inpStyle} value={movementForm.actualCost} onChange={(e) => setMovementForm((f) => ({ ...f, actualCost: e.target.value }))} placeholder="0.00" /></F>
+            </div>
             <Btns onCancel={() => { setShowMovementForm(false); setEditMovement(null); setMovementForm(BLANK_MOVEMENT); }} label={editMovement ? "Save Changes" : "Add Movement"} />
           </form>
         </Modal>

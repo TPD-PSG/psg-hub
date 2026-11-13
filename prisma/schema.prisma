@@ -129,6 +129,8 @@ model HaulageMovement {
   arrivalAt        DateTime?
   cargo            String?
   notes            String?
+  estimatedCost    Float?
+  actualCost       Float?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 }

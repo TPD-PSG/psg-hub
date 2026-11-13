@@ -16,6 +16,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       arrivalAt:      body.arrivalAt ? new Date(body.arrivalAt) : null,
       cargo:          body.cargo || null,
       notes:          body.notes || null,
+      estimatedCost:  body.estimatedCost != null ? Number(body.estimatedCost) : null,
+      actualCost:     body.actualCost != null ? Number(body.actualCost) : null,
     },
   });
   return NextResponse.json(movement, { status: 201 });

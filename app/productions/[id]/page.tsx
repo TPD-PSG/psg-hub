@@ -1017,8 +1017,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       <td className="px-4 py-2.5 text-right text-yellow-300">{fmt(s.estimated)}</td>
                       <td className="px-4 py-2.5 text-right text-orange-300">{fmt(s.committed)}</td>
                       <td className="px-4 py-2.5 text-right text-green-400">{fmt(s.spent)}</td>
-                      <td className={`px-4 py-2.5 text-right font-medium ${s.budgeted - s.spent < 0 ? "text-red-400" : "text-white/60"}`}>
-                        {fmt(s.budgeted - s.spent)}
+                      <td className={`px-4 py-2.5 text-right font-medium ${s.budgeted - s.committed < 0 ? "text-red-400" : "text-white/60"}`}>
+                        {fmt(s.budgeted - s.committed)}
                       </td>
                     </tr>
                   ))}
@@ -1030,8 +1030,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <td className="px-4 py-3 text-right font-semibold text-yellow-300">{fmt(totalEstimated)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-orange-300">{fmt(totalCommitted)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-green-400">{fmt(totalSpent)}</td>
-                    <td className={`px-4 py-3 text-right font-semibold ${totalBudgeted - totalSpent < 0 ? "text-red-400" : "text-white/60"}`}>
-                      {fmt(totalBudgeted - totalSpent)}
+                    <td className={`px-4 py-3 text-right font-semibold ${totalBudgeted - totalCommitted < 0 ? "text-red-400" : "text-white/60"}`}>
+                      {fmt(totalBudgeted - totalCommitted)}
                     </td>
                   </tr>
                 </tfoot>
@@ -1047,7 +1047,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 const lineEst = line.expenses.reduce((s, x) => s + x.estimated, 0);
                 const lineCom = line.expenses.reduce((s, x) => s + x.committed, 0);
                 const lineSpt = line.expenses.reduce((s, x) => s + x.spent, 0);
-                const pct = line.budgeted > 0 ? Math.min((lineSpt / line.budgeted) * 100, 100) : 0;
+                const pct = line.budgeted > 0 ? Math.min((lineCom / line.budgeted) * 100, 100) : 0;
                 const byPhase = PHASES.reduce((acc, p) => {
                   acc[p] = line.expenses.filter((x) => x.phase === p);
                   return acc;
@@ -1063,9 +1063,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         {line.nominalCode && <span className="ml-1 text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{line.nominalCode}</span>}
                       </div>
                       <div className="flex items-center gap-4 text-xs shrink-0">
-                        <span className="text-yellow-300">Est: {fmt(lineEst)}</span>
-                        <span className="text-orange-300">Com: {fmt(lineCom)}</span>
-                        <span className="text-green-400">Spt: {fmt(lineSpt)}</span>
+                        <span className="text-yellow-300">PM: {fmt(lineEst)}</span>
+                        <span className="text-orange-300">Net: {fmt(lineCom)}</span>
+                        <span className="text-green-400">Gross: {fmt(lineSpt)}</span>
                         <span style={{ color: "var(--psg-muted)" }}>/ {fmt(line.budgeted)}</span>
                       </div>
                       <div className="flex gap-2 shrink-0">

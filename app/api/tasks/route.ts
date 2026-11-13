@@ -15,20 +15,20 @@ export async function GET(req: NextRequest) {
   const taskListId = searchParams.get("taskListId");
   const signoffUserId = searchParams.get("signoffUserId");
   const statusFilter = searchParams.get("status");
+  const myTasks = searchParams.get("myTasks");
 
   const where: Record<string, unknown> = {};
   if (productionId) where.productionId = Number(productionId);
-  // For admins companyWide=1 filters to tasks with no production; for non-admins
-  // it means "all my tasks" so we skip the productionId=null restriction.
-  if (companyWide === "1" && role === "admin") where.productionId = null;
+  // companyWide=1: show only tasks with no production (admin unlinked to-dos)
+  if (companyWide === "1" && role === "admin" && !myTasks) where.productionId = null;
   if (assigneeId) where.assigneeUserId = Number(assigneeId);
   if (signoffUserId) where.signoffUserId = Number(signoffUserId);
   if (statusFilter) where.status = statusFilter;
   if (taskListId === "null") where.taskListId = null;
   else if (taskListId) where.taskListId = Number(taskListId);
 
-  // Non-admins only see tasks they are involved in
-  if (role !== "admin" && userId) {
+  // myTasks=1 or non-admins: only show tasks the user is involved in
+  if ((myTasks === "1" || role !== "admin") && userId) {
     where.OR = [
       { assigneeUserId: userId },
       { createdByUserId: userId },

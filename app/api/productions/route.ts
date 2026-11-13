@@ -11,21 +11,24 @@ const include = {
   venueRef: { select: { name: true, city: true } },
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   const role: string = (session?.user as any)?.role ?? "member";
   const userId: number | undefined = (session?.user as any)?.id ? Number((session!.user as any).id) : undefined;
   const permsRaw: string | null = (session?.user as any)?.permissions ?? null;
   const perms = parsePerms(permsRaw);
 
-  const where =
-    role !== "admin" && !perms.allProductions && userId
-      ? { team: { some: { userId } } }
-      : undefined;
+  const { searchParams } = new URL(req.url);
+  const showArchived = searchParams.get("archived") === "1";
+
+  const where: Record<string, unknown> = { archived: showArchived };
+  if (role !== "admin" && !perms.allProductions && userId) {
+    where.team = { some: { userId } };
+  }
 
   const productions = await prisma.production.findMany({
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy: showArchived ? { archivedAt: "desc" } : { createdAt: "desc" },
     include,
   });
   return NextResponse.json(productions);

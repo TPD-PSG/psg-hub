@@ -29,6 +29,7 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
     title: "Productions",
     items: [
       { label: "All Productions", href: "/productions" },
+      { label: "Archived Productions", href: "/productions/archived" },
       { label: "New Production", href: "/productions/new" },
     ],
   },

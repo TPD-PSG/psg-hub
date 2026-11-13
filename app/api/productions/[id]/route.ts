@@ -93,6 +93,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(production);
 }
 
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  const role = (session?.user as any)?.role ?? "member";
+  if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { id } = await params;
+  const body = await req.json();
+  if (typeof body.archived !== "boolean") return NextResponse.json({ error: "Missing archived field" }, { status: 400 });
+  const production = await prisma.production.update({
+    where: { id: Number(id) },
+    data: { archived: body.archived, archivedAt: body.archived ? new Date() : null },
+  });
+  return NextResponse.json(production);
+}
+
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   await prisma.production.delete({ where: { id: Number(id) } });

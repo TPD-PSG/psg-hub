@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
 import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
@@ -222,6 +223,8 @@ type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "ca
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as any)?.role === "admin";
   const searchParams = useSearchParams();
   const [prod, setProd] = useState<Production | null>(null);
   const tab: TabKey = (searchParams.get("section") as TabKey) ?? "schedule";
@@ -865,6 +868,16 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     router.push("/");
   }
 
+  async function archiveProd() {
+    if (!confirm(`Archive "${prod?.name}"? It will move to Archived Productions and become read-only.`)) return;
+    await fetch(`/api/productions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: true }),
+    });
+    router.push("/productions/archived");
+  }
+
   async function saveMovement(e: React.FormEvent) {
     e.preventDefault();
     if (movementForm.id) {
@@ -1017,10 +1030,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           </div>
         </div>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button onClick={() => setEditProd(true)} className="border px-3 py-1.5 rounded text-sm hover:bg-white/5 transition-colors text-white" style={{ borderColor: "var(--psg-card-border)" }}>Edit</button>
-          <button onClick={deleteProd} className="border px-3 py-1.5 rounded text-sm transition-colors text-red-400 hover:bg-red-900/20" style={{ borderColor: "rgba(248,113,113,0.3)" }}>Delete</button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => setEditProd(true)} className="border px-3 py-1.5 rounded text-sm hover:bg-white/5 transition-colors text-white" style={{ borderColor: "var(--psg-card-border)" }}>Edit</button>
+            <button onClick={archiveProd} className="border px-3 py-1.5 rounded text-sm transition-colors hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Archive</button>
+            <button onClick={deleteProd} className="border px-3 py-1.5 rounded text-sm transition-colors text-red-400 hover:bg-red-900/20" style={{ borderColor: "rgba(248,113,113,0.3)" }}>Delete</button>
+          </div>
+        )}
       </div>
 
       {/* Budget summary cards — budget tab only */}

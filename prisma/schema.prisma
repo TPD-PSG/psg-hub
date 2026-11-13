@@ -49,6 +49,8 @@ model Production {
   status              String    @default("planning")
   announcementStatus  String    @default("not_announced")
   internalStatus      String    @default("pencil") // pencil | confirmed
+  archived            Boolean   @default(false)
+  archivedAt          DateTime?
   productionManager   String?   // free-text proj lead(s), e.g. "Toby / Tom"
   color       String?
   notes         String?

@@ -1,0 +1,2 @@
+ALTER TABLE "Production" ADD COLUMN "archived" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Production" ADD COLUMN "archivedAt" DATETIME;

@@ -188,7 +188,7 @@ export default function TasksPanel({ productionId }: Props) {
       if (activeListId === NO_LIST_ID) qs += "&taskListId=null";
       else qs += `&taskListId=${activeListId}`;
     } else {
-      qs = "?companyWide=1";
+      qs = "?myTasks=1";
     }
     const data = await fetch(`/api/tasks${qs}`).then(r => r.json());
     if (Array.isArray(data)) setTasks(data);

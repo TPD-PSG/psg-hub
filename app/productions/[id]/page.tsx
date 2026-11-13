@@ -237,6 +237,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [docsUploading, setDocsUploading] = useState(false);
   const [invoiceDragOver, setInvoiceDragOver] = useState(false);
+  const [quoteDragOver, setQuoteDragOver] = useState(false);
 
   const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   const [showTeamPicker, setShowTeamPicker] = useState(false);
@@ -514,6 +515,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     setPendingPO([]);
     setPendingInvoices([]);
     setInvoiceDragOver(false);
+    setQuoteDragOver(false);
   }
 
   async function addInvoiceFiles(files: File[]) {
@@ -1693,6 +1695,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   <input type="file" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); setPendingQuotes(q => [...q, ...files]); e.target.value = ""; }} />
                 </label>
               </div>
+              <div
+                className="rounded border-2 border-dashed mb-3 py-4 text-center text-xs transition-colors"
+                style={{ borderColor: quoteDragOver ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: quoteDragOver ? "rgba(59,130,246,0.08)" : "transparent", color: "var(--psg-muted)" }}
+                onDragOver={(e) => { e.preventDefault(); setQuoteDragOver(true); }}
+                onDragLeave={() => setQuoteDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setQuoteDragOver(false); const files = Array.from(e.dataTransfer.files); if (files.length) setPendingQuotes(q => [...q, ...files]); }}
+              >
+                Drop quote files here
+              </div>
               {existingDocs.filter(d => d.type === "quote").map(d => (
                 <div key={d.id} className="flex items-center justify-between py-1.5 px-2 rounded text-xs mb-1" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
                   <a href={`/api/spend-documents/${d.id}`} target="_blank" rel="noopener noreferrer" className="truncate hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>{d.name}</a>
@@ -1715,16 +1726,16 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   {expenseForm.approvedBy ? "Edit" : "+ Add Approval"}
                 </button>
               </div>
-              <F label="PO Number"><input className={inp} style={inpStyle} value={expenseForm.poNumber} onChange={(e) => setExpenseForm((f) => ({ ...f, poNumber: e.target.value }))} /></F>
               {expenseForm.approvedBy ? (
-                <div className="text-xs rounded px-2 py-1.5 space-y-0.5 mt-2" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                <div className="text-xs rounded px-2 py-1.5 space-y-0.5 mb-3" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
                   <p className="text-white">Approved by: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvedBy}</span></p>
                   {expenseForm.approvedDate && <p className="text-white">Date: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvedDate}</span></p>}
                   {expenseForm.approvalMethod && <p className="text-white">Method: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvalMethod}</span></p>}
                 </div>
               ) : (
-                <p className="text-xs mt-2" style={{ color: "var(--psg-muted)" }}>No approval recorded</p>
+                <p className="text-xs mb-3" style={{ color: "var(--psg-muted)" }}>No approval recorded</p>
               )}
+              <F label="PO Number"><input className={inp} style={inpStyle} value={expenseForm.poNumber} onChange={(e) => setExpenseForm((f) => ({ ...f, poNumber: e.target.value }))} /></F>
             </div>
 
             {/* PO Upload */}

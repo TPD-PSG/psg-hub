@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, Suspense } from "react";
+import { useEffect, useState, use, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import ExportMenu from "@/components/ExportMenu";
@@ -365,6 +365,48 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [contactForm, setContactForm] = useState(BLANK_CONTACT);
   const [dragContactId, setDragContactId] = useState<number | null>(null);
   const [showContra, setShowContra] = useState(false);
+  // Contact sheet import
+  const contactImportRef = useRef<HTMLInputElement>(null);
+  const [contactImportState, setContactImportState] = useState<"idle" | "uploading" | "reviewing" | "importing">("idle");
+  const [contactImportError, setContactImportError] = useState<string | null>(null);
+  type ImportedContact = { section: string; name: string; company?: string; role?: string; phone?: string; email?: string; notes?: string; _selected: boolean };
+  const [importedContacts, setImportedContacts] = useState<ImportedContact[]>([]);
+
+  async function handleContactImport(file: File) {
+    setContactImportState("uploading");
+    setContactImportError(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await fetch(`/api/productions/${id}/contacts/import`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) { setContactImportError(data.error ?? "Import failed"); setContactImportState("idle"); return; }
+      if (!data.contacts?.length) { setContactImportError("No contacts found in this document"); setContactImportState("idle"); return; }
+      setImportedContacts(data.contacts.map((c: Omit<ImportedContact, "_selected">) => ({ ...c, _selected: true })));
+      setContactImportState("reviewing");
+    } catch {
+      setContactImportError("Upload failed — please try again");
+      setContactImportState("idle");
+    }
+  }
+
+  async function confirmContactImport() {
+    const toImport = importedContacts.filter(c => c._selected).map(({ _selected, ...c }) => c);
+    if (!toImport.length) return;
+    setContactImportState("importing");
+    const fd = new FormData();
+    fd.append("contacts", JSON.stringify(toImport));
+    const res = await fetch(`/api/productions/${id}/contacts/import`, { method: "POST", body: fd });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.contacts)) setContacts(data.contacts);
+      setContactImportState("idle");
+      setImportedContacts([]);
+    } else {
+      setContactImportError("Import failed");
+      setContactImportState("reviewing");
+    }
+  }
 
   async function reloadContacts() {
     const data = await fetch(`/api/productions/${id}/contacts`).then(r => r.json());
@@ -2411,12 +2453,74 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   ↓ Export PDF
                 </button>
               )}
+              <input ref={contactImportRef} type="file" accept=".pdf,.doc,.docx,.csv,.xlsx,.xls" className="hidden"
+                onChange={e => { if (e.target.files?.[0]) { handleContactImport(e.target.files[0]); e.target.value = ""; } }} />
+              <button onClick={() => contactImportRef.current?.click()}
+                disabled={contactImportState !== "idle"}
+                className="px-3 py-2 rounded text-sm border hover:bg-white/5 transition-colors disabled:opacity-50"
+                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                {contactImportState === "uploading" ? "Analysing…" : "↑ Import"}
+              </button>
               <button onClick={() => { setEditContact(null); setContactForm(BLANK_CONTACT); setShowContactForm(true); }}
                 className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
                 + Add Contact
               </button>
             </div>
           </div>
+
+          {contactImportError && (
+            <div className="text-sm text-red-400 rounded px-3 py-2 bg-red-900/20 flex items-center justify-between">
+              <span>{contactImportError}</span>
+              <button onClick={() => setContactImportError(null)} className="ml-3 text-red-400 hover:text-red-300">×</button>
+            </div>
+          )}
+
+          {contactImportState === "reviewing" && (
+            <div className="rounded-xl border p-5 space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-blue)" }}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-white text-sm">Review imported contacts</div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                    {importedContacts.filter(c => c._selected).length} of {importedContacts.length} selected — deselect any you don't want to import
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setContactImportState("idle"); setImportedContacts([]); }}
+                    className="px-3 py-1.5 rounded text-sm" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.08)" }}>
+                    Cancel
+                  </button>
+                  <button onClick={confirmContactImport} disabled={!importedContacts.some(c => c._selected)}
+                    className="px-4 py-1.5 rounded text-sm font-medium text-white disabled:opacity-40" style={{ backgroundColor: "var(--psg-blue)" }}>
+                    Import {importedContacts.filter(c => c._selected).length} contacts
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+                {importedContacts.map((c, i) => (
+                  <label key={i} className={`flex items-start gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${c._selected ? "bg-white/5" : "opacity-40"}`}>
+                    <input type="checkbox" checked={c._selected} onChange={() => setImportedContacts(prev => prev.map((x, j) => j === i ? { ...x, _selected: !x._selected } : x))}
+                      className="mt-0.5 w-4 h-4 rounded flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-white">{c.name}</span>
+                        {c.role && <span className="text-xs" style={{ color: "var(--psg-blue)" }}>{c.role}</span>}
+                        {c.company && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{c.company}</span>}
+                        <span className="text-xs px-1.5 py-0.5 rounded-full border" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>{c.section}</span>
+                      </div>
+                      <div className="flex gap-3 mt-0.5 text-xs" style={{ color: "var(--psg-muted)" }}>
+                        {c.phone && <span>📞 {c.phone}</span>}
+                        {c.email && <span>✉ {c.email}</span>}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {contactImportState === "importing" && (
+            <div className="text-sm text-center py-4" style={{ color: "var(--psg-muted)" }}>Importing contacts…</div>
+          )}
 
           {contacts.length === 0 ? (
             <div className="rounded-xl border p-10 text-center text-sm" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>

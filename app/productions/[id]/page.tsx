@@ -25,6 +25,7 @@ type BudgetLine = {
   id: number;
   department: string;
   description: string;
+  nominalCode: string | null;
   budgeted: number;
   notes: string | null;
   expenses: Expense[];
@@ -375,7 +376,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [editingEntry, setEditingEntry] = useState<CSEntry | null>(null);
 
   const [eventForm, setEventForm] = useState({ title: "", type: "Rehearsal", startAt: "", endAt: "", location: "", notes: "" });
-  const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", budgeted: "", notes: "" });
+  const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" });
   const [expenseForm, setExpenseForm] = useState<typeof BLANK_EXPENSE & { id?: number }>(BLANK_EXPENSE);
   const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", color: "", notes: "", reportEmail: "", sharepointUrl: "" });
 
@@ -482,7 +483,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     e.preventDefault();
     await fetch(`/api/productions/${id}/budget`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(budgetForm) });
     setShowBudgetForm(false);
-    setBudgetForm({ department: "Scenery", description: "", budgeted: "", notes: "" });
+    setBudgetForm({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" });
     reload();
   }
 
@@ -495,7 +496,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   async function saveExpense(e: React.FormEvent) {
     e.preventDefault();
     if (expenseForm.id) {
-      await fetch(`/api/expenses/${expenseForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm) });
+      await fetch(`/api/budget-expenses/${expenseForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm) });
     } else {
       await fetch(`/api/budget-lines/${showExpenseForm}/expenses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm) });
     }
@@ -523,12 +524,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   async function deleteExpense(eid: number) {
     if (!confirm("Delete this item?")) return;
-    await fetch(`/api/expenses/${eid}`, { method: "DELETE" });
+    await fetch(`/api/budget-expenses/${eid}`, { method: "DELETE" });
     reload();
   }
 
   async function toggleIssued(exp: Expense) {
-    await fetch(`/api/expenses/${exp.id}`, {
+    await fetch(`/api/budget-expenses/${exp.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...exp, issuedForPayment: !exp.issuedForPayment }),
     });
@@ -961,6 +962,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       <div>
                         <span className="font-semibold text-sm text-white">{line.description}</span>
                         <span className="ml-2 text-xs" style={{ color: "var(--psg-muted)" }}>{line.department}</span>
+                        {line.nominalCode && <span className="ml-1 text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{line.nominalCode}</span>}
                       </div>
                       <div className="flex items-center gap-4 text-xs shrink-0">
                         <span className="text-yellow-300">Est: {fmt(lineEst)}</span>
@@ -1558,6 +1560,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               </datalist>
             </F>
             <F label="Description *"><input required className={inp} style={inpStyle} value={budgetForm.description} onChange={(e) => setBudgetForm((f) => ({ ...f, description: e.target.value }))} placeholder="e.g. Sound Hires" /></F>
+            <F label="Nominal Code"><input className={inp} style={inpStyle} value={budgetForm.nominalCode} onChange={(e) => setBudgetForm((f) => ({ ...f, nominalCode: e.target.value }))} placeholder="e.g. 4100" /></F>
             <F label="Overall Allocation (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={budgetForm.budgeted} onChange={(e) => setBudgetForm((f) => ({ ...f, budgeted: e.target.value }))} /></F>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={budgetForm.notes} onChange={(e) => setBudgetForm((f) => ({ ...f, notes: e.target.value }))} /></F>
             <Btns onCancel={() => setShowBudgetForm(false)} />

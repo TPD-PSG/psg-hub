@@ -9,6 +9,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     data: {
       department: body.department,
       description: body.description,
+      nominalCode: body.nominalCode || null,
       budgeted: Number(body.budgeted),
       notes: body.notes || null,
     },

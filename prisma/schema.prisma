@@ -107,6 +107,7 @@ model BudgetLine {
   production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
   department   String
   description  String
+  nominalCode  String?
   budgeted     Float
   notes        String?
   createdAt    DateTime   @default(now())

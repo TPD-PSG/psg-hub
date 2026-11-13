@@ -208,7 +208,7 @@ export default function FunPage() {
       {/* ── My pending submissions ── */}
       {pending.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Your pending submissions — {fmtMonth(currentMonthYear)}</p>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>{role === "admin" ? "All pending submissions" : "Your pending submissions"} — {fmtMonth(currentMonthYear)}</p>
           <p className="text-xs" style={{ color: "var(--psg-muted)" }}>These will appear in the {fmtMonth(currentMonthYear)} roundup.</p>
           {pending.map(sub => (
             <SubmissionCard key={sub.id} sub={sub} canDelete={sub.author.id === userId} onDelete={deleteSub} />

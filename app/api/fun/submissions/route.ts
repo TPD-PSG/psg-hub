@@ -9,10 +9,12 @@ export async function GET() {
   const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
   if (!userId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
+  const isAdmin = (session?.user as any)?.role === "admin";
+
   const [mine, roundups] = await Promise.all([
-    // User's own pending submissions (not yet in a roundup)
+    // Pending submissions: admins see all, others see only their own
     prisma.funSubmission.findMany({
-      where: { authorId: userId, roundupId: null },
+      where: isAdmin ? { roundupId: null } : { authorId: userId, roundupId: null },
       include: {
         author: { select: { id: true, name: true, avatarUrl: true } },
         media: { select: { id: true, name: true, mime: true } },

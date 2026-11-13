@@ -14,7 +14,7 @@ const MODULES = [
 type Permissions = { modules: string[]; allProductions: boolean };
 type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
-  permissions: string | null; createdAt: string;
+  color?: string | null; permissions: string | null; createdAt: string;
 };
 
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -28,7 +28,9 @@ function parsePerms(raw: string | null): Permissions {
   try { return JSON.parse(raw); } catch { return defaultPerms(); }
 }
 
-const BLANK = { name: "", email: "", password: "", role: "member" };
+const BLANK = { name: "", email: "", password: "", role: "member", color: "" };
+
+const MEMBER_COLORS = ["#f59e0b","#10b981","#3b82f6","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16","#f97316","#14b8a6"];
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -55,7 +57,7 @@ export default function AdminUsersPage() {
 
   function openEdit(u: User) {
     setEditUser(u);
-    setForm({ name: u.name, email: u.email, password: "", role: u.role });
+    setForm({ name: u.name, email: u.email, password: "", role: u.role, color: u.color ?? "" });
     setPerms(parsePerms(u.permissions));
     setError("");
     setShowForm(true);
@@ -64,7 +66,7 @@ export default function AdminUsersPage() {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const body = { ...form, permissions: perms };
+    const body = { ...form, permissions: perms, color: form.color || null };
     if (editUser) {
       const res = await fetch(`/api/users/${editUser.id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -191,6 +193,22 @@ export default function AdminUsersPage() {
                     <option value="member">Member</option>
                     <option value="admin">Admin (full access)</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-2" style={{ color: "var(--psg-muted)" }}>Schedule colour</label>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    {MEMBER_COLORS.map(c => (
+                      <button key={c} type="button" onClick={() => setForm(f => ({ ...f, color: f.color === c ? "" : c }))}
+                        className="w-7 h-7 rounded-full transition-all"
+                        style={{ backgroundColor: c, outline: form.color === c ? `3px solid white` : "none", outlineOffset: 2 }} />
+                    ))}
+                    {form.color && !MEMBER_COLORS.includes(form.color) && (
+                      <span className="w-7 h-7 rounded-full" style={{ backgroundColor: form.color, outline: "3px solid white", outlineOffset: 2 }} />
+                    )}
+                    {form.color && (
+                      <button type="button" onClick={() => setForm(f => ({ ...f, color: "" }))} className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>Clear</button>
+                    )}
+                  </div>
                 </div>
               </div>
 

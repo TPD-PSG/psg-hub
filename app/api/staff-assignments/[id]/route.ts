@@ -21,7 +21,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       notes: body.notes || null,
     },
     include: {
-      user: { select: { id: true, name: true, avatarUrl: true } },
+      user: { select: { id: true, name: true, avatarUrl: true, color: true } },
       production: { select: { id: true, name: true } },
       tourStop: { select: { id: true, venue: { select: { name: true, city: true } } } },
     },

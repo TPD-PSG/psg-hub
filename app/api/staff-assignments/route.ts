@@ -10,7 +10,7 @@ export async function GET() {
   const assignments = await prisma.staffAssignment.findMany({
     orderBy: { startDate: "asc" },
     include: {
-      user: { select: { id: true, name: true, avatarUrl: true } },
+      user: { select: { id: true, name: true, avatarUrl: true, color: true } },
       production: { select: { id: true, name: true } },
       tourStop: { select: { id: true, venue: { select: { name: true, city: true } } } },
     },
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       notes: body.notes || null,
     },
     include: {
-      user: { select: { id: true, name: true, avatarUrl: true } },
+      user: { select: { id: true, name: true, avatarUrl: true, color: true } },
       production: { select: { id: true, name: true } },
       tourStop: { select: { id: true, venue: { select: { name: true, city: true } } } },
     },

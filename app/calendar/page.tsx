@@ -81,7 +81,7 @@ type StaffAssignment = {
   endDate: string;
   activityType: string | null;
   notes: string | null;
-  user: { id: number; name: string; avatarUrl: string | null };
+  user: { id: number; name: string; avatarUrl: string | null; color?: string | null };
   production: { id: number; name: string };
   tourStop: { id: number; venue: { name: string; city: string | null } } | null;
 };
@@ -374,22 +374,32 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
   // Show ALL productions (not just ones with assignments)
   const allProductions = productions;
 
-  // Build key-date activity lookup: prodId → date → activity label
-  // Spans multi-day key dates across every day in the range
+  // Build key-date + tour-stop activity lookup: prodId → date → activity label
   const kdLookup: Record<number, Record<string, string>> = {};
-  events.filter(ev => ev.type === "key_date" && ev.productionId !== null && ev.kdType).forEach(ev => {
-    const activity = KD_TO_ACTIVITY[ev.kdType!];
-    if (!activity) return;
-    const pid = ev.productionId!;
+  function addToKdLookup(pid: number, startStr: string, endStr: string | null, activity: string) {
     if (!kdLookup[pid]) kdLookup[pid] = {};
-    const s = ev.startDate.slice(0, 10) < monthStart ? monthStart : ev.startDate.slice(0, 10);
-    const e = (ev.endDate ?? ev.startDate).slice(0, 10) > monthEnd ? monthEnd : (ev.endDate ?? ev.startDate).slice(0, 10);
+    const s = startStr.slice(0, 10) < monthStart ? monthStart : startStr.slice(0, 10);
+    const e = (endStr ?? startStr).slice(0, 10) > monthEnd ? monthEnd : (endStr ?? startStr).slice(0, 10);
     let cur = new Date(s + "T12:00:00");
     const end = new Date(e + "T12:00:00");
     while (cur <= end) {
       const ds = cur.toISOString().slice(0, 10);
-      if (!kdLookup[pid][ds]) kdLookup[pid][ds] = activity; // first key date wins per day
+      if (!kdLookup[pid][ds]) kdLookup[pid][ds] = activity;
       cur.setDate(cur.getDate() + 1);
+    }
+  }
+  events.forEach(ev => {
+    if (!ev.productionId) return;
+    if (ev.type === "key_date" && ev.kdType) {
+      const activity = KD_TO_ACTIVITY[ev.kdType];
+      if (activity) addToKdLookup(ev.productionId, ev.startDate, ev.endDate, activity);
+    } else if (ev.type === "tour_stop") {
+      // tour_stop titles contain "Load in", performance, "Get out" — infer activity from title
+      const title = ev.title.toLowerCase();
+      const activity = title.includes("load in") || title.includes("get in") ? "GET IN"
+        : title.includes("get out") ? "OUT"
+        : "PERF";
+      addToKdLookup(ev.productionId, ev.startDate, ev.endDate, activity);
     }
   });
 
@@ -515,11 +525,15 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
                           </td>
                           <td key={`${p.id}-st-${dateStr}`} className="border-r cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", minWidth: 72 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
                             <div className="px-1 py-0.5 flex flex-col gap-px min-h-[22px]">
-                              {cellItems.map(a => (
-                                <span key={a.id} className="font-bold px-1.5 rounded text-center block leading-5" style={{ backgroundColor: "#eab308", color: "#1a1a00", fontSize: 10 }}>
-                                  {a.user.name.split(" ")[0].toUpperCase()}
-                                </span>
-                              ))}
+                              {cellItems.map(a => {
+                                const badgeBg = a.user.color ?? "#eab308";
+                                const badgeFg = "#fff";
+                                return (
+                                  <span key={a.id} className="font-bold px-1.5 rounded text-center block leading-5" style={{ backgroundColor: badgeBg, color: badgeFg, fontSize: 10 }}>
+                                    {a.user.name.split(" ")[0].toUpperCase()}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </td>
                         </>

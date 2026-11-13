@@ -7,7 +7,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const expense = await prisma.expense.create({
     data: {
       budgetLineId:     Number(id),
-      phase:            body.phase || "pre-production",
+      phase:            body.phase || "Capitalisation",
       description:      body.description,
       estimated:        Number(body.estimated) || 0,
       committed:        Number(body.committed) || 0,
@@ -18,6 +18,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       vatExempt:        body.vatExempt ?? false,
       supplier:         body.supplier || null,
       notes:            body.notes || null,
+      approvedBy:       body.approvedBy || null,
+      approvedDate:     body.approvedDate ? new Date(body.approvedDate) : null,
+      approvalMethod:   body.approvalMethod || null,
     },
   });
   return NextResponse.json(expense, { status: 201 });

@@ -9,7 +9,17 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       events: { orderBy: { startAt: "asc" } },
       budgetLines: {
         orderBy: { department: "asc" },
-        include: { expenses: { orderBy: { createdAt: "asc" } } },
+        include: {
+          expenses: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              documents: {
+                select: { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, issuedForPayment: true, createdAt: true },
+                orderBy: { createdAt: "asc" },
+              },
+            },
+          },
+        },
       },
       crew: {
         orderBy: { createdAt: "asc" },

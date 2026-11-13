@@ -414,8 +414,27 @@ model Expense {
   vatExempt         Boolean    @default(false)
   supplier          String?
   notes             String?
+  approvedBy        String?
+  approvedDate      DateTime?
+  approvalMethod    String?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+
+  documents         SpendDocument[]
+}
+
+model SpendDocument {
+  id               Int      @id @default(autoincrement())
+  expenseId        Int
+  expense          Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  type             String   // quote | po | invoice
+  name             String
+  mime             String
+  file             String   // base64
+  invoiceDate      DateTime?
+  invoiceAmount    Float?
+  issuedForPayment Boolean  @default(false)
+  createdAt        DateTime @default(now())
 }
 
 model Property {

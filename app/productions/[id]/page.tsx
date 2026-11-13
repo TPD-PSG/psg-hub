@@ -7,6 +7,7 @@ import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF } from "@/lib/exports";
 
+type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; issuedForPayment: boolean; createdAt: string };
 type Expense = {
   id: number;
   phase: string;
@@ -20,6 +21,10 @@ type Expense = {
   vatExempt: boolean;
   supplier: string | null;
   notes: string | null;
+  approvedBy: string | null;
+  approvedDate: string | null;
+  approvalMethod: string | null;
+  documents: SpendDoc[];
 };
 type BudgetLine = {
   id: number;
@@ -141,7 +146,7 @@ const KEY_DATE_LABEL: Record<string, string> = Object.fromEntries(KEY_DATE_TYPES
 
 const EVENT_TYPES = ["Rehearsal", "Tech", "Dress Rehearsal", "Performance", "Meeting", "Workshop", "Other"];
 const DEPARTMENTS = ["Scenery", "Props", "Wardrobe", "Wigs & Hair", "Makeup", "Sound Hires", "Sound Consumables", "Lighting Hires", "Lighting Consumables", "Rigging", "Instruments", "Video Hires", "Video Consumables", "Video Content", "Production Setup", "Transport", "Rehearsal", "Production Staffing", "Petty Cash", "Other"];
-const PHASES = ["pre-production", "running", "closing"];
+const PHASES = ["Capitalisation", "running", "closing"];
 const STATUS_OPTS = ["planning", "in-production", "closed"];
 
 function fmt(n: number) {
@@ -185,7 +190,7 @@ const ANN_LABELS: Record<string, string> = {
 const ANN_OPTS = ["nda", "not_announced", "on_sale", "open"];
 
 const PHASE_COLORS: Record<string, string> = {
-  "pre-production": "text-yellow-400",
+  "Capitalisation": "text-yellow-400",
   running: "text-green-400",
   closing: "text-blue-400",
 };
@@ -193,7 +198,7 @@ const PHASE_COLORS: Record<string, string> = {
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
 
-const BLANK_EXPENSE = { phase: "pre-production", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "" };
+const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "" };
 
 type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "reports" | "tasks" | "tour";
 
@@ -222,6 +227,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [bookingForm, setBookingForm] = useState<typeof BLANK_BOOKING & { id?: number }>(BLANK_BOOKING);
   const [budgetView, setBudgetView] = useState<"summary" | "detail">("detail");
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+
+  // Spend document state
+  type PendingInvoice = { file: File; invoiceDate: string; invoiceAmount: string; issuedForPayment: boolean };
+  const [existingDocs, setExistingDocs] = useState<SpendDoc[]>([]);
+  const [pendingQuotes, setPendingQuotes] = useState<File[]>([]);
+  const [pendingPO, setPendingPO] = useState<File[]>([]);
+  const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [docsUploading, setDocsUploading] = useState(false);
 
   const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   const [showTeamPicker, setShowTeamPicker] = useState(false);
@@ -493,16 +507,52 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     reload();
   }
 
+  function resetSpendDocState() {
+    setExistingDocs([]);
+    setPendingQuotes([]);
+    setPendingPO([]);
+    setPendingInvoices([]);
+  }
+
+  async function uploadPendingDocs(expenseId: number) {
+    const uploads: Promise<void>[] = [];
+    for (const f of pendingQuotes) {
+      const fd = new FormData(); fd.append("file", f); fd.append("type", "quote");
+      uploads.push(fetch(`/api/budget-expenses/${expenseId}/documents`, { method: "POST", body: fd }).then(() => {}));
+    }
+    for (const f of pendingPO) {
+      const fd = new FormData(); fd.append("file", f); fd.append("type", "po");
+      uploads.push(fetch(`/api/budget-expenses/${expenseId}/documents`, { method: "POST", body: fd }).then(() => {}));
+    }
+    for (const inv of pendingInvoices) {
+      const fd = new FormData();
+      fd.append("file", inv.file); fd.append("type", "invoice");
+      if (inv.invoiceDate) fd.append("invoiceDate", inv.invoiceDate);
+      if (inv.invoiceAmount) fd.append("invoiceAmount", inv.invoiceAmount);
+      fd.append("issuedForPayment", String(inv.issuedForPayment));
+      uploads.push(fetch(`/api/budget-expenses/${expenseId}/documents`, { method: "POST", body: fd }).then(() => {}));
+    }
+    await Promise.all(uploads);
+  }
+
   async function saveExpense(e: React.FormEvent) {
     e.preventDefault();
+    setDocsUploading(true);
+    let expenseId: number;
     if (expenseForm.id) {
       await fetch(`/api/budget-expenses/${expenseForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm) });
+      expenseId = expenseForm.id;
     } else {
-      await fetch(`/api/budget-lines/${showExpenseForm}/expenses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm) });
+      const res = await fetch(`/api/budget-lines/${showExpenseForm}/expenses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm) });
+      const data = await res.json();
+      expenseId = data.id;
     }
+    await uploadPendingDocs(expenseId);
+    setDocsUploading(false);
     setShowExpenseForm(null);
     setEditingExpense(null);
     setExpenseForm(BLANK_EXPENSE);
+    resetSpendDocState();
     reload();
   }
 
@@ -517,7 +567,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       paymentDue: exp.paymentDue ? exp.paymentDue.slice(0, 10) : "",
       supplier: exp.supplier ?? "",
       notes: exp.notes ?? "",
+      approvedBy: exp.approvedBy ?? "",
+      approvedDate: exp.approvedDate ? exp.approvedDate.slice(0, 10) : "",
+      approvalMethod: exp.approvalMethod ?? "",
     });
+    setExistingDocs(exp.documents ?? []);
+    setPendingQuotes([]);
+    setPendingPO([]);
+    setPendingInvoices([]);
     setEditingExpense(exp);
     setShowExpenseForm(lineId);
   }
@@ -526,6 +583,17 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     if (!confirm("Delete this item?")) return;
     await fetch(`/api/budget-expenses/${eid}`, { method: "DELETE" });
     reload();
+  }
+
+  async function deleteSpendDoc(docId: number) {
+    await fetch(`/api/spend-documents/${docId}`, { method: "DELETE" });
+    setExistingDocs(d => d.filter(doc => doc.id !== docId));
+  }
+
+  async function patchSpendDoc(docId: number, patch: Partial<SpendDoc>) {
+    const res = await fetch(`/api/spend-documents/${docId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+    const updated = await res.json();
+    setExistingDocs(d => d.map(doc => doc.id === docId ? updated : doc));
   }
 
   async function toggleIssued(exp: Expense) {
@@ -971,7 +1039,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <span style={{ color: "var(--psg-muted)" }}>/ {fmt(line.budgeted)}</span>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <button onClick={() => { setExpenseForm(BLANK_EXPENSE); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}>+ PO</button>
+                        <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}>+ Spend</button>
                         <button onClick={() => deleteBudgetLine(line.id)} className="text-xs text-red-400 hover:text-red-300">Delete</button>
                       </div>
                     </div>
@@ -1011,7 +1079,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                                   {x.vatExempt && <td className="px-2 py-2 text-white/30 text-xs">No VAT</td>}
                                   {!x.vatExempt && <td className="px-2 py-2" />}
                                   <td className="px-3 py-2 opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
-                                    <button onClick={() => openEditExpense(x, line.id)} className="text-blue-400 hover:text-blue-300">Edit PO</button>
+                                    <button onClick={() => openEditExpense(x, line.id)} className="text-blue-400 hover:text-blue-300">Edit</button>
                                     <button onClick={() => deleteExpense(x.id)} className="text-red-400 hover:text-red-300">×</button>
                                   </td>
                                 </tr>
@@ -1568,10 +1636,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         </Modal>
       )}
 
-      {/* Modal: Add / Edit Expense Item */}
+      {/* Modal: Add / Edit Spend Item */}
       {showExpenseForm !== null && (
-        <Modal title={editingExpense ? "Edit Purchase Order" : "Add Purchase Order"} onClose={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); }}>
-          <form onSubmit={saveExpense} className="space-y-3">
+        <Modal title={editingExpense ? "Edit Spend" : "Add Spend"} onClose={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); }}>
+          <form onSubmit={saveExpense} className="space-y-4">
+            {/* Core fields */}
             <F label="Phase">
               <select className={inp} style={inpStyle} value={expenseForm.phase} onChange={(e) => setExpenseForm((f) => ({ ...f, phase: e.target.value }))}>
                 {PHASES.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -1588,19 +1657,145 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               <F label="PO Number"><input className={inp} style={inpStyle} value={expenseForm.poNumber} onChange={(e) => setExpenseForm((f) => ({ ...f, poNumber: e.target.value }))} /></F>
               <F label="Payment Due"><input type="date" className={inp} style={inpStyle} value={expenseForm.paymentDue} onChange={(e) => setExpenseForm((f) => ({ ...f, paymentDue: e.target.value }))} /></F>
             </div>
-            <div className="flex gap-6 text-sm text-white">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={expenseForm.issuedForPayment} onChange={(e) => setExpenseForm((f) => ({ ...f, issuedForPayment: e.target.checked }))} />
-                Issued for Payment
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={expenseForm.vatExempt} onChange={(e) => setExpenseForm((f) => ({ ...f, vatExempt: e.target.checked }))} />
-                VAT Exempt
-              </label>
-            </div>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={expenseForm.notes} onChange={(e) => setExpenseForm((f) => ({ ...f, notes: e.target.value }))} /></F>
-            <Btns onCancel={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); }} label={editingExpense ? "Save Changes" : "Add PO"} />
+
+            {/* Quotes */}
+            <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>Quotes</span>
+                <label className="cursor-pointer text-xs px-2 py-1 rounded border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                  + Upload
+                  <input type="file" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); setPendingQuotes(q => [...q, ...files]); e.target.value = ""; }} />
+                </label>
+              </div>
+              {existingDocs.filter(d => d.type === "quote").map(d => (
+                <div key={d.id} className="flex items-center justify-between py-1.5 px-2 rounded text-xs mb-1" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                  <a href={`/api/spend-documents/${d.id}`} target="_blank" rel="noopener noreferrer" className="truncate hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>{d.name}</a>
+                  <button type="button" onClick={() => deleteSpendDoc(d.id)} className="ml-2 shrink-0 text-red-400 hover:text-red-300">×</button>
+                </div>
+              ))}
+              {pendingQuotes.map((f, i) => (
+                <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded text-xs mb-1" style={{ backgroundColor: "rgba(59,130,246,0.08)" }}>
+                  <span className="truncate text-blue-300">{f.name} <span style={{ color: "var(--psg-muted)" }}>(pending)</span></span>
+                  <button type="button" onClick={() => setPendingQuotes(q => q.filter((_, j) => j !== i))} className="ml-2 shrink-0 text-red-400 hover:text-red-300">×</button>
+                </div>
+              ))}
+            </div>
+
+            {/* Approval */}
+            <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>Approval</span>
+                <button type="button" onClick={() => setShowApprovalModal(true)} className="text-xs px-2 py-1 rounded border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                  {expenseForm.approvedBy ? "Edit" : "+ Add Approval"}
+                </button>
+              </div>
+              {expenseForm.approvedBy ? (
+                <div className="text-xs rounded px-2 py-1.5 space-y-0.5" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                  <p className="text-white">Approved by: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvedBy}</span></p>
+                  {expenseForm.approvedDate && <p className="text-white">Date: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvedDate}</span></p>}
+                  {expenseForm.approvalMethod && <p className="text-white">Method: <span style={{ color: "var(--psg-muted)" }}>{expenseForm.approvalMethod}</span></p>}
+                </div>
+              ) : (
+                <p className="text-xs" style={{ color: "var(--psg-muted)" }}>No approval recorded</p>
+              )}
+            </div>
+
+            {/* PO Upload */}
+            <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>Purchase Order</span>
+                <label className="cursor-pointer text-xs px-2 py-1 rounded border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                  + Upload
+                  <input type="file" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); setPendingPO(p => [...p, ...files]); e.target.value = ""; }} />
+                </label>
+              </div>
+              {existingDocs.filter(d => d.type === "po").map(d => (
+                <div key={d.id} className="flex items-center justify-between py-1.5 px-2 rounded text-xs mb-1" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                  <a href={`/api/spend-documents/${d.id}`} target="_blank" rel="noopener noreferrer" className="truncate hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>{d.name}</a>
+                  <button type="button" onClick={() => deleteSpendDoc(d.id)} className="ml-2 shrink-0 text-red-400 hover:text-red-300">×</button>
+                </div>
+              ))}
+              {pendingPO.map((f, i) => (
+                <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded text-xs mb-1" style={{ backgroundColor: "rgba(59,130,246,0.08)" }}>
+                  <span className="truncate text-blue-300">{f.name} <span style={{ color: "var(--psg-muted)" }}>(pending)</span></span>
+                  <button type="button" onClick={() => setPendingPO(p => p.filter((_, j) => j !== i))} className="ml-2 shrink-0 text-red-400 hover:text-red-300">×</button>
+                </div>
+              ))}
+            </div>
+
+            {/* Invoices */}
+            <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>Invoices</span>
+                <label className="cursor-pointer text-xs px-2 py-1 rounded border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                  + Upload
+                  <input type="file" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); setPendingInvoices(inv => [...inv, ...files.map(f => ({ file: f, invoiceDate: "", invoiceAmount: "", issuedForPayment: false }))]); e.target.value = ""; }} />
+                </label>
+              </div>
+              {existingDocs.filter(d => d.type === "invoice").map(d => (
+                <div key={d.id} className="rounded p-2 mb-2 space-y-1.5" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid var(--psg-card-border)" }}>
+                  <div className="flex items-center justify-between">
+                    <a href={`/api/spend-documents/${d.id}`} target="_blank" rel="noopener noreferrer" className="text-xs truncate hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>{d.name}</a>
+                    <button type="button" onClick={() => deleteSpendDoc(d.id)} className="ml-2 shrink-0 text-xs text-red-400 hover:text-red-300">×</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" placeholder="Invoice date" className={inp + " text-xs py-1"} style={inpStyle}
+                      value={d.invoiceDate ? d.invoiceDate.slice(0, 10) : ""}
+                      onChange={(e) => patchSpendDoc(d.id, { invoiceDate: e.target.value || null } as any)} />
+                    <input type="number" step="0.01" placeholder="Amount (£)" className={inp + " text-xs py-1"} style={inpStyle}
+                      value={d.invoiceAmount ?? ""}
+                      onChange={(e) => patchSpendDoc(d.id, { invoiceAmount: e.target.value ? Number(e.target.value) : null } as any)} />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                    <input type="checkbox" checked={d.issuedForPayment}
+                      onChange={(e) => patchSpendDoc(d.id, { issuedForPayment: e.target.checked })} />
+                    Issued for Payment
+                  </label>
+                </div>
+              ))}
+              {pendingInvoices.map((inv, i) => (
+                <div key={i} className="rounded p-2 mb-2 space-y-1.5" style={{ backgroundColor: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.2)" }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-blue-300 truncate">{inv.file.name} <span style={{ color: "var(--psg-muted)" }}>(pending)</span></span>
+                    <button type="button" onClick={() => setPendingInvoices(a => a.filter((_, j) => j !== i))} className="ml-2 shrink-0 text-xs text-red-400 hover:text-red-300">×</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" placeholder="Invoice date" className={inp + " text-xs py-1"} style={inpStyle}
+                      value={inv.invoiceDate}
+                      onChange={(e) => setPendingInvoices(a => a.map((x, j) => j === i ? { ...x, invoiceDate: e.target.value } : x))} />
+                    <input type="number" step="0.01" placeholder="Amount (£)" className={inp + " text-xs py-1"} style={inpStyle}
+                      value={inv.invoiceAmount}
+                      onChange={(e) => setPendingInvoices(a => a.map((x, j) => j === i ? { ...x, invoiceAmount: e.target.value } : x))} />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                    <input type="checkbox" checked={inv.issuedForPayment}
+                      onChange={(e) => setPendingInvoices(a => a.map((x, j) => j === i ? { ...x, issuedForPayment: e.target.checked } : x))} />
+                    Issued for Payment
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            <Btns onCancel={() => { setShowExpenseForm(null); setEditingExpense(null); setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); }} label={docsUploading ? "Saving…" : editingExpense ? "Save Changes" : "Add Spend"} />
           </form>
+        </Modal>
+      )}
+
+      {/* Approval sub-modal */}
+      {showApprovalModal && (
+        <Modal title="Approval Details" onClose={() => setShowApprovalModal(false)}>
+          <div className="space-y-3">
+            <F label="Approved By"><input className={inp} style={inpStyle} value={expenseForm.approvedBy} onChange={(e) => setExpenseForm(f => ({ ...f, approvedBy: e.target.value }))} placeholder="Name or role" /></F>
+            <F label="Approved Date"><input type="date" className={inp} style={inpStyle} value={expenseForm.approvedDate} onChange={(e) => setExpenseForm(f => ({ ...f, approvedDate: e.target.value }))} /></F>
+            <F label="Approval Method"><input className={inp} style={inpStyle} value={expenseForm.approvalMethod} onChange={(e) => setExpenseForm(f => ({ ...f, approvalMethod: e.target.value }))} placeholder="e.g. Email, Board meeting, Verbal" /></F>
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => setShowApprovalModal(false)} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "var(--psg-blue)" }}>Done</button>
+              {expenseForm.approvedBy && (
+                <button type="button" onClick={() => { setExpenseForm(f => ({ ...f, approvedBy: "", approvedDate: "", approvalMethod: "" })); setShowApprovalModal(false); }} className="border px-4 py-2 rounded text-sm text-red-400 hover:bg-red-900/20" style={{ borderColor: "rgba(248,113,113,0.3)" }}>Clear</button>
+              )}
+            </div>
+          </div>
         </Modal>
       )}
 

@@ -69,14 +69,15 @@ export async function GET() {
       const venueName = stop.venue?.name ?? "Unknown Venue";
       const city = stop.venue?.city ? ` · ${stop.venue.city}` : "";
       const href = `/productions/${prod.id}?section=tour`;
+      const venueLabel = `${venueName}${city}`;
       if (stop.loadInDate) {
-        events.push({ id: `tour-li-${stop.id}`, type: "tour_stop", title: `${prod.name} — Load in · ${venueName}${city}`, production: prod.name, productionId: prod.id, startDate: stop.loadInDate, endDate: null, notes: stop.notes, color, href });
+        events.push({ id: `tour-li-${stop.id}`, type: "tour_stop", title: `${prod.name} — Load in · ${venueLabel}`, production: prod.name, productionId: prod.id, startDate: stop.loadInDate, endDate: null, notes: stop.notes, color, href, venue: venueLabel });
       }
       if (stop.performanceStart) {
-        events.push({ id: `tour-perf-${stop.id}`, type: "tour_stop", title: `${prod.name} · ${venueName}${city}`, production: prod.name, productionId: prod.id, startDate: stop.performanceStart, endDate: stop.performanceEnd, notes: stop.notes, color, href });
+        events.push({ id: `tour-perf-${stop.id}`, type: "tour_stop", title: `${prod.name} · ${venueLabel}`, production: prod.name, productionId: prod.id, startDate: stop.performanceStart, endDate: stop.performanceEnd, notes: stop.notes, color, href, venue: venueLabel });
       }
       if (stop.endDate) {
-        events.push({ id: `tour-go-${stop.id}`, type: "tour_stop", title: `${prod.name} — Get out · ${venueName}${city}`, production: prod.name, productionId: prod.id, startDate: stop.endDate, endDate: null, notes: stop.notes, color, href });
+        events.push({ id: `tour-go-${stop.id}`, type: "tour_stop", title: `${prod.name} — Get out · ${venueLabel}`, production: prod.name, productionId: prod.id, startDate: stop.endDate, endDate: null, notes: stop.notes, color, href, venue: venueLabel });
       }
     });
   });

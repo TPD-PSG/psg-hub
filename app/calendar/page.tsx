@@ -18,6 +18,7 @@ type CalEvent = {
   notes?: string | null;
   color: string;
   href: string;
+  venue?: string | null;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -374,9 +375,9 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
   // Show ALL productions (not just ones with assignments)
   const allProductions = productions;
 
-  // Build key-date + tour-stop activity lookup: prodId → date → activity label
-  const kdLookup: Record<number, Record<string, string>> = {};
-  function addToKdLookup(pid: number, startStr: string, endStr: string | null, activity: string) {
+  // Build key-date + tour-stop activity lookup: prodId → date → { activity, venue? }
+  const kdLookup: Record<number, Record<string, { activity: string; venue?: string }>> = {};
+  function addToKdLookup(pid: number, startStr: string, endStr: string | null, activity: string, venue?: string) {
     if (!kdLookup[pid]) kdLookup[pid] = {};
     const s = startStr.slice(0, 10) < monthStart ? monthStart : startStr.slice(0, 10);
     const e = (endStr ?? startStr).slice(0, 10) > monthEnd ? monthEnd : (endStr ?? startStr).slice(0, 10);
@@ -384,7 +385,7 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
     const end = new Date(e + "T12:00:00");
     while (cur <= end) {
       const ds = cur.toISOString().slice(0, 10);
-      if (!kdLookup[pid][ds]) kdLookup[pid][ds] = activity;
+      if (!kdLookup[pid][ds]) kdLookup[pid][ds] = { activity, venue };
       cur.setDate(cur.getDate() + 1);
     }
   }
@@ -394,12 +395,11 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
       const activity = KD_TO_ACTIVITY[ev.kdType];
       if (activity) addToKdLookup(ev.productionId, ev.startDate, ev.endDate, activity);
     } else if (ev.type === "tour_stop") {
-      // tour_stop titles contain "Load in", performance, "Get out" — infer activity from title
       const title = ev.title.toLowerCase();
       const activity = title.includes("load in") || title.includes("get in") ? "GET IN"
         : title.includes("get out") ? "OUT"
         : "PERF";
-      addToKdLookup(ev.productionId, ev.startDate, ev.endDate, activity);
+      addToKdLookup(ev.productionId, ev.startDate, ev.endDate, activity, ev.venue ?? undefined);
     }
   });
 
@@ -421,7 +421,7 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
 
   function openAdd(date?: string, productionId?: number) {
     setEditAssignment(null);
-    const presetActivity = date && productionId ? (kdLookup[productionId]?.[date] ?? "") : "";
+    const presetActivity = date && productionId ? (kdLookup[productionId]?.[date]?.activity ?? "") : "";
     setForm({ userId: "", productionId: productionId ? String(productionId) : "", startDate: date ?? "", endDate: date ?? "", activityType: presetActivity, notes: "" });
     setShowModal(true);
   }
@@ -515,13 +515,16 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
                     {allProductions.map(p => {
                       const cellItems = lookup[p.id]?.[dateStr] ?? [];
                       // Activity: prefer manually set on assignment, fall back to key date from production schedule
-                      const actType = cellItems[0]?.activityType ?? kdLookup[p.id]?.[dateStr] ?? null;
+                      const kdCell = kdLookup[p.id]?.[dateStr];
+                      const actType = cellItems[0]?.activityType ?? kdCell?.activity ?? null;
                       const actColor = actType ? (ACTIVITY_COLORS[actType] ?? "#6b7280") : null;
-                      const actFromKd = !cellItems[0]?.activityType && !!actType; // greyed if from key date only
+                      const actFromKd = !cellItems[0]?.activityType && !!actType;
+                      const venueLabel = actFromKd ? kdCell?.venue : null;
                       return (
                         <>
                           <td key={`${p.id}-act-${dateStr}`} className="border-r text-center cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", backgroundColor: actColor ? actColor + (actFromKd ? "55" : "dd") : "transparent", width: 64, minWidth: 64 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
                             {actType && <span className="font-bold text-white px-1 py-0.5 block leading-5" style={{ fontSize: 10, opacity: actFromKd ? 0.7 : 1 }}>{actType}</span>}
+                            {venueLabel && <span className="text-white block px-0.5 leading-3 pb-0.5" style={{ fontSize: 8, opacity: 0.85 }}>{venueLabel}</span>}
                           </td>
                           <td key={`${p.id}-st-${dateStr}`} className="border-r cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", minWidth: 72 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
                             <div className="px-1 py-0.5 flex flex-col gap-px min-h-[22px]">

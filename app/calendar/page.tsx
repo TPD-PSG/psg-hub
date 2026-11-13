@@ -289,7 +289,7 @@ function CalendarInner() {
           </div>
         ) : (
           /* ── Schedule view ── */
-          <ScheduleView year={year} month={month} assignments={assignments} productions={allProductions} onRefresh={refreshAssignments} />
+          <ScheduleView year={year} month={month} assignments={assignments} productions={allProductions} events={events} onRefresh={refreshAssignments} />
         )}
 
         {/* Selected day panel — month view only */}
@@ -328,10 +328,24 @@ function CalendarInner() {
 
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-function ScheduleView({ year, month, assignments, productions, onRefresh }: {
+// Map production key date types → schedule activity labels
+const KD_TO_ACTIVITY: Record<string, string> = {
+  get_in: "GET IN", load_in: "GET IN",
+  fit_up: "FIT UP",
+  technical_rehearsal: "TECH",
+  dress_rehearsal: "DRESS",
+  preview: "PREVIEW",
+  performance: "PERF",
+  get_out: "OUT",
+  rehearsal_period: "REH",
+  first_rehearsal: "REH",
+};
+
+function ScheduleView({ year, month, assignments, productions, events, onRefresh }: {
   year: number; month: number;
   assignments: StaffAssignment[];
   productions: ProductionSummary[];
+  events: CalEvent[];
   onRefresh: () => void;
 }) {
   const [users, setUsers] = useState<{ id: number; name: string }[]>([]);
@@ -360,6 +374,25 @@ function ScheduleView({ year, month, assignments, productions, onRefresh }: {
   // Show ALL productions (not just ones with assignments)
   const allProductions = productions;
 
+  // Build key-date activity lookup: prodId → date → activity label
+  // Spans multi-day key dates across every day in the range
+  const kdLookup: Record<number, Record<string, string>> = {};
+  events.filter(ev => ev.type === "key_date" && ev.productionId !== null && ev.kdType).forEach(ev => {
+    const activity = KD_TO_ACTIVITY[ev.kdType!];
+    if (!activity) return;
+    const pid = ev.productionId!;
+    if (!kdLookup[pid]) kdLookup[pid] = {};
+    const s = ev.startDate.slice(0, 10) < monthStart ? monthStart : ev.startDate.slice(0, 10);
+    const e = (ev.endDate ?? ev.startDate).slice(0, 10) > monthEnd ? monthEnd : (ev.endDate ?? ev.startDate).slice(0, 10);
+    let cur = new Date(s + "T12:00:00");
+    const end = new Date(e + "T12:00:00");
+    while (cur <= end) {
+      const ds = cur.toISOString().slice(0, 10);
+      if (!kdLookup[pid][ds]) kdLookup[pid][ds] = activity; // first key date wins per day
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
   // Build lookup: prodId → date → assignments[]
   const lookup: Record<number, Record<string, StaffAssignment[]>> = {};
   monthAssignments.forEach(a => {
@@ -378,7 +411,8 @@ function ScheduleView({ year, month, assignments, productions, onRefresh }: {
 
   function openAdd(date?: string, productionId?: number) {
     setEditAssignment(null);
-    setForm({ userId: "", productionId: productionId ? String(productionId) : "", startDate: date ?? "", endDate: date ?? "", activityType: "", notes: "" });
+    const presetActivity = date && productionId ? (kdLookup[productionId]?.[date] ?? "") : "";
+    setForm({ userId: "", productionId: productionId ? String(productionId) : "", startDate: date ?? "", endDate: date ?? "", activityType: presetActivity, notes: "" });
     setShowModal(true);
   }
 
@@ -470,12 +504,14 @@ function ScheduleView({ year, month, assignments, productions, onRefresh }: {
                     </td>
                     {allProductions.map(p => {
                       const cellItems = lookup[p.id]?.[dateStr] ?? [];
-                      const actType = cellItems[0]?.activityType;
+                      // Activity: prefer manually set on assignment, fall back to key date from production schedule
+                      const actType = cellItems[0]?.activityType ?? kdLookup[p.id]?.[dateStr] ?? null;
                       const actColor = actType ? (ACTIVITY_COLORS[actType] ?? "#6b7280") : null;
+                      const actFromKd = !cellItems[0]?.activityType && !!actType; // greyed if from key date only
                       return (
                         <>
-                          <td key={`${p.id}-act-${dateStr}`} className="border-r text-center cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", backgroundColor: actColor ? actColor + "dd" : "transparent", width: 64, minWidth: 64 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
-                            {actType && <span className="font-bold text-white px-1 py-0.5 block leading-5" style={{ fontSize: 10 }}>{actType}</span>}
+                          <td key={`${p.id}-act-${dateStr}`} className="border-r text-center cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", backgroundColor: actColor ? actColor + (actFromKd ? "55" : "dd") : "transparent", width: 64, minWidth: 64 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
+                            {actType && <span className="font-bold text-white px-1 py-0.5 block leading-5" style={{ fontSize: 10, opacity: actFromKd ? 0.7 : 1 }}>{actType}</span>}
                           </td>
                           <td key={`${p.id}-st-${dateStr}`} className="border-r cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", minWidth: 72 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
                             <div className="px-1 py-0.5 flex flex-col gap-px min-h-[22px]">

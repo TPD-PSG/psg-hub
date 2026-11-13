@@ -108,7 +108,7 @@ const ACTIVITY_COLORS: Record<string, string> = {
   "TBC":    "#6b7280",
 };
 
-type ProductionSummary = { id: number; name: string; color: string | null; venue: string | null };
+type ProductionSummary = { id: number; name: string; color: string | null; venue: string | null; internalStatus: string | null; productionManager: string | null };
 
 function CalendarInner() {
   const searchParams = useSearchParams();
@@ -126,9 +126,11 @@ function CalendarInner() {
   useEffect(() => {
     fetch("/api/calendar").then(r => r.json()).then(d => { if (Array.isArray(d)) setEvents(d); });
     fetch("/api/productions").then(r => r.json()).then(d => {
-      if (Array.isArray(d)) setAllProductions(d.map((p: { id: number; name: string; color: string | null; venue: string | null; venueRef?: { name: string; city: string | null } | null }) => ({
+      if (Array.isArray(d)) setAllProductions(d.map((p: { id: number; name: string; color: string | null; venue: string | null; venueRef?: { name: string; city: string | null } | null; internalStatus?: string | null; productionManager?: string | null }) => ({
         id: p.id, name: p.name, color: p.color,
         venue: p.venueRef ? `${p.venueRef.name}${p.venueRef.city ? ", " + p.venueRef.city : ""}` : p.venue,
+        internalStatus: p.internalStatus ?? "pencil",
+        productionManager: p.productionManager ?? null,
       })));
     });
     refreshAssignments();
@@ -487,6 +489,21 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
         <div className="rounded-xl border overflow-x-auto" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
           <table className="text-xs border-collapse" style={{ minWidth: 300 + activeProductions.length * 152 }}>
             <thead>
+              {/* CONFIRMED / PENCIL status row */}
+              <tr>
+                <th className="sticky left-0 z-10 border-b border-r" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }} />
+                {activeProductions.map(p => {
+                  const confirmed = p.internalStatus === "confirmed";
+                  return (
+                    <th key={p.id} colSpan={2} className="border-b border-r px-2 py-1.5 text-center" style={{ borderColor: "var(--psg-card-border)", backgroundColor: confirmed ? "rgba(16,185,129,0.25)" : "rgba(245,158,11,0.15)" }}>
+                      <span className="text-xs font-bold tracking-widest uppercase" style={{ color: confirmed ? "#10b981" : "#f59e0b" }}>
+                        {confirmed ? "Confirmed" : "Pencil"}
+                      </span>
+                    </th>
+                  );
+                })}
+              </tr>
+              {/* Production name row */}
               <tr>
                 <th className="sticky left-0 z-10 px-3 py-2 text-left border-b border-r w-28" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }} />
                 {activeProductions.map(p => (
@@ -496,6 +513,16 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
                   </th>
                 ))}
               </tr>
+              {/* Proj Lead row */}
+              <tr className="border-b" style={{ borderColor: "var(--psg-card-border)" }}>
+                <th className="sticky left-0 z-10 px-3 py-1 border-r text-left" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)", fontSize: 10 }}>PROJ LEAD</th>
+                {activeProductions.map(p => (
+                  <th key={`${p.id}-pm`} colSpan={2} className="border-b border-r px-2 py-1 text-center font-bold" style={{ borderColor: "var(--psg-card-border)", color: "white", fontSize: 10, backgroundColor: p.color ? p.color + "22" : "transparent" }}>
+                    {p.productionManager ? p.productionManager.toUpperCase() : <span style={{ color: "var(--psg-muted)", fontWeight: "normal" }}>—</span>}
+                  </th>
+                ))}
+              </tr>
+              {/* Activity / Staff sub-headers */}
               <tr className="border-b" style={{ borderColor: "var(--psg-card-border)" }}>
                 <th className="sticky left-0 z-10 px-3 py-1 border-r" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }} />
                 {activeProductions.map(p => (

@@ -48,6 +48,8 @@ model Production {
   endDate     DateTime?
   status              String    @default("planning")
   announcementStatus  String    @default("not_announced")
+  internalStatus      String    @default("pencil") // pencil | confirmed
+  productionManager   String?   // free-text proj lead(s), e.g. "Toby / Tom"
   color       String?
   notes         String?
   reportEmail   String?

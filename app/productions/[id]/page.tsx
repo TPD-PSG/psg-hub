@@ -475,7 +475,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [eventForm, setEventForm] = useState({ title: "", type: "Rehearsal", startAt: "", endAt: "", location: "", notes: "" });
   const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" });
   const [expenseForm, setExpenseForm] = useState<typeof BLANK_EXPENSE & { id?: number }>(BLANK_EXPENSE);
-  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", color: "", notes: "", reportEmail: "", sharepointUrl: "" });
+  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", internalStatus: "pencil", productionManager: "", color: "", notes: "", reportEmail: "", sharepointUrl: "" });
 
   useEffect(() => {
     reload();
@@ -558,7 +558,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       isTour: data.isTour ?? false,
       startDate: data.startDate ? data.startDate.slice(0, 10) : "",
       endDate: data.endDate ? data.endDate.slice(0, 10) : "",
-      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", color: data.color ?? "", notes: data.notes ?? "", reportEmail: data.reportEmail ?? "", sharepointUrl: data.sharepointUrl ?? "",
+      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", internalStatus: data.internalStatus ?? "pencil", productionManager: data.productionManager ?? "", color: data.color ?? "", notes: data.notes ?? "", reportEmail: data.reportEmail ?? "", sharepointUrl: data.sharepointUrl ?? "",
     });
   }
 
@@ -3290,7 +3290,23 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               <F label="Type"><input className={inp} style={inpStyle} value={prodForm.type} onChange={(e) => setProdForm((f) => ({ ...f, type: e.target.value }))} /></F>
               <F label="Status"><select className={inp} style={inpStyle} value={prodForm.status} onChange={(e) => setProdForm((f) => ({ ...f, status: e.target.value }))}>{STATUS_OPTS.map((s) => <option key={s}>{s}</option>)}</select></F>
               <F label="Announcement"><select className={inp} style={inpStyle} value={prodForm.announcementStatus} onChange={(e) => setProdForm((f) => ({ ...f, announcementStatus: e.target.value }))}>{ANN_OPTS.map((s) => <option key={s} value={s}>{ANN_LABELS[s]}</option>)}</select></F>
+              <F label="Internal status">
+                <div className="flex gap-2">
+                  {["pencil", "confirmed"].map(s => (
+                    <button key={s} type="button" onClick={() => setProdForm(f => ({ ...f, internalStatus: s }))}
+                      className="flex-1 py-2 rounded text-xs font-bold uppercase tracking-wider border transition-colors"
+                      style={{
+                        borderColor: prodForm.internalStatus === s ? (s === "confirmed" ? "#10b981" : "#f59e0b") : "var(--psg-card-border)",
+                        backgroundColor: prodForm.internalStatus === s ? (s === "confirmed" ? "rgba(16,185,129,0.2)" : "rgba(245,158,11,0.2)") : "transparent",
+                        color: prodForm.internalStatus === s ? (s === "confirmed" ? "#10b981" : "#f59e0b") : "var(--psg-muted)",
+                      }}>
+                      {s === "confirmed" ? "Confirmed" : "Pencil"}
+                    </button>
+                  ))}
+                </div>
+              </F>
             </div>
+            <F label="Proj Lead / Production Manager"><input className={inp} style={inpStyle} value={prodForm.productionManager} onChange={(e) => setProdForm((f) => ({ ...f, productionManager: e.target.value }))} placeholder="e.g. Toby / Tom" /></F>
             <F label="Venue (from database)">
               <select className={inp} style={inpStyle} value={prodForm.venueId} onChange={e => setProdForm(f => ({ ...f, venueId: e.target.value }))}>
                 <option value="">— none / freetext below —</option>

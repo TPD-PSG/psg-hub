@@ -424,7 +424,8 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
 
   // Filter to productions with any activity this month
   const activeProductions = productions.filter(p =>
-    kdLookup[p.id] !== undefined || lookup[p.id] !== undefined
+    (kdLookup[p.id] && Object.keys(kdLookup[p.id]).length > 0) ||
+    (lookup[p.id] && Object.keys(lookup[p.id]).length > 0)
   );
 
   function openAdd(date?: string, productionId?: number) {

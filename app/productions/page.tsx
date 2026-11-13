@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import UserAvatar from "@/components/UserAvatar";
 
 type TeamMember = { user: { id: number; name: string; email: string; avatarUrl?: string | null } };
 type Production = {
   id: number; name: string; type: string; venue: string | null; status: string;
   announcementStatus?: string;
+  logoUrl?: string | null;
+  color?: string | null;
   team?: TeamMember[];
 };
 
@@ -57,6 +60,13 @@ export default function ProductionsPage() {
             className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-white/5"
             style={{ borderColor: "var(--psg-card-border)" }}
           >
+            <div className="shrink-0 w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center"
+              style={{ backgroundColor: p.logoUrl ? "transparent" : (p.color ?? "var(--psg-card-border)") }}>
+              {p.logoUrl
+                ? <Image src={p.logoUrl} alt={p.name} width={40} height={40} className="object-contain w-full h-full" />
+                : <span className="text-xs font-bold text-white/60">{p.name.slice(0, 2).toUpperCase()}</span>
+              }
+            </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-white">{p.name}</span>

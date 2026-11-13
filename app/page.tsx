@@ -451,6 +451,7 @@ export default function HomePage() {
         <CompactTile href="/roadmap" icon="💡" title="Ideas & Roadmap" sub="Feature requests & improvements" />
         <CompactTile href="/helpdesk" icon="🎫" title="Help Desk" sub="Report an issue or request help" />
         <CompactTile href="/ask" icon="🤖" title="Ask Me Anything" sub="Questions answered from company docs" />
+        <CompactTile href="/fun" icon="🎭" title="Fun Corner" sub="This is not a place of entertainment" />
       </div>
 
       {role === "admin" && (

@@ -23,6 +23,7 @@ model User {
   tasksSignoff        Task[]           @relation("TaskSignoff")
   tasksCreated        Task[]           @relation("TaskCreatedBy")
   notifications       Notification[]
+  funSubmissions      FunSubmission[]
   productionTeams     ProductionTeam[]
   roadmapItems        RoadmapItem[]
   staffAssignments    StaffAssignment[]
@@ -431,6 +432,37 @@ model Task {
   createdByUser   User?     @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+model FunRoundup {
+  id          Int             @id @default(autoincrement())
+  monthYear   String          @unique // "2026-11"
+  sentAt      DateTime
+  createdAt   DateTime        @default(now())
+  submissions FunSubmission[]
+}
+
+model FunSubmission {
+  id          Int         @id @default(autoincrement())
+  authorId    Int
+  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title       String
+  story       String
+  monthYear   String      // "2026-11" — the month it was submitted
+  roundupId   Int?
+  roundup     FunRoundup? @relation(fields: [roundupId], references: [id], onDelete: SetNull)
+  media       FunMedia[]
+  createdAt   DateTime    @default(now())
+}
+
+model FunMedia {
+  id           Int           @id @default(autoincrement())
+  submissionId Int
+  submission   FunSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  name         String
+  mime         String
+  data         String        // base64
+  createdAt    DateTime      @default(now())
 }
 
 model Notification {

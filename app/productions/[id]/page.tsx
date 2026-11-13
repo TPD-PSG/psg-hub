@@ -2080,10 +2080,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="grid grid-cols-2 gap-3">
               <F label="Payment Date"><input type="date" className={inp} style={inpStyle} value={psgExpenseForm.paymentDue} onChange={(e) => setPSGExpenseForm(f => ({ ...f, paymentDue: e.target.value }))} /></F>
               <F label="Payment Method">
-                <select className={inp} style={inpStyle} value={psgExpenseForm.paymentMethod} onChange={(e) => setPSGExpenseForm(f => ({ ...f, paymentMethod: e.target.value }))}>
+                <select className={inp} style={inpStyle} value={["Soldo", "Personal Card", "PSG Trade Account", "TWS Trade Account"].includes(psgExpenseForm.paymentMethod) || psgExpenseForm.paymentMethod === "" ? psgExpenseForm.paymentMethod : "Other"} onChange={(e) => setPSGExpenseForm(f => ({ ...f, paymentMethod: e.target.value === "Other" ? "" : e.target.value }))}>
                   <option value="">— select —</option>
-                  {["BACS", "Card", "Cash", "Cheque", "Direct Debit", "PayPal", "Other"].map(m => <option key={m} value={m}>{m}</option>)}
+                  {["Soldo", "Personal Card", "PSG Trade Account", "TWS Trade Account", "Other"].map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
+                {!["Soldo", "Personal Card", "PSG Trade Account", "TWS Trade Account", ""].includes(psgExpenseForm.paymentMethod) && (
+                  <input className={`${inp} mt-1`} style={inpStyle} placeholder="Specify payment method…" value={psgExpenseForm.paymentMethod} onChange={(e) => setPSGExpenseForm(f => ({ ...f, paymentMethod: e.target.value }))} />
+                )}
               </F>
             </div>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={psgExpenseForm.notes} onChange={(e) => setPSGExpenseForm(f => ({ ...f, notes: e.target.value }))} /></F>

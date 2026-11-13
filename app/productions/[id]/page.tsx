@@ -2872,13 +2872,16 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             )}
             {docs.length === 0 && <p className="text-xs text-center py-4" style={{ color: "var(--psg-muted)" }}>No files yet</p>}
             <div
-              className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-blue-400/50 transition-colors"
+              className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors"
               style={{ borderColor: "var(--psg-card-border)" }}
               onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.onchange = (e) => { const files = Array.from((e.target as HTMLInputElement).files ?? []); if (files.length) uploadHSDocs(files, folderKey, stopId); }; inp.click(); }}
+              onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-blue)"; (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(59,130,246,0.06)"; }}
+              onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-card-border)"; (e.currentTarget as HTMLElement).style.backgroundColor = ""; }}
+              onDrop={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-card-border)"; (e.currentTarget as HTMLElement).style.backgroundColor = ""; const files = Array.from(e.dataTransfer.files); if (files.length) uploadHSDocs(files, folderKey, stopId); }}
             >
               {hsUploading && hsUploadStop === stopId
                 ? <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Uploading…</p>
-                : <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Click to upload files</p>}
+                : <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Drop files here or click to upload</p>}
             </div>
           </div>
         );

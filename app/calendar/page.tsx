@@ -372,8 +372,9 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
     return s <= monthEnd && e >= monthStart;
   });
 
-  // Show ALL productions (not just ones with assignments)
-  const allProductions = productions;
+  // Only show productions with activity (key dates, tour stops, or assignments) this month
+  // kdLookup and lookup are built below — filter after both are populated
+  const allProductions = productions; // placeholder; filtered version computed after lookups
 
   // Build key-date + tour-stop activity lookup: prodId → date → { activity, venue? }
   const kdLookup: Record<number, Record<string, { activity: string; venue?: string }>> = {};
@@ -418,6 +419,11 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
       cur.setDate(cur.getDate() + 1);
     }
   });
+
+  // Filter to productions with any activity this month
+  const activeProductions = productions.filter(p =>
+    kdLookup[p.id] !== undefined || lookup[p.id] !== undefined
+  );
 
   function openAdd(date?: string, productionId?: number) {
     setEditAssignment(null);
@@ -473,17 +479,17 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
         </button>
       </div>
 
-      {allProductions.length === 0 ? (
+      {activeProductions.length === 0 ? (
         <div className="text-center py-16 rounded-xl border" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-          No productions found. Add productions first.
+          No productions with scheduled activity in {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][month]} {year}.
         </div>
       ) : (
         <div className="rounded-xl border overflow-x-auto" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-          <table className="text-xs border-collapse" style={{ minWidth: 300 + allProductions.length * 160 }}>
+          <table className="text-xs border-collapse" style={{ minWidth: 300 + activeProductions.length * 152 }}>
             <thead>
               <tr>
                 <th className="sticky left-0 z-10 px-3 py-2 text-left border-b border-r w-28" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }} />
-                {allProductions.map(p => (
+                {activeProductions.map(p => (
                   <th key={p.id} colSpan={2} className="border-b border-r px-2 py-2 text-center font-bold text-white" style={{ borderColor: "var(--psg-card-border)", backgroundColor: p.color ? p.color + "33" : "rgba(255,255,255,0.04)", minWidth: 160 }}>
                     <div className="truncate" title={p.name}>{p.name}</div>
                     {p.venue && <div className="font-normal truncate mt-0.5" style={{ color: "var(--psg-muted)", fontSize: 10 }}>{p.venue}</div>}
@@ -492,10 +498,10 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
               </tr>
               <tr className="border-b" style={{ borderColor: "var(--psg-card-border)" }}>
                 <th className="sticky left-0 z-10 px-3 py-1 border-r" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }} />
-                {allProductions.map(p => (
+                {activeProductions.map(p => (
                   <>
-                    <th key={`${p.id}-act`} className="px-2 py-1 font-normal text-center border-r w-16" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Activity</th>
-                    <th key={`${p.id}-st`} className="px-2 py-1 font-normal text-center border-r" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Staff</th>
+                    <th key={`${p.id}-act`} className="px-2 py-1 font-normal text-center border-r" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)", width: 96, minWidth: 96 }}>Activity</th>
+                    <th key={`${p.id}-st`} className="px-2 py-1 font-normal text-center border-r" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)", width: 56, minWidth: 56 }}>Staff</th>
                   </>
                 ))}
               </tr>
@@ -512,7 +518,7 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
                       <span className="font-semibold" style={{ color: isToday ? "var(--psg-blue)" : isWeekend ? "rgba(255,255,255,0.3)" : "white" }}>{DOW[dow]}</span>
                       <span className="ml-1.5" style={{ color: isToday ? "var(--psg-blue)" : "var(--psg-muted)" }}>{date.getDate()}/{date.getMonth()+1}</span>
                     </td>
-                    {allProductions.map(p => {
+                    {activeProductions.map(p => {
                       const cellItems = lookup[p.id]?.[dateStr] ?? [];
                       // Activity: prefer manually set on assignment, fall back to key date from production schedule
                       const kdCell = kdLookup[p.id]?.[dateStr];
@@ -522,21 +528,21 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
                       const venueLabel = actFromKd ? kdCell?.venue : null;
                       return (
                         <>
-                          <td key={`${p.id}-act-${dateStr}`} className="border-r text-center cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", backgroundColor: actColor ? actColor + (actFromKd ? "55" : "dd") : "transparent", width: 64, minWidth: 64 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
+                          <td key={`${p.id}-act-${dateStr}`} className="border-r text-center cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", backgroundColor: actColor ? actColor + (actFromKd ? "55" : "dd") : "transparent", width: 96, minWidth: 96 }} onClick={() => openAdd(dateStr, p.id)}>
                             {actType && <span className="font-bold text-white px-1 py-0.5 block leading-5" style={{ fontSize: 10, opacity: actFromKd ? 0.7 : 1 }}>{actType}</span>}
                             {venueLabel && <span className="text-white block px-0.5 leading-3 pb-0.5" style={{ fontSize: 8, opacity: 0.85 }}>{venueLabel}</span>}
                           </td>
-                          <td key={`${p.id}-st-${dateStr}`} className="border-r cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", minWidth: 72 }} onClick={() => cellItems.length > 0 ? openEdit(cellItems[0]) : openAdd(dateStr, p.id)}>
-                            <div className="px-1 py-0.5 flex flex-col gap-px min-h-[22px]">
+                          <td key={`${p.id}-st-${dateStr}`} className="border-r" style={{ borderColor: "var(--psg-card-border)", width: 56, minWidth: 56 }}>
+                            <div className="px-0.5 py-0.5 flex flex-col gap-px min-h-[22px]">
                               {cellItems.map(a => {
                                 const badgeBg = a.user.color ?? "#eab308";
-                                const badgeFg = "#fff";
                                 return (
-                                  <span key={a.id} className="font-bold px-1.5 rounded text-center block leading-5" style={{ backgroundColor: badgeBg, color: badgeFg, fontSize: 10 }}>
+                                  <span key={a.id} className="font-bold px-1 rounded text-center block leading-5 cursor-pointer hover:opacity-80" style={{ backgroundColor: badgeBg, color: "#fff", fontSize: 9 }} onClick={() => openEdit(a)}>
                                     {a.user.name.split(" ")[0].toUpperCase()}
                                   </span>
                                 );
                               })}
+                              <span className="block text-center leading-4 cursor-pointer opacity-0 hover:opacity-100 transition-opacity" style={{ fontSize: 10, color: "var(--psg-muted)" }} onClick={() => openAdd(dateStr, p.id)}>+</span>
                             </div>
                           </td>
                         </>
@@ -576,7 +582,7 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
                 <label className="text-xs mb-1 block" style={{ color: "var(--psg-muted)" }}>Production *</label>
                 <select className={inp} style={inpStyle} value={form.productionId} onChange={e => setForm(f => ({ ...f, productionId: e.target.value }))}>
                   <option value="">Select…</option>
-                  {allProductions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {productions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">

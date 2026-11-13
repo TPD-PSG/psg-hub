@@ -92,7 +92,7 @@ export default function FunPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || !story.trim()) return;
+    if (!title.trim()) return;
     setSubmitting(true);
     const fd = new FormData();
     fd.append("title", title.trim());
@@ -166,8 +166,8 @@ export default function FunPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>The story *</label>
-            <textarea required rows={5} className={inp} style={inpStyle} placeholder="Tell us what happened…" value={story} onChange={e => setStory(e.target.value)} />
+            <label className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>The story</label>
+            <textarea rows={5} className={inp} style={inpStyle} placeholder="Tell us what happened… (optional)" value={story} onChange={e => setStory(e.target.value)} />
           </div>
 
           {/* Media upload */}

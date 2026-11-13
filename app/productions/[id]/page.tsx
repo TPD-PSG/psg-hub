@@ -372,6 +372,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const contactImportRef = useRef<HTMLInputElement>(null);
   const [contactImportState, setContactImportState] = useState<"idle" | "uploading" | "reviewing" | "importing">("idle");
   const [contactImportError, setContactImportError] = useState<string | null>(null);
+  const [contactDragOver, setContactDragOver] = useState(false);
   type ImportedContact = { section: string; name: string; company?: string; role?: string; phone?: string; email?: string; notes?: string; _selected: boolean };
   const [importedContacts, setImportedContacts] = useState<ImportedContact[]>([]);
 
@@ -2483,6 +2484,18 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               </button>
             </div>
           </div>
+
+          {contactImportState === "idle" && (
+            <div
+              className="rounded border-2 border-dashed py-4 text-center text-xs transition-colors"
+              style={{ borderColor: contactDragOver ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: contactDragOver ? "rgba(59,130,246,0.08)" : "transparent", color: "var(--psg-muted)" }}
+              onDragOver={e => { e.preventDefault(); setContactDragOver(true); }}
+              onDragLeave={() => setContactDragOver(false)}
+              onDrop={e => { e.preventDefault(); setContactDragOver(false); const file = e.dataTransfer.files[0]; if (file) handleContactImport(file); }}
+            >
+              Drop a contact sheet here — PDF, Excel, Word or CSV
+            </div>
+          )}
 
           {contactImportError && (
             <div className="text-sm text-red-400 rounded px-3 py-2 bg-red-900/20 flex items-center justify-between">

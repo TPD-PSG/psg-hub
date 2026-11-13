@@ -47,8 +47,9 @@ model Production {
   status              String    @default("planning")
   announcementStatus  String    @default("not_announced")
   color       String?
-  notes       String?
-  reportEmail String?
+  notes         String?
+  reportEmail   String?
+  sharepointUrl String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

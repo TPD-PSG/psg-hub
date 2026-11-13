@@ -110,6 +110,7 @@ type Production = {
   color: string | null;
   notes: string | null;
   reportEmail: string | null;
+  sharepointUrl: string | null;
   events: Event[];
   budgetLines: BudgetLine[];
   crew: ProductionCrew[];
@@ -376,7 +377,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [eventForm, setEventForm] = useState({ title: "", type: "Rehearsal", startAt: "", endAt: "", location: "", notes: "" });
   const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", budgeted: "", notes: "" });
   const [expenseForm, setExpenseForm] = useState<typeof BLANK_EXPENSE & { id?: number }>(BLANK_EXPENSE);
-  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", color: "", notes: "", reportEmail: "" });
+  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", color: "", notes: "", reportEmail: "", sharepointUrl: "" });
 
   useEffect(() => {
     reload();
@@ -459,7 +460,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       isTour: data.isTour ?? false,
       startDate: data.startDate ? data.startDate.slice(0, 10) : "",
       endDate: data.endDate ? data.endDate.slice(0, 10) : "",
-      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", color: data.color ?? "", notes: data.notes ?? "", reportEmail: data.reportEmail ?? "",
+      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", color: data.color ?? "", notes: data.notes ?? "", reportEmail: data.reportEmail ?? "", sharepointUrl: data.sharepointUrl ?? "",
     });
   }
 
@@ -645,28 +646,34 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
-          {/* Production logo */}
-          <label
-            className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center cursor-pointer border border-dashed hover:border-white/40 transition-colors group"
-            style={{ borderColor: prod.logoUrl ? "transparent" : "var(--psg-card-border)", backgroundColor: prod.logoUrl ? "transparent" : "var(--psg-card-bg)" }}
-            title="Click to upload production logo"
-          >
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }} />
-            {prod.logoUrl ? (
-              <>
+          {/* Production logo — click opens SharePoint folder if URL set */}
+          {prod.sharepointUrl ? (
+            <a
+              href={prod.sharepointUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center border transition-opacity hover:opacity-80"
+              style={{ borderColor: prod.logoUrl ? "transparent" : "var(--psg-card-border)", backgroundColor: prod.logoUrl ? "transparent" : "var(--psg-card-bg)" }}
+              title="Open SharePoint folder"
+            >
+              {prod.logoUrl ? (
                 <Image src={prod.logoUrl} alt={prod.name} fill className="object-contain p-1" />
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); removeLogo(); }}
-                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs"
-                >Remove</button>
-              </>
-            ) : logoUploading ? (
-              <span className="text-xs" style={{ color: "var(--psg-muted)" }}>…</span>
-            ) : (
-              <span className="text-xs text-center leading-tight px-1" style={{ color: "var(--psg-muted)" }}>+ Logo</span>
-            )}
-          </label>
+              ) : (
+                <span className="text-sm font-bold" style={{ color: "var(--psg-muted)" }}>{prod.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </a>
+          ) : (
+            <div
+              className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center border"
+              style={{ borderColor: prod.logoUrl ? "transparent" : "var(--psg-card-border)", backgroundColor: prod.logoUrl ? "transparent" : "var(--psg-card-bg)" }}
+            >
+              {prod.logoUrl ? (
+                <Image src={prod.logoUrl} alt={prod.name} fill className="object-contain p-1" />
+              ) : (
+                <span className="text-sm font-bold" style={{ color: "var(--psg-muted)" }}>{prod.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </div>
+          )}
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             {prod.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: prod.color }} />}
@@ -2039,7 +2046,27 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               </div>
             </F>
             <F label="Show Report Email"><input type="email" className={inp} style={inpStyle} value={prodForm.reportEmail} onChange={(e) => setProdForm((f) => ({ ...f, reportEmail: e.target.value }))} placeholder="reports@example.com" /></F>
+            <F label="SharePoint Folder URL"><input type="url" className={inp} style={inpStyle} value={prodForm.sharepointUrl} onChange={(e) => setProdForm((f) => ({ ...f, sharepointUrl: e.target.value }))} placeholder="https://..." /></F>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={prodForm.notes} onChange={(e) => setProdForm((f) => ({ ...f, notes: e.target.value }))} /></F>
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: "var(--psg-muted)" }}>Production Logo</label>
+              <div className="flex items-center gap-3">
+                {prod.logoUrl && (
+                  <div className="relative w-14 h-14 rounded-lg overflow-hidden border shrink-0" style={{ borderColor: "var(--psg-card-border)" }}>
+                    <Image src={prod.logoUrl} alt={prod.name} fill className="object-contain p-1" />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <label className="cursor-pointer text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                    {logoUploading ? "Uploading…" : prod.logoUrl ? "Replace logo" : "Upload logo"}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }} />
+                  </label>
+                  {prod.logoUrl && (
+                    <button type="button" onClick={removeLogo} className="text-xs px-3 py-1.5 rounded border transition-colors text-red-400 hover:bg-red-900/20" style={{ borderColor: "rgba(248,113,113,0.3)" }}>Remove</button>
+                  )}
+                </div>
+              </div>
+            </div>
             <Btns onCancel={() => setEditProd(false)} label="Save Changes" />
           </form>
         </Modal>

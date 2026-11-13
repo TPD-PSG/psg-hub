@@ -302,6 +302,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     setShowTourForm(false);
     setEditStop(null);
     setStopForm(BLANK_STOP);
+    setVenueSearch("");
     reloadTourStops();
   }
 

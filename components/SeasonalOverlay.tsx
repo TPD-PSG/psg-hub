@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-type Season = "christmas" | "halloween" | "spring" | null;
+type Season = "christmas" | "halloween" | "spring" | "bonfire" | "newyear" | null;
+type Intensity = "light" | "normal" | "heavy";
 
-function getSeason(): Season {
+const INTENSITY_MULTIPLIER: Record<Intensity, number> = { light: 0.4, normal: 1, heavy: 2.2 };
+
+function getAutoSeason(): Season {
   const now = new Date();
-  const m = now.getMonth() + 1; // 1-12
+  const m = now.getMonth() + 1;
   const d = now.getDate();
   if ((m === 12 && d >= 1) || (m === 1 && d <= 5)) return "christmas";
   if (m === 10 && d >= 25) return "halloween";
+  if (m === 11 && d === 5) return "bonfire";
+  if ((m === 12 && d >= 31) || (m === 1 && d <= 2)) return "newyear";
   if ((m === 3 && d >= 20) || (m === 4 && d <= 10)) return "spring";
   return null;
 }
@@ -61,6 +66,40 @@ function makeParticle(canvas: HTMLCanvasElement, season: Season): Particle {
       emoji: emojis[Math.floor(Math.random() * emojis.length)],
     };
   }
+  if (season === "bonfire") {
+    const emojis = ["✨", "💫", "🔥", "⭐"];
+    return {
+      x: Math.random() * canvas.width,
+      y: canvas.height + 10,
+      vx: (Math.random() - 0.5) * 2,
+      vy: -(2 + Math.random() * 3),
+      size: 10 + Math.random() * 8,
+      opacity: 0.7 + Math.random() * 0.3,
+      wobble: 0,
+      wobbleSpeed: 0.04 + Math.random() * 0.04,
+      wobbleOffset: Math.random() * Math.PI * 2,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.08,
+      emoji: emojis[Math.floor(Math.random() * emojis.length)],
+    };
+  }
+  if (season === "newyear") {
+    const emojis = ["🎉", "🎊", "⭐", "✨", "🌟"];
+    return {
+      x: Math.random() * canvas.width,
+      y: -20,
+      vx: (Math.random() - 0.5) * 1.5,
+      vy: 1 + Math.random() * 1.5,
+      size: 12 + Math.random() * 10,
+      opacity: 0.7 + Math.random() * 0.3,
+      wobble: 0,
+      wobbleSpeed: 0.03 + Math.random() * 0.03,
+      wobbleOffset: Math.random() * Math.PI * 2,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.06,
+      emoji: emojis[Math.floor(Math.random() * emojis.length)],
+    };
+  }
   // spring
   const emojis = ["🌸", "🌺", "🌼", "🍃"];
   return {
@@ -82,11 +121,29 @@ const COUNTS: Record<NonNullable<Season>, number> = {
   christmas: 120,
   halloween: 30,
   spring: 25,
+  bonfire: 40,
+  newyear: 35,
 };
 
-export default function SeasonalOverlay() {
+export default function SeasonalOverlay({ previewSeason, previewIntensity }: { previewSeason?: Season | undefined; previewIntensity?: Intensity } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const season = getSeason();
+  const [settingsSeason, setSettingsSeason] = useState<Season | "auto">("auto");
+  const [settingsIntensity, setSettingsIntensity] = useState<Intensity>("normal");
+
+  useEffect(() => {
+    fetch("/api/settings").then(r => r.json()).then((d: Record<string, string>) => {
+      if (d.seasonal_mode && d.seasonal_mode !== "auto") setSettingsSeason(d.seasonal_mode as Season);
+      else setSettingsSeason("auto");
+      if (d.seasonal_intensity) setSettingsIntensity(d.seasonal_intensity as Intensity);
+    }).catch(() => {/* settings unavailable */});
+  }, []);
+
+  const resolvedSeason: Season = previewSeason !== undefined
+    ? previewSeason
+    : (settingsSeason === "auto" ? getAutoSeason() : settingsSeason as Season);
+  const resolvedIntensity: Intensity = previewIntensity ?? settingsIntensity;
+  const season = resolvedSeason;
+  const intensityMultiplier = INTENSITY_MULTIPLIER[resolvedIntensity];
 
   useEffect(() => {
     if (!season) return;
@@ -95,7 +152,7 @@ export default function SeasonalOverlay() {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     let raf: number;
-    const count = COUNTS[season];
+    const count = Math.round(COUNTS[season] * intensityMultiplier);
     const particles: Particle[] = [];
 
     function resize() {
@@ -105,10 +162,14 @@ export default function SeasonalOverlay() {
     resize();
     window.addEventListener("resize", resize);
 
-    // Seed initial particles spread across the screen height
+    // Seed initial particles spread across the screen
     for (let i = 0; i < count; i++) {
       const p = makeParticle(canvas, season);
-      p.y = Math.random() * canvas.height; // already on screen at start
+      if (season === "bonfire") {
+        p.y = canvas.height - Math.random() * canvas.height;
+      } else {
+        p.y = Math.random() * canvas.height;
+      }
       particles.push(p);
     }
 
@@ -121,8 +182,10 @@ export default function SeasonalOverlay() {
         p.y += p.vy;
         p.rotation += p.rotSpeed;
 
-        if (p.y > canvas.height + 30) {
-          // reset to top
+        const escaped = season === "bonfire"
+          ? p.y < -30
+          : p.y > canvas.height + 30;
+        if (escaped) {
           const fresh = makeParticle(canvas, season);
           Object.assign(p, fresh);
         }
@@ -161,7 +224,7 @@ export default function SeasonalOverlay() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
     };
-  }, [season]);
+  }, [season, intensityMultiplier]);
 
   if (!season) return null;
 

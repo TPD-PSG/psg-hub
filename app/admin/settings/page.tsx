@@ -1,8 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SeasonalOverlay from "@/components/SeasonalOverlay";
 
 type QuickLink = { id: number; label: string; url: string; icon: string; order: number };
+type SeasonMode = "auto" | "off" | "christmas" | "halloween" | "spring" | "bonfire" | "newyear";
+type SeasonIntensity = "light" | "normal" | "heavy";
+
+const SEASON_OPTIONS: { value: SeasonMode; label: string; desc: string }[] = [
+  { value: "auto",      label: "Auto (date-based)",  desc: "Activates automatically based on the time of year" },
+  { value: "off",       label: "Off",                desc: "No seasonal effects" },
+  { value: "christmas", label: "❄️ Christmas Snow",   desc: "Falling snow (also active Dec 1–Jan 5)" },
+  { value: "halloween", label: "🦇 Halloween",        desc: "Bats, spiders & falling leaves (also active Oct 25–31)" },
+  { value: "spring",    label: "🌸 Spring Blossom",   desc: "Cherry blossom & flower petals (also active Mar 20–Apr 10)" },
+  { value: "bonfire",   label: "🎆 Bonfire Night",    desc: "Firework sparks & embers (5 Nov)" },
+  { value: "newyear",   label: "🎉 New Year",         desc: "Confetti & streamers" },
+];
 
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
@@ -14,8 +27,19 @@ export default function AdminSettingsPage() {
   const [addForm, setAddForm] = useState({ label: "", url: "", icon: "🔗" });
   const [adding, setAdding] = useState(false);
 
+  // Seasonal effects
+  const [seasonMode, setSeasonMode] = useState<SeasonMode>("auto");
+  const [seasonIntensity, setSeasonIntensity] = useState<SeasonIntensity>("normal");
+  const [seasonSaved, setSeasonSaved] = useState(false);
+  const [previewSeason, setPreviewSeason] = useState<"christmas" | "halloween" | "spring" | "bonfire" | "newyear" | null | undefined>(undefined);
+  const [previewIntensity, setPreviewIntensity] = useState<SeasonIntensity | undefined>(undefined);
+
   useEffect(() => {
-    fetch("/api/settings").then(r => r.json()).then(d => { if (d?.news) setNews(d.news); });
+    fetch("/api/settings").then(r => r.json()).then((d: Record<string, string>) => {
+      if (d?.news) setNews(d.news);
+      if (d?.seasonal_mode) setSeasonMode(d.seasonal_mode as SeasonMode);
+      if (d?.seasonal_intensity) setSeasonIntensity(d.seasonal_intensity as SeasonIntensity);
+    });
     fetch("/api/quicklinks").then(r => r.json()).then(d => { if (Array.isArray(d)) setLinks(d); });
   }, []);
 
@@ -38,6 +62,25 @@ export default function AdminSettingsPage() {
     setLinks(l => [...l, link]);
     setAddForm({ label: "", url: "", icon: "🔗" });
     setAdding(false);
+  }
+
+  async function saveSeasonalSettings() {
+    await Promise.all([
+      fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "seasonal_mode", value: seasonMode }) }),
+      fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "seasonal_intensity", value: seasonIntensity }) }),
+    ]);
+    setPreviewSeason(undefined);
+    setPreviewIntensity(undefined);
+    setSeasonSaved(true);
+    setTimeout(() => setSeasonSaved(false), 2000);
+  }
+
+  function handlePreview() {
+    const validSeasons = ["christmas", "halloween", "spring", "bonfire", "newyear"] as const;
+    const s = validSeasons.find(v => v === seasonMode) ?? null;
+    setPreviewSeason(s);
+    setPreviewIntensity(seasonIntensity);
+    setTimeout(() => { setPreviewSeason(undefined); setPreviewIntensity(undefined); }, 8000);
   }
 
   async function deleteLink(id: number) {
@@ -124,6 +167,62 @@ export default function AdminSettingsPage() {
             </div>
           ))}
         </div>
+      </div>
+      {/* Seasonal effects */}
+      <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+        <div>
+          <h2 className="font-semibold text-white">Seasonal Effects</h2>
+          <p className="text-sm mt-1" style={{ color: "var(--psg-muted)" }}>
+            Decorative canvas overlay shown to all users. Respects reduced-motion preferences. Changes take effect on next page load.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--psg-muted)" }}>Effect</label>
+            <div className="grid gap-2">
+              {SEASON_OPTIONS.map(opt => (
+                <label key={opt.value} className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors hover:bg-white/5" style={{ borderColor: seasonMode === opt.value ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: seasonMode === opt.value ? "rgba(59,130,246,0.08)" : undefined }}>
+                  <input type="radio" name="seasonMode" value={opt.value} checked={seasonMode === opt.value} onChange={() => setSeasonMode(opt.value)} className="mt-0.5 shrink-0 accent-blue-500" />
+                  <div>
+                    <div className="text-sm text-white font-medium">{opt.label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{opt.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--psg-muted)" }}>Intensity</label>
+            <div className="flex gap-2">
+              {(["light", "normal", "heavy"] as SeasonIntensity[]).map(v => (
+                <button key={v} onClick={() => setSeasonIntensity(v)}
+                  className="flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-colors border"
+                  style={seasonIntensity === v
+                    ? { backgroundColor: "var(--psg-blue)", borderColor: "var(--psg-blue)", color: "white" }
+                    : { borderColor: "var(--psg-card-border)", color: "var(--psg-muted)", backgroundColor: "transparent" }}>
+                  {v === "light" ? "🌨 Light" : v === "normal" ? "❄️ Normal" : "🌨❄️ Heavy"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={saveSeasonalSettings} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
+            {seasonSaved ? "Saved ✓" : "Save settings"}
+          </button>
+          {(seasonMode !== "auto" && seasonMode !== "off") && (
+            <button onClick={handlePreview} className="border px-4 py-2 rounded text-sm hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+              ▶ Preview (8s)
+            </button>
+          )}
+        </div>
+
+        {previewSeason !== undefined && (
+          <SeasonalOverlay previewSeason={previewSeason} previewIntensity={previewIntensity} />
+        )}
       </div>
     </div>
   );

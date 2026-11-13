@@ -54,6 +54,79 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
   );
 }
 
+function TaskCard({ task, onQuickStatus, onEdit, onDelete, showProduction }: {
+  task: Task;
+  onQuickStatus: (task: Task, status: string) => void;
+  onEdit: (task: Task) => void;
+  onDelete: (id: number) => void;
+  showProduction: boolean;
+}) {
+  return (
+    <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+      <div className="flex items-start gap-3">
+        <button
+          onClick={() => onQuickStatus(task, task.status === "done" ? "todo" : (task.requiresSignoff ? "awaiting_signoff" : "done"))}
+          className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
+          style={task.status === "done"
+            ? { backgroundColor: "var(--psg-blue)", borderColor: "var(--psg-blue)" }
+            : { borderColor: "var(--psg-card-border)", backgroundColor: "transparent" }}
+          title={task.status === "done" ? "Mark incomplete" : task.requiresSignoff ? "Request sign-off" : "Mark done"}
+        >
+          {task.status === "done" && <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          {task.status === "awaiting_signoff" && <span className="text-yellow-400 text-xs font-bold">?</span>}
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2 flex-wrap">
+            <span className={`font-medium text-sm ${task.status === "done" ? "line-through opacity-50" : ""}`}>{task.title}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[task.status]}`}>{STATUS_LABELS[task.status]}</span>
+            <span className={`text-xs font-semibold ${PRIORITY_COLORS[task.priority]}`}>
+              {task.priority === "high" ? "▲ High" : task.priority === "low" ? "▼ Low" : ""}
+            </span>
+          </div>
+
+          {task.description && <div className="text-sm mt-1" style={{ color: "var(--psg-muted)" }}>{task.description}</div>}
+
+          <div className="flex flex-wrap gap-3 mt-2 text-xs" style={{ color: "var(--psg-muted)" }}>
+            {(task.assigneeUser || task.assigneeName) && (
+              <span className="flex items-center gap-1">
+                {task.assigneeUser && <UserAvatar name={task.assigneeUser.name} avatarUrl={task.assigneeUser.avatarUrl} size={18} />}
+                <span>Assigned to: <span className="text-white/70">{task.assigneeUser?.name ?? task.assigneeName}</span></span>
+              </span>
+            )}
+            {task.requiresSignoff && task.signoffUser && (
+              <span className={`flex items-center gap-1 ${task.status === "awaiting_signoff" ? "text-yellow-400 font-medium" : ""}`}>
+                <UserAvatar name={task.signoffUser.name} avatarUrl={task.signoffUser.avatarUrl} size={18} />
+                Sign-off: {task.signoffUser.name}
+                {task.signoffAt ? ` ✓ ${new Date(task.signoffAt).toLocaleDateString("en-GB")}` : ""}
+              </span>
+            )}
+            {task.dueDate && (
+              <span className={new Date(task.dueDate) < new Date() && task.status !== "done" ? "text-red-400" : ""}>
+                Due: {new Date(task.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </span>
+            )}
+            {showProduction && task.production && (
+              <span>Production: <span className="text-white/70">{task.production.name}</span></span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-1 shrink-0">
+          {task.status !== "in_progress" && task.status !== "done" && (
+            <button onClick={() => onQuickStatus(task, "in_progress")} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Start</button>
+          )}
+          {task.requiresSignoff && task.status !== "awaiting_signoff" && task.status !== "done" && (
+            <button onClick={() => onQuickStatus(task, "awaiting_signoff")} className="text-xs px-2 py-1 rounded" style={{ color: "#facc15", backgroundColor: "rgba(250,204,21,0.1)" }}>Request sign-off</button>
+          )}
+          <button onClick={() => onEdit(task)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Edit</button>
+          <button onClick={() => onDelete(task.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type Props = { productionId?: number };
 
 const BLANK = {
@@ -203,6 +276,24 @@ export default function TasksPanel({ productionId }: Props) {
     done: tasks.filter(t => t.status === "done").length,
   };
 
+  // Group tasks by production for standalone "my tasks" view
+  const groupedTasks: { label: string; tasks: Task[] }[] = [];
+  if (productionId === undefined) {
+    const groups = new Map<string, Task[]>();
+    for (const t of filtered) {
+      const key = t.production?.name ?? "Company-wide";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(t);
+    }
+    // Company-wide last
+    const sorted = Array.from(groups.entries()).sort(([a], [b]) => {
+      if (a === "Company-wide") return 1;
+      if (b === "Company-wide") return -1;
+      return a.localeCompare(b);
+    });
+    for (const [label, tasks] of sorted) groupedTasks.push({ label, tasks });
+  }
+
   const activeListName = activeListId === NO_LIST_ID
     ? "General"
     : lists.find(l => String(l.id) === activeListId)?.name ?? "General";
@@ -321,71 +412,26 @@ export default function TasksPanel({ productionId }: Props) {
         <div className="py-12 text-center rounded-lg border text-sm" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
           {tasks.length === 0 ? "No tasks yet." : "No tasks in this filter."}
         </div>
+      ) : productionId === undefined ? (
+        // Standalone "my tasks" view — grouped by production
+        <div className="space-y-6">
+          {groupedTasks.map(({ label, tasks: groupTasks }) => (
+            <div key={label}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>{label}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "var(--psg-muted)" }}>{groupTasks.length}</span>
+                <div className="flex-1 h-px" style={{ backgroundColor: "var(--psg-card-border)" }} />
+              </div>
+              <div className="space-y-2">
+                {groupTasks.map((task) => <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />)}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((task) => (
-            <div key={task.id} className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-              <div className="flex items-start gap-3">
-                <button
-                  onClick={() => quickStatus(task, task.status === "done" ? "todo" : (task.requiresSignoff ? "awaiting_signoff" : "done"))}
-                  className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
-                  style={task.status === "done"
-                    ? { backgroundColor: "var(--psg-blue)", borderColor: "var(--psg-blue)" }
-                    : { borderColor: "var(--psg-card-border)", backgroundColor: "transparent" }}
-                  title={task.status === "done" ? "Mark incomplete" : task.requiresSignoff ? "Request sign-off" : "Mark done"}
-                >
-                  {task.status === "done" && <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                  {task.status === "awaiting_signoff" && <span className="text-yellow-400 text-xs font-bold">?</span>}
-                </button>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <span className={`font-medium text-sm ${task.status === "done" ? "line-through opacity-50" : ""}`}>{task.title}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[task.status]}`}>{STATUS_LABELS[task.status]}</span>
-                    <span className={`text-xs font-semibold ${PRIORITY_COLORS[task.priority]}`}>
-                      {task.priority === "high" ? "▲ High" : task.priority === "low" ? "▼ Low" : ""}
-                    </span>
-                  </div>
-
-                  {task.description && <div className="text-sm mt-1" style={{ color: "var(--psg-muted)" }}>{task.description}</div>}
-
-                  <div className="flex flex-wrap gap-3 mt-2 text-xs" style={{ color: "var(--psg-muted)" }}>
-                    {(task.assigneeUser || task.assigneeName) && (
-                      <span className="flex items-center gap-1">
-                        {task.assigneeUser && <UserAvatar name={task.assigneeUser.name} avatarUrl={task.assigneeUser.avatarUrl} size={18} />}
-                        <span>Assigned to: <span className="text-white/70">{task.assigneeUser?.name ?? task.assigneeName}</span></span>
-                      </span>
-                    )}
-                    {task.requiresSignoff && task.signoffUser && (
-                      <span className={`flex items-center gap-1 ${task.status === "awaiting_signoff" ? "text-yellow-400 font-medium" : ""}`}>
-                        <UserAvatar name={task.signoffUser.name} avatarUrl={task.signoffUser.avatarUrl} size={18} />
-                        Sign-off: {task.signoffUser.name}
-                        {task.signoffAt ? ` ✓ ${new Date(task.signoffAt).toLocaleDateString("en-GB")}` : ""}
-                      </span>
-                    )}
-                    {task.dueDate && (
-                      <span className={new Date(task.dueDate) < new Date() && task.status !== "done" ? "text-red-400" : ""}>
-                        Due: {new Date(task.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      </span>
-                    )}
-                    {!productionId && task.production && (
-                      <span>Production: <span className="text-white/70">{task.production.name}</span></span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-1 shrink-0">
-                  {task.status !== "in_progress" && task.status !== "done" && (
-                    <button onClick={() => quickStatus(task, "in_progress")} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Start</button>
-                  )}
-                  {task.requiresSignoff && task.status !== "awaiting_signoff" && task.status !== "done" && (
-                    <button onClick={() => quickStatus(task, "awaiting_signoff")} className="text-xs px-2 py-1 rounded" style={{ color: "#facc15", backgroundColor: "rgba(250,204,21,0.1)" }}>Request sign-off</button>
-                  )}
-                  <button onClick={() => { setEditTask(task); setForm({ title: task.title, description: task.description ?? "", assigneeUserId: task.assigneeUserId?.toString() ?? "", assigneeName: task.assigneeName ?? "", status: task.status, priority: task.priority, dueDate: task.dueDate ? task.dueDate.slice(0, 10) : "", requiresSignoff: task.requiresSignoff, signoffUserId: task.signoffUserId?.toString() ?? "" }); setShowForm(true); }} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Edit</button>
-                  <button onClick={() => deleteTask(task.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
-                </div>
-              </div>
-            </div>
+            <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />
           ))}
         </div>
       )}

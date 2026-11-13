@@ -86,7 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     docContent = { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } };
   }
 
-  const SECTION_PRESETS = ["Creative Team", "Production Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage", "General"];
+  const SECTION_PRESETS = ["Creative Team", "Production Team", "Show Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage", "General"];
 
   const message = await client.messages.create({
     model: "claude-sonnet-5-5",
@@ -98,14 +98,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           docContent,
           {
             type: "text",
-            text: `This is a contact sheet or contacts document for a theatre/live production. Extract all contacts.
+            text: `This is a contact sheet for a theatre/live production. Extract all contacts.
 
-For each person, identify:
-- section: which group they belong to (use one of: ${SECTION_PRESETS.join(", ")} — or create a sensible section name from headings in the document)
-- name: full name
-- role: their job title/role (e.g. Director, Production Manager, Stage Manager, Lighting Designer)
-- company: organisation/company they represent (if shown)
-- phone: phone number(s) — combine multiple into one string separated by " / "
+Section headers: rows that contain only a category label (often ALL-CAPS, e.g. CREATIVES, CAST, PRODUCTION, COMPANY) with no name/email/phone data are section dividers — not contacts. Use them to group the people below.
+
+Map each section to the closest name from this list: ${SECTION_PRESETS.join(", ")}
+If nothing fits, use the section heading from the document as-is.
+
+For each person extract:
+- section: group they belong to
+- name: full name (skip rows with no name)
+- role: job title/role
+- company: organisation they represent (if shown)
+- phone: phone number(s) — combine multiples with " / "
 - email: email address
 - notes: any other relevant info
 
@@ -116,7 +121,7 @@ Return ONLY valid JSON (no markdown, no explanation):
   ]
 }
 
-Omit any field if unknown. Include every named person in the document.`,
+Omit any field if unknown. Skip rows with no name. Include every named person.`,
           },
         ],
       },

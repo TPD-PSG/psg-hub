@@ -2612,7 +2612,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 <F label="Section">
                   {(() => {
                     const existingSections = Array.from(new Set(contacts.map(c => c.section)));
-                    const presets = ["General", "Creative Team", "Production Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage"];
+                    const presets = ["General", "Creative Team", "Production Team", "Show Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage"];
                     const allOptions = Array.from(new Set([...existingSections, ...presets]));
                     const isCustom = contactForm.section && !allOptions.includes(contactForm.section);
                     return (

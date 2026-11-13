@@ -426,6 +426,53 @@ export async function exportVenueStopPDF(productionName: string, stop: TourStopR
   doc.save(`venue-${slug}.pdf`);
 }
 
+// ── CDM Toolbox Talk Sign-off PDF ────────────────────────────────────────────
+
+type ToolboxSig = { signeeName: string; employer?: string | null; position?: string | null; signeeDate: string; venueName?: string | null; agreedBriefing: boolean; agreedSafety: boolean; createdAt: string };
+
+export async function exportToolboxSignoffPDF(productionName: string, sigs: ToolboxSig[], venueName?: string, productionLogoUrl?: string | null) {
+  const [logo, prodLogo] = await Promise.all([fetchLogoAsset(), productionLogoUrl ? fetchLogoAsset(productionLogoUrl) : Promise.resolve(null)]);
+  const subtitle = venueName
+    ? `${venueName} — Exported ${fmtDate(new Date().toISOString())}`
+    : `Exported ${fmtDate(new Date().toISOString())}`;
+  const doc = basePDF(`CDM Toolbox Talk Sign-off — ${productionName}`, subtitle, logo, prodLogo ?? undefined);
+
+  const body = sigs.map(s => [
+    s.signeeName,
+    s.employer ?? "—",
+    s.position ?? "—",
+    fmtDate(s.signeeDate + "T12:00:00"),
+    s.venueName ?? (venueName ?? "—"),
+    s.agreedBriefing ? "✓" : "✗",
+    s.agreedSafety ? "✓" : "✗",
+    fmtDateTime(s.createdAt),
+  ]);
+
+  autoTable(doc, {
+    startY: 32,
+    head: [["Name", "Employer", "Position", "Date", "Venue", "CDM Briefing", "Safety Agree.", "Submitted At"]],
+    body,
+    styles: { fontSize: 8, cellPadding: 2.5, overflow: "linebreak" },
+    headStyles: { fillColor: [10, 25, 65], fontSize: 8 },
+    columnStyles: {
+      0: { cellWidth: 38, fontStyle: "bold" },
+      1: { cellWidth: 38 },
+      2: { cellWidth: 32 },
+      3: { cellWidth: 24 },
+      4: { cellWidth: 36 },
+      5: { cellWidth: 20, halign: "center" },
+      6: { cellWidth: 20, halign: "center" },
+      7: { cellWidth: "auto" },
+    },
+    margin: { left: 10, right: 10 },
+    alternateRowStyles: { fillColor: [245, 245, 250] },
+  });
+
+  const slug = productionName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
+  const venueSlug = venueName ? `-${venueName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase()}` : "";
+  doc.save(`cdm-signoffs-${slug}${venueSlug}.pdf`);
+}
+
 // ── Production Contact Sheet ─────────────────────────────────────────────────
 
 type ProductionContact = { section?: string | null; name: string; company?: string | null; role?: string | null; phone?: string | null; email?: string | null; notes?: string | null };

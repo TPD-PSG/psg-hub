@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
-import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF } from "@/lib/exports";
+import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF } from "@/lib/exports";
 
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
 type ProdDoc = { id: number; name: string; mime: string; folder: string; createdAt: string };
@@ -2918,21 +2918,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         // Available sign-off dates for the filter
         const allSigDates = Array.from(new Set(prod.toolboxSignatures.map(s => s.signeeDate))).sort().reverse();
 
-        // Export filtered sigs as CSV
-        function exportCSV(sigs: ToolboxSig[]) {
-          const rows = [
-            ["Name", "Employer", "Position", "Date", "Venue", "CDM Briefing", "Safety Agreement", "Submitted At"],
-            ...sigs.map(s => [
-              s.signeeName, s.employer ?? "", s.position ?? "", s.signeeDate,
-              s.venueName ?? "", s.agreedBriefing ? "Yes" : "No", s.agreedSafety ? "Yes" : "No",
-              new Date(s.createdAt).toLocaleString("en-GB"),
-            ]),
-          ];
-          const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-          const blob = new Blob([csv], { type: "text/csv" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a"); a.href = url; a.download = `cdm-signoffs-${prod?.name.replace(/\s+/g, "-") ?? "export"}.csv`; a.click();
-          URL.revokeObjectURL(url);
+        // Export filtered sigs as branded PDF
+        function exportPDF(sigs: ToolboxSig[], venueName?: string) {
+          exportToolboxSignoffPDF(prod?.name ?? "Production", sigs, venueName, prod?.logoUrl ?? undefined);
         }
 
         return (
@@ -3008,8 +2996,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                           <div className="flex items-center justify-between mb-2">
                             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>Sign-off Records ({filteredStopSigs.length})</p>
                             {stopSigs.length > 0 && (
-                              <button onClick={() => exportCSV(filteredStopSigs)} className="text-xs border px-2.5 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-                                Export CSV
+                              <button onClick={() => exportPDF(filteredStopSigs, stop.venue.name)} className="text-xs border px-2.5 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                                Export PDF
                               </button>
                             )}
                           </div>
@@ -3020,7 +3008,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                                 const active = hsOpenFolders.has(`${key}_date_${d}`);
                                 return (
                                   <button key={d} onClick={() => setSelDates(d)} className="text-xs px-2.5 py-1 rounded-full border transition-colors" style={{ borderColor: active ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: active ? "rgba(59,130,246,0.15)" : "transparent", color: active ? "var(--psg-blue)" : "var(--psg-muted)" }}>
-                                    {d}
+                                    {d.split("-").reverse().join("/")}
                                   </button>
                                 );
                               })}
@@ -3040,7 +3028,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                                       <td className="px-3 py-2 text-white font-medium">{sig.signeeName}</td>
                                       <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{sig.employer ?? "—"}</td>
                                       <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{sig.position ?? "—"}</td>
-                                      <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{sig.signeeDate}</td>
+                                      <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{sig.signeeDate.split("-").reverse().join("/")}</td>
                                       <td className="px-3 py-2 text-center">{sig.agreedBriefing ? "✓" : "✗"}</td>
                                       <td className="px-3 py-2 text-center">{sig.agreedSafety ? "✓" : "✗"}</td>
                                     </tr>
@@ -3074,13 +3062,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       const active = hsOpenFolders.has(`sigdate_${d}`);
                       return (
                         <button key={d} onClick={() => setHsOpenFolders(p => { const n = new Set(p); active ? n.delete(`sigdate_${d}`) : n.add(`sigdate_${d}`); return n; })} className="text-xs px-2.5 py-1 rounded-full border transition-colors" style={{ borderColor: active ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: active ? "rgba(59,130,246,0.15)" : "transparent", color: active ? "var(--psg-blue)" : "var(--psg-muted)" }}>
-                          {d}
+                          {d.split("-").reverse().join("/")}
                         </button>
                       );
                     })}
                     {prod.toolboxSignatures.length > 0 && (
-                      <button onClick={() => { const activeDates = allSigDates.filter(d => hsOpenFolders.has(`sigdate_${d}`)); const toExport = activeDates.length > 0 ? prod.toolboxSignatures.filter(s => activeDates.includes(s.signeeDate)) : prod.toolboxSignatures; exportCSV(toExport); }} className="text-xs border px-2.5 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-                        Export CSV
+                      <button onClick={() => { const activeDates = allSigDates.filter(d => hsOpenFolders.has(`sigdate_${d}`)); const toExport = activeDates.length > 0 ? prod.toolboxSignatures.filter(s => activeDates.includes(s.signeeDate)) : prod.toolboxSignatures; exportPDF(toExport); }} className="text-xs border px-2.5 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                        Export PDF
                       </button>
                     )}
                   </div>
@@ -3101,7 +3089,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                                 <td className="px-4 py-2 text-white font-medium">{sig.signeeName}</td>
                                 <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.employer ?? "—"}</td>
                                 <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.position ?? "—"}</td>
-                                <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.signeeDate}</td>
+                                <td className="px-4 py-2" style={{ color: "var(--psg-muted)" }}>{sig.signeeDate.split("-").reverse().join("/")}</td>
                                 <td className="px-4 py-2 text-center">{sig.agreedBriefing ? "✓" : "✗"}</td>
                                 <td className="px-4 py-2 text-center">{sig.agreedSafety ? "✓" : "✗"}</td>
                               </tr>

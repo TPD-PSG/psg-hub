@@ -90,7 +90,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const message = await client.messages.create({
     model: "claude-sonnet-5-5",
-    max_tokens: 8192,
+    max_tokens: 16000,
     messages: [
       {
         role: "user",
@@ -129,11 +129,14 @@ Omit any field if unknown. Skip rows with no name. Include every named person.`,
   });
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
-  const cleaned = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+  // Try to extract JSON object from the response regardless of surrounding markdown
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const cleaned = jsonMatch ? jsonMatch[0] : text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
   let extracted: { contacts?: unknown[] };
   try {
     extracted = JSON.parse(cleaned);
   } catch {
+    console.error("Contacts import: failed to parse AI response", text.slice(0, 500));
     return NextResponse.json({ error: "AI returned an unreadable response — please try again" }, { status: 502 });
   }
   const contacts = Array.isArray(extracted.contacts) ? extracted.contacts : [];

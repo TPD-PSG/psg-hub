@@ -2025,6 +2025,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   <input type="file" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); setPendingPO(p => [...p, ...files]); e.target.value = ""; }} />
                 </label>
               </div>
+              <div
+                className="rounded border-2 border-dashed mb-3 py-4 text-center text-xs transition-colors"
+                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+                onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-blue)"; (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(59,130,246,0.08)"; }}
+                onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-card-border)"; (e.currentTarget as HTMLElement).style.backgroundColor = ""; }}
+                onDrop={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-card-border)"; (e.currentTarget as HTMLElement).style.backgroundColor = ""; const files = Array.from(e.dataTransfer.files); if (files.length) setPendingPO(p => [...p, ...files]); }}
+              >
+                Drop PO files here
+              </div>
               {existingDocs.filter(d => d.type === "po").map(d => (
                 <div key={d.id} className="flex items-center justify-between py-1.5 px-2 rounded text-xs mb-1" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
                   <a href={`/api/spend-documents/${d.id}`} target="_blank" rel="noopener noreferrer" className="truncate hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>{d.name}</a>
@@ -2581,13 +2590,16 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             )}
             {docs.length === 0 && <p className="text-xs text-center py-4" style={{ color: "var(--psg-muted)" }}>No files yet</p>}
             <div
-              className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-blue-400/50 transition-colors"
+              className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors"
               style={{ borderColor: "var(--psg-card-border)" }}
               onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.onchange = (e) => { const files = Array.from((e.target as HTMLInputElement).files ?? []); if (files.length) uploadProdDocs(files, folderPath); }; inp.click(); }}
+              onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-blue)"; (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(59,130,246,0.06)"; }}
+              onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-card-border)"; (e.currentTarget as HTMLElement).style.backgroundColor = ""; }}
+              onDrop={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "var(--psg-card-border)"; (e.currentTarget as HTMLElement).style.backgroundColor = ""; const files = Array.from(e.dataTransfer.files); if (files.length) uploadProdDocs(files, folderPath); }}
             >
               {docUploading && docUploadFolder === folderPath
                 ? <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Uploading…</p>
-                : <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Click to upload files</p>}
+                : <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Drop files here or click to upload</p>}
             </div>
           </div>
         );

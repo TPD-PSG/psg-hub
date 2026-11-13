@@ -150,6 +150,9 @@ export default function TasksPanel({ productionId }: Props) {
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [form, setForm] = useState(BLANK);
 
+  // Quick-add: productionId to pre-fill when adding from a group header
+  const [quickAddProductionId, setQuickAddProductionId] = useState<number | null>(null);
+
   // List management
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState("");
@@ -228,7 +231,7 @@ export default function TasksPanel({ productionId }: Props) {
       : null;
     const payload = {
       ...form,
-      productionId: productionId ?? null,
+      productionId: productionId ?? quickAddProductionId ?? null,
       taskListId: listIdForTask,
       assigneeUserId: form.assigneeUserId ? Number(form.assigneeUserId) : null,
       signoffUserId: form.signoffUserId ? Number(form.signoffUserId) : null,
@@ -238,7 +241,7 @@ export default function TasksPanel({ productionId }: Props) {
     } else {
       await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     }
-    setShowForm(false); setEditTask(null); setForm(BLANK);
+    setShowForm(false); setEditTask(null); setForm(BLANK); setQuickAddProductionId(null);
     await reloadTasks();
   }
 
@@ -277,13 +280,13 @@ export default function TasksPanel({ productionId }: Props) {
   };
 
   // Group tasks by production for standalone "my tasks" view
-  const groupedTasks: { label: string; tasks: Task[] }[] = [];
+  const groupedTasks: { label: string; tasks: Task[]; productionId: number | null }[] = [];
   if (productionId === undefined) {
-    const groups = new Map<string, Task[]>();
+    const groups = new Map<string, { tasks: Task[]; prodId: number | null }>();
     for (const t of filtered) {
       const key = t.production?.name ?? "Company-wide";
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(t);
+      if (!groups.has(key)) groups.set(key, { tasks: [], prodId: t.production?.id ?? null });
+      groups.get(key)!.tasks.push(t);
     }
     // Company-wide last
     const sorted = Array.from(groups.entries()).sort(([a], [b]) => {
@@ -291,7 +294,9 @@ export default function TasksPanel({ productionId }: Props) {
       if (b === "Company-wide") return -1;
       return a.localeCompare(b);
     });
-    for (const [label, groupItems] of sorted) groupedTasks.push({ label, tasks: groupItems });
+    for (const [label, { tasks: groupItems, prodId }] of sorted) {
+      groupedTasks.push({ label, tasks: groupItems, productionId: prodId });
+    }
   }
 
   const activeListName = activeListId === NO_LIST_ID
@@ -415,12 +420,20 @@ export default function TasksPanel({ productionId }: Props) {
       ) : productionId === undefined ? (
         // Standalone "my tasks" view — grouped by production
         <div className="space-y-6">
-          {groupedTasks.map(({ label, tasks: groupTasks }) => (
+          {groupedTasks.map(({ label, tasks: groupTasks, productionId: groupProdId }) => (
             <div key={label}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>{label}</span>
                 <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "var(--psg-muted)" }}>{groupTasks.length}</span>
                 <div className="flex-1 h-px" style={{ backgroundColor: "var(--psg-card-border)" }} />
+                {groupProdId !== null && (
+                  <button
+                    onClick={() => { setQuickAddProductionId(groupProdId); setEditTask(null); setForm(BLANK); setShowForm(true); }}
+                    className="text-xs px-2 py-0.5 rounded transition-colors hover:bg-white/10"
+                    style={{ color: "var(--psg-muted)" }}
+                    title={`Add task to ${label}`}
+                  >+ add</button>
+                )}
               </div>
               <div className="space-y-2">
                 {groupTasks.map((task) => <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />)}
@@ -441,7 +454,7 @@ export default function TasksPanel({ productionId }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
           <div className="w-full max-w-lg rounded-xl shadow-2xl overflow-y-auto max-h-[90vh]" style={{ backgroundColor: "var(--psg-card-bg)", border: "1px solid var(--psg-card-border)" }}>
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-              <h2 className="font-semibold">{editTask ? "Edit Task" : `New Task${productionId !== undefined ? ` — ${activeListName}` : ""}`}</h2>
+              <h2 className="font-semibold">{editTask ? "Edit Task" : productionId !== undefined ? `New Task — ${activeListName}` : quickAddProductionId ? `New Task — ${groupedTasks.find(g => g.productionId === quickAddProductionId)?.label ?? ""}` : "New Task"}</h2>
               <button onClick={() => { setShowForm(false); setEditTask(null); setForm(BLANK); }} className="text-xl leading-none" style={{ color: "var(--psg-muted)" }}>×</button>
             </div>
             <form onSubmit={save} className="p-4 space-y-3">

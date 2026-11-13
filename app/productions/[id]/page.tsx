@@ -2495,25 +2495,35 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   </button>
                 </div>
               </div>
+              {importedContacts.some(c => contacts.some(ex => ex.name.toLowerCase() === c.name.toLowerCase())) && (
+                <div className="text-xs rounded-lg px-3 py-2 flex items-center gap-2" style={{ backgroundColor: "rgba(234,179,8,0.1)", color: "#fde047" }}>
+                  ⚠ Some names already exist in this production's contacts — duplicates are highlighted below. Deselect them if you don't want to add again.
+                </div>
+              )}
               <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
-                {importedContacts.map((c, i) => (
-                  <label key={i} className={`flex items-start gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${c._selected ? "bg-white/5" : "opacity-40"}`}>
-                    <input type="checkbox" checked={c._selected} onChange={() => setImportedContacts(prev => prev.map((x, j) => j === i ? { ...x, _selected: !x._selected } : x))}
-                      className="mt-0.5 w-4 h-4 rounded flex-shrink-0" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-white">{c.name}</span>
-                        {c.role && <span className="text-xs" style={{ color: "var(--psg-blue)" }}>{c.role}</span>}
-                        {c.company && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{c.company}</span>}
-                        <span className="text-xs px-1.5 py-0.5 rounded-full border" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>{c.section}</span>
+                {importedContacts.map((c, i) => {
+                  const isDuplicate = contacts.some(ex => ex.name.toLowerCase() === c.name.toLowerCase());
+                  return (
+                    <label key={i} className={`flex items-start gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${c._selected ? (isDuplicate ? "bg-yellow-900/20" : "bg-white/5") : "opacity-40"}`}
+                      style={isDuplicate && c._selected ? { borderLeft: "2px solid #ca8a04" } : undefined}>
+                      <input type="checkbox" checked={c._selected} onChange={() => setImportedContacts(prev => prev.map((x, j) => j === i ? { ...x, _selected: !x._selected } : x))}
+                        className="mt-0.5 w-4 h-4 rounded flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-white">{c.name}</span>
+                          {isDuplicate && <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "rgba(234,179,8,0.2)", color: "#fde047" }}>already exists</span>}
+                          {c.role && <span className="text-xs" style={{ color: "var(--psg-blue)" }}>{c.role}</span>}
+                          {c.company && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{c.company}</span>}
+                          <span className="text-xs px-1.5 py-0.5 rounded-full border" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>{c.section}</span>
+                        </div>
+                        <div className="flex gap-3 mt-0.5 text-xs" style={{ color: "var(--psg-muted)" }}>
+                          {c.phone && <span>📞 {c.phone}</span>}
+                          {c.email && <span>✉ {c.email}</span>}
+                        </div>
                       </div>
-                      <div className="flex gap-3 mt-0.5 text-xs" style={{ color: "var(--psg-muted)" }}>
-                        {c.phone && <span>📞 {c.phone}</span>}
-                        {c.email && <span>✉ {c.email}</span>}
-                      </div>
-                    </div>
-                  </label>
-                ))}
+                    </label>
+                  );
+                })}
               </div>
             </div>
           )}

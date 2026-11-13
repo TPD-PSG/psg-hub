@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
   const assigneeId = searchParams.get("assigneeId");
 
   const taskListId = searchParams.get("taskListId");
+  const signoffUserId = searchParams.get("signoffUserId");
+  const statusFilter = searchParams.get("status");
 
   const where: Record<string, unknown> = {};
   if (productionId) where.productionId = Number(productionId);
@@ -20,6 +22,8 @@ export async function GET(req: NextRequest) {
   // it means "all my tasks" so we skip the productionId=null restriction.
   if (companyWide === "1" && role === "admin") where.productionId = null;
   if (assigneeId) where.assigneeUserId = Number(assigneeId);
+  if (signoffUserId) where.signoffUserId = Number(signoffUserId);
+  if (statusFilter) where.status = statusFilter;
   if (taskListId === "null") where.taskListId = null;
   else if (taskListId) where.taskListId = Number(taskListId);
 

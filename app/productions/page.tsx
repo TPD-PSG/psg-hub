@@ -9,6 +9,7 @@ type TeamMember = { user: { id: number; name: string; email: string; avatarUrl?:
 type Production = {
   id: number; name: string; type: string; venue: string | null; status: string;
   announcementStatus?: string;
+  internalStatus?: string;
   logoUrl?: string | null;
   color?: string | null;
   team?: TeamMember[];
@@ -87,6 +88,10 @@ export default function ProductionsPage() {
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {p.internalStatus === "confirmed"
+                ? <span className="text-xs px-2 py-0.5 rounded-full font-semibold tracking-wide" style={{ backgroundColor: "rgba(34,197,94,0.15)", color: "#4ade80" }}>CONFIRMED</span>
+                : <span className="text-xs px-2 py-0.5 rounded-full font-semibold tracking-wide" style={{ backgroundColor: "rgba(251,191,36,0.15)", color: "#fbbf24" }}>PENCIL</span>
+              }
               {p.announcementStatus && p.announcementStatus !== "not_announced" && (
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ANN_COLORS[p.announcementStatus] ?? "bg-white/10 text-white/40"}`}>
                   {ANN_LABELS[p.announcementStatus] ?? p.announcementStatus}

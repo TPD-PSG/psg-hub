@@ -1,0 +1,1 @@
+ALTER TABLE "HaulageMovement" ADD COLUMN "rechargeable" BOOLEAN NOT NULL DEFAULT 0;

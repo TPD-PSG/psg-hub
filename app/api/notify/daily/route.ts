@@ -168,5 +168,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, created: created.length, items: created });
+  // ── 5. SQLite backup to Cloudflare R2 ────────────────────────────────────
+  let backupResult: Record<string, unknown> = { skipped: true };
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    const backupRes = await fetch(`${baseUrl}/api/backup`, {
+      method: "POST",
+      headers: secret ? { "x-notify-secret": secret } : {},
+    });
+    backupResult = await backupRes.json();
+  } catch (err) {
+    backupResult = { error: String(err) };
+  }
+
+  return NextResponse.json({ ok: true, created: created.length, items: created, backup: backupResult });
 }

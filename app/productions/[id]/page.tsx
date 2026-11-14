@@ -3808,52 +3808,72 @@ function PerformanceSchedulePanel({
   }
 
   const totalPerf = weeks.flat().filter(d => d.perf).length;
-  const totalMatinee = weeks.flat().filter(d => d.matinee && d.perf).length;
+  const totalMatineeOnly = weeks.flat().filter(d => d.matinee && !d.perf).length;
+  const totalMatinee = weeks.flat().filter(d => d.matinee).length;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-white">Performance Schedule</h3>
-        {totalPerf > 0 && (
+        {(totalPerf > 0 || totalMatineeOnly > 0) && (
           <span className="text-xs" style={{ color: "var(--psg-muted)" }}>
-            {totalPerf} performance{totalPerf !== 1 ? "s" : ""}
-            {totalMatinee > 0 ? ` · ${totalMatinee} matinee${totalMatinee !== 1 ? "s" : ""}` : ""}
+            {totalPerf > 0 ? `${totalPerf} evening${totalPerf !== 1 ? "s" : ""}` : ""}
+            {totalPerf > 0 && totalMatineeOnly > 0 ? " · " : ""}
+            {totalMatineeOnly > 0 ? `${totalMatineeOnly} matinee-only` : ""}
+            {totalMatinee > 0 && totalPerf > 0 ? ` · ${totalMatinee} matinee${totalMatinee !== 1 ? "s" : ""} total` : ""}
           </span>
         )}
       </div>
 
-      {/* Pattern pickers */}
-      <div className="rounded-lg border p-4 mb-4 space-y-3" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
-        <div>
-          <p className="text-xs mb-2" style={{ color: "var(--psg-muted)" }}>Performance days</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {DAYS.map((day, i) => (
-              <button key={day} type="button"
-                onClick={() => setWeekPattern(p => toggleBit(p, i))}
-                className="px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                style={hasBit(weekPattern, i)
-                  ? { backgroundColor: "var(--psg-blue)", color: "#fff" }
-                  : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
-                {day}
-              </button>
-            ))}
-          </div>
+      {/* Pattern pickers — grid of days × Eve/Mat */}
+      <div className="rounded-lg border p-4 mb-4" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+        <div className="overflow-x-auto">
+          <table className="text-xs border-collapse" style={{ minWidth: 360 }}>
+            <thead>
+              <tr>
+                <th className="text-right pr-3 pb-1.5 font-normal w-12" style={{ color: "var(--psg-muted)" }}></th>
+                {DAYS.map(d => (
+                  <th key={d} className="text-center pb-1.5 font-medium px-1" style={{ color: "var(--psg-muted)", minWidth: 44 }}>{d}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="text-right pr-3 py-1 font-medium" style={{ color: "#93c5fd", whiteSpace: "nowrap" }}>Evening</td>
+                {DAYS.map((day, i) => (
+                  <td key={day} className="text-center px-1 py-1">
+                    <button type="button"
+                      onClick={() => setWeekPattern(p => toggleBit(p, i))}
+                      className="w-9 h-7 rounded text-xs font-medium transition-colors"
+                      style={hasBit(weekPattern, i)
+                        ? { backgroundColor: "var(--psg-blue)", color: "#fff" }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
+                      E
+                    </button>
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="text-right pr-3 py-1 font-medium" style={{ color: "#c4b5fd", whiteSpace: "nowrap" }}>Matinee</td>
+                {DAYS.map((day, i) => (
+                  <td key={day} className="text-center px-1 py-1">
+                    <button type="button"
+                      onClick={() => setMatineePattern(p => toggleBit(p, i))}
+                      className="w-9 h-7 rounded text-xs font-medium transition-colors"
+                      style={hasBit(matineePattern, i)
+                        ? { backgroundColor: "#7c3aed", color: "#fff" }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
+                      M
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div>
-          <p className="text-xs mb-2" style={{ color: "var(--psg-muted)" }}>Matinee days</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {DAYS.map((day, i) => (
-              <button key={day} type="button"
-                onClick={() => setMatineePattern(p => toggleBit(p, i))}
-                className="px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                style={hasBit(matineePattern, i)
-                  ? { backgroundColor: "#7c3aed", color: "#fff" }
-                  : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
-                {day}
-              </button>
-            ))}
-          </div>
-        </div>
+        <p className="text-xs mt-2 mb-3" style={{ color: "var(--psg-muted)" }}>
+          A day can have Evening only, Matinee only, or both. Matinee-only days appear in purple.
+        </p>
         <button onClick={savePattern} disabled={saving}
           className="text-white text-xs px-3 py-1.5 rounded font-medium hover:opacity-90 disabled:opacity-50"
           style={{ backgroundColor: "var(--psg-blue)" }}>
@@ -3887,25 +3907,30 @@ function PerformanceSchedulePanel({
                           className="rounded p-1 text-center transition-colors"
                           style={{
                             backgroundColor: !inRun ? "transparent"
+                              : perf && matinee ? "rgba(99,60,219,0.2)"
                               : perf ? "rgba(59,130,246,0.15)"
+                              : matinee ? "rgba(124,58,237,0.15)"
                               : "rgba(255,255,255,0.03)",
-                            border: inRun ? `1px solid ${perf ? "rgba(59,130,246,0.3)" : "var(--psg-card-border)"}` : "1px solid transparent",
+                            border: inRun ? `1px solid ${perf ? "rgba(59,130,246,0.3)" : matinee ? "rgba(124,58,237,0.4)" : "var(--psg-card-border)"}` : "1px solid transparent",
                             opacity: !inRun ? 0.3 : 1,
                             cursor: inRun ? "pointer" : "default",
                             minHeight: 44,
                           }}
                           onClick={() => inRun && toggleOverride(dateStr, perf, false)}
                           onContextMenu={e => { if (inRun) { e.preventDefault(); toggleOverride(dateStr, matinee, true); } }}
-                          title={inRun ? `${dateStr}${perf ? " · Performance" : " · Dark"}${matinee ? " · Matinee" : ""}\nClick to toggle · Right-click to toggle matinee` : undefined}
+                          title={inRun ? `${dateStr}${perf && matinee ? " · Evening + Matinee" : perf ? " · Evening" : matinee ? " · Matinee only" : " · Dark"}\nClick to toggle evening · Right-click to toggle matinee` : undefined}
                         >
-                          <div className="font-medium" style={{ color: perf ? "#fff" : "var(--psg-muted)" }}>
+                          <div className="font-medium" style={{ color: (perf || matinee) ? "#fff" : "var(--psg-muted)" }}>
                             {date.getDate()}
                           </div>
-                          {matinee && perf && (
-                            <div className="mt-0.5">
-                              <span className="text-xs rounded px-1" style={{ backgroundColor: "#7c3aed33", color: "#a78bfa", fontSize: 9 }}>M</span>
-                            </div>
-                          )}
+                          <div className="mt-0.5 flex gap-0.5 justify-center">
+                            {perf && (
+                              <span style={{ fontSize: 8, lineHeight: 1, padding: "1px 3px", borderRadius: 3, backgroundColor: "rgba(59,130,246,0.4)", color: "#93c5fd" }}>E</span>
+                            )}
+                            {matinee && (
+                              <span style={{ fontSize: 8, lineHeight: 1, padding: "1px 3px", borderRadius: 3, backgroundColor: "rgba(124,58,237,0.4)", color: "#c4b5fd" }}>M</span>
+                            )}
+                          </div>
                           {hasOverride && (
                             <div className="mt-0.5 mx-auto w-1 h-1 rounded-full" style={{ backgroundColor: "#f59e0b" }} />
                           )}
@@ -3918,7 +3943,7 @@ function PerformanceSchedulePanel({
             </tbody>
           </table>
           <p className="text-xs mt-2" style={{ color: "var(--psg-muted)" }}>
-            Click a date to toggle it on/off · Right-click to toggle matinee · <span style={{ color: "#f59e0b" }}>●</span> = overridden from pattern
+            Click to toggle evening · Right-click to toggle matinee · <span style={{ color: "#93c5fd" }}>E</span> = evening · <span style={{ color: "#c4b5fd" }}>M</span> = matinee · <span style={{ color: "#f59e0b" }}>●</span> = overridden
           </p>
         </div>
       )}

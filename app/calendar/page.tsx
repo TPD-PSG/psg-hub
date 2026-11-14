@@ -8,7 +8,7 @@ import Link from "next/link";
 
 type CalEvent = {
   id: string;
-  type: "key_date" | "task" | "tour_stop";
+  type: "key_date" | "task" | "tour_stop" | "performance";
   kdType?: string;
   title: string;
   production: string | null;
@@ -19,6 +19,8 @@ type CalEvent = {
   color: string;
   href: string;
   venue?: string | null;
+  evening?: boolean;
+  matinee?: boolean;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -245,7 +247,7 @@ function CalendarInner() {
                           <div key={`${ev.id}-${idx}`}
                             className="text-xs px-1.5 py-0.5 rounded truncate"
                             style={{ backgroundColor: ev.color + "33", color: ev.color, borderLeft: isStart ? `2px solid ${ev.color}` : "2px solid transparent" }}>
-                            {isStart ? (ev.type === "task" ? "● " : ev.type === "tour_stop" ? "📍 " : "") + ev.title : ""}
+                            {isStart ? (ev.type === "task" ? "● " : ev.type === "tour_stop" ? "📍 " : ev.type === "performance" ? (ev.evening === false && ev.matinee ? "🌅 " : "🎭 ") : "") + ev.title : ""}
                             {!isStart && <span className="opacity-50">·</span>}
                           </div>
                         );
@@ -277,6 +279,10 @@ function CalendarInner() {
                     {ev.production && <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: ev.color + "22", color: ev.color }}>{ev.production}</span>}
                     {ev.type === "task" && <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/50">Task</span>}
                     {ev.type === "tour_stop" && <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/50">Tour Stop</span>}
+                    {ev.type === "performance" && !ev.evening && ev.matinee && <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "#7c3aed33", color: "#c4b5fd" }}>Matinee only</span>}
+                    {ev.type === "performance" && ev.evening && !ev.matinee && <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/60 text-green-300">Evening</span>}
+                    {ev.type === "performance" && ev.evening && ev.matinee && <><span className="text-xs px-2 py-0.5 rounded-full bg-green-900/60 text-green-300">Evening</span><span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "#7c3aed33", color: "#c4b5fd" }}>+ Matinee</span></>}
+                    {ev.type === "performance" && ev.evening === undefined && <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/60 text-green-300">Performance</span>}
                     {ev.kdType && <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/50">{KEY_DATE_LABELS[ev.kdType] ?? ev.kdType}</span>}
                   </div>
                   {ev.notes && <p className="text-xs mt-0.5 truncate" style={{ color: "var(--psg-muted)" }}>{ev.notes}</p>}

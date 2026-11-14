@@ -57,6 +57,9 @@ model Production {
   reportEmail   String?
   sharepointUrl String?
   haulageBudgetLineId Int?
+  advancingStatus String  @default("triage")
+  contraEstimate  Float?
+  contraActual    Float?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

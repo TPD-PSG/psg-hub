@@ -129,6 +129,9 @@ type Production = {
   reportEmail: string | null;
   sharepointUrl: string | null;
   haulageBudgetLineId: number | null;
+  advancingStatus: string;
+  contraEstimate: number | null;
+  contraActual: number | null;
   events: Event[];
   budgetLines: BudgetLine[];
   crew: ProductionCrew[];
@@ -2447,6 +2450,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       {/* ── ADVANCING TAB ── */}
       {tab === "advancing" && (
         <AdvancingBoard tourStops={tourStops}
+          production={prod.isTour ? null : prod}
           onStatusChange={async (stopId, status) => {
             await fetch(`/api/tour-stops/${stopId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ advancingStatus: status }) });
             reloadTourStops();
@@ -2454,6 +2458,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           onContraChange={async (stopId, field, value) => {
             await fetch(`/api/tour-stops/${stopId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value === "" ? null : Number(value) }) });
             reloadTourStops();
+          }}
+          onProdStatusChange={async (status) => {
+            await fetch(`/api/productions/${prod.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ advancingStatus: status }) });
+            setProd(p => p ? { ...p, advancingStatus: status } : p);
+          }}
+          onProdContraChange={async (field, value) => {
+            await fetch(`/api/productions/${prod.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value === "" ? null : Number(value) }) });
+            setProd(p => p ? { ...p, [field]: value === "" ? null : Number(value) } : p);
           }}
         />
       )}
@@ -3412,15 +3424,95 @@ const ADVANCING_COLUMNS = [
   { key: "closed",           label: "Closed / Pre Contra", color: "#b91c1c" },
 ];
 
-function AdvancingBoard({ tourStops, onStatusChange, onContraChange }: {
+function AdvancingBoard({ tourStops, production, onStatusChange, onContraChange, onProdStatusChange, onProdContraChange }: {
   tourStops: TourStop[];
+  production: Production | null;
   onStatusChange: (stopId: number, status: string) => Promise<void>;
   onContraChange: (stopId: number, field: "contraEstimate" | "contraActual", value: string) => Promise<void>;
+  onProdStatusChange: (status: string) => Promise<void>;
+  onProdContraChange: (field: "contraEstimate" | "contraActual", value: string) => Promise<void>;
 }) {
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [contraEdits, setContraEdits] = useState<Record<string, string>>({});
-  const [contraOpen, setContraOpen] = useState<Record<number, boolean>>({});;
+  const [contraOpen, setContraOpen] = useState<Record<number, boolean>>({});
+  const [prodContraOpen, setProdContraOpen] = useState(false);
+  const [prodContraEdits, setProdContraEdits] = useState<Record<string, string>>({});
+
+  // Non-touring: show single-venue kanban
+  if (production !== null) {
+    const venue = production.venueRef ?? (production.venue ? { id: 0, name: production.venue, city: null } : null);
+    if (!venue) {
+      return <div className="p-6 text-sm" style={{ color: "var(--psg-muted)" }}>No venue set — add one in the production details.</div>;
+    }
+    const currentStatus = production.advancingStatus || "triage";
+    return (
+      <div className="p-4 overflow-x-auto">
+        <div className="flex gap-3 min-w-max">
+          {ADVANCING_COLUMNS.map(col => {
+            const isActive = currentStatus === col.key;
+            return (
+              <div
+                key={col.key}
+                className="flex flex-col rounded-lg w-52 shrink-0"
+                style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid var(--psg-card-border)" }}
+                onDragOver={e => { e.preventDefault(); setDragOver(col.key); }}
+                onDragLeave={() => setDragOver(null)}
+                onDrop={async e => { e.preventDefault(); setDragOver(null); if (e.dataTransfer.getData("prod") === "1") await onProdStatusChange(col.key); }}
+              >
+                <div className="px-3 py-2.5 rounded-t-lg flex items-center justify-between"
+                  style={{ backgroundColor: col.color + "22", borderBottom: `2px solid ${col.color}` }}>
+                  <span className="text-xs font-semibold" style={{ color: col.color }}>{col.label}</span>
+                  <span className="text-xs rounded-full px-1.5 py-0.5 font-medium" style={{ backgroundColor: col.color + "33", color: col.color }}>{isActive ? 1 : 0}</span>
+                </div>
+                <div className="flex-1 p-2 space-y-2 min-h-20 transition-colors rounded-b-lg"
+                  style={{ backgroundColor: dragOver === col.key ? col.color + "11" : undefined }}>
+                  {isActive && (
+                    <div
+                      draggable
+                      onDragStart={e => { e.dataTransfer.setData("prod", "1"); }}
+                      className="rounded-lg p-2.5 cursor-grab active:cursor-grabbing select-none"
+                      style={{ backgroundColor: "var(--psg-card-bg)", border: "1px solid var(--psg-card-border)" }}
+                    >
+                      <div className="text-xs font-semibold text-white mb-0.5">{venue.name}</div>
+                      {venue.city && <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{venue.city}</div>}
+                      <div className="mt-2" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+                        <button
+                          className="text-xs underline"
+                          style={{ color: "var(--psg-muted)" }}
+                          onClick={() => setProdContraOpen(o => !o)}
+                        >
+                          {prodContraOpen ? "Hide contra" : `Contra${production.contraEstimate != null ? ` £${production.contraEstimate.toLocaleString()}` : ""}`}
+                        </button>
+                        {prodContraOpen && (
+                          <div className="mt-1.5 space-y-1">
+                            {(["contraEstimate", "contraActual"] as const).map(f => (
+                              <div key={f} className="flex items-center gap-1">
+                                <span className="text-xs w-16 shrink-0" style={{ color: "var(--psg-muted)" }}>{f === "contraEstimate" ? "Est." : "Actual"}</span>
+                                <input
+                                  type="number"
+                                  className="flex-1 rounded px-1.5 py-0.5 text-xs"
+                                  style={{ background: "var(--psg-input-bg)", border: "1px solid var(--psg-card-border)", color: "white", width: "100%" }}
+                                  value={prodContraEdits[f] ?? (production[f] != null ? String(production[f]) : "")}
+                                  onChange={e => setProdContraEdits(v => ({ ...v, [f]: e.target.value }))}
+                                  onBlur={async () => { if (f in prodContraEdits) { await onProdContraChange(f, prodContraEdits[f] ?? ""); setProdContraEdits(v => { const n = { ...v }; delete n[f]; return n; }); } }}
+                                  placeholder="£"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   if (tourStops.length === 0) {
     return <div className="p-6 text-sm" style={{ color: "var(--psg-muted)" }}>No tour stops yet — add them in Tour Stops first.</div>;

@@ -99,10 +99,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json();
-  if (typeof body.archived !== "boolean") return NextResponse.json({ error: "Missing archived field" }, { status: 400 });
+  const data: Record<string, unknown> = {};
+  if (typeof body.archived === "boolean") {
+    data.archived = body.archived;
+    data.archivedAt = body.archived ? new Date() : null;
+  }
+  if (typeof body.advancingStatus === "string") data.advancingStatus = body.advancingStatus;
+  if ("contraEstimate" in body) data.contraEstimate = body.contraEstimate === "" || body.contraEstimate == null ? null : Number(body.contraEstimate);
+  if ("contraActual" in body) data.contraActual = body.contraActual === "" || body.contraActual == null ? null : Number(body.contraActual);
+  if (Object.keys(data).length === 0) return NextResponse.json({ error: "No valid fields" }, { status: 400 });
   const production = await prisma.production.update({
     where: { id: Number(id) },
-    data: { archived: body.archived, archivedAt: body.archived ? new Date() : null },
+    data,
   });
   return NextResponse.json(production);
 }

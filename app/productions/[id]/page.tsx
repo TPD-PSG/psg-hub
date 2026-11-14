@@ -1157,7 +1157,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <PerformanceSchedulePanel
               productionId={prod.id}
               openingNight={keyDates.find(k => k.type === "preview" || k.type === "press_night" || k.type === "performance")?.startDate ?? prod.startDate}
-              closingNight={keyDates.find(k => k.type === "get_out")?.startDate ?? keyDates.find(k => k.type === "performance")?.endDate ?? prod.endDate}
+              closingNight={(() => {
+                const getOut = keyDates.find(k => k.type === "get_out");
+                if (getOut) return getOut.startDate;
+                const perfsWithEnd = keyDates.filter(k => k.type === "performance" && k.endDate);
+                if (perfsWithEnd.length > 0) return perfsWithEnd[perfsWithEnd.length - 1].endDate;
+                const anyPerfs = keyDates.filter(k => k.type === "performance");
+                if (anyPerfs.length > 0) return anyPerfs[anyPerfs.length - 1].startDate;
+                return prod.endDate;
+              })()}
               schedule={perfSchedule}
               overrides={perfOverrides}
               onSave={reloadPerfSchedule}
@@ -3839,21 +3847,6 @@ function PerformanceSchedulePanel({
             </thead>
             <tbody>
               <tr>
-                <td className="text-right pr-3 py-1 font-medium" style={{ color: "#93c5fd", whiteSpace: "nowrap" }}>Evening</td>
-                {DAYS.map((day, i) => (
-                  <td key={day} className="text-center px-1 py-1">
-                    <button type="button"
-                      onClick={() => setWeekPattern(p => toggleBit(p, i))}
-                      className="w-9 h-7 rounded text-xs font-medium transition-colors"
-                      style={hasBit(weekPattern, i)
-                        ? { backgroundColor: "var(--psg-blue)", color: "#fff" }
-                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
-                      E
-                    </button>
-                  </td>
-                ))}
-              </tr>
-              <tr>
                 <td className="text-right pr-3 py-1 font-medium" style={{ color: "#c4b5fd", whiteSpace: "nowrap" }}>Matinee</td>
                 {DAYS.map((day, i) => (
                   <td key={day} className="text-center px-1 py-1">
@@ -3864,6 +3857,21 @@ function PerformanceSchedulePanel({
                         ? { backgroundColor: "#7c3aed", color: "#fff" }
                         : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
                       M
+                    </button>
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="text-right pr-3 py-1 font-medium" style={{ color: "#93c5fd", whiteSpace: "nowrap" }}>Evening</td>
+                {DAYS.map((day, i) => (
+                  <td key={day} className="text-center px-1 py-1">
+                    <button type="button"
+                      onClick={() => setWeekPattern(p => toggleBit(p, i))}
+                      className="w-9 h-7 rounded text-xs font-medium transition-colors"
+                      style={hasBit(weekPattern, i)
+                        ? { backgroundColor: "var(--psg-blue)", color: "#fff" }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
+                      E
                     </button>
                   </td>
                 ))}
@@ -3924,11 +3932,11 @@ function PerformanceSchedulePanel({
                             {date.getDate()}
                           </div>
                           <div className="mt-0.5 flex gap-0.5 justify-center">
-                            {perf && (
-                              <span style={{ fontSize: 8, lineHeight: 1, padding: "1px 3px", borderRadius: 3, backgroundColor: "rgba(59,130,246,0.4)", color: "#93c5fd" }}>E</span>
-                            )}
                             {matinee && (
                               <span style={{ fontSize: 8, lineHeight: 1, padding: "1px 3px", borderRadius: 3, backgroundColor: "rgba(124,58,237,0.4)", color: "#c4b5fd" }}>M</span>
+                            )}
+                            {perf && (
+                              <span style={{ fontSize: 8, lineHeight: 1, padding: "1px 3px", borderRadius: 3, backgroundColor: "rgba(59,130,246,0.4)", color: "#93c5fd" }}>E</span>
                             )}
                           </div>
                           {hasOverride && (

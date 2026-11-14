@@ -130,16 +130,29 @@ export async function GET() {
     if (prod.isTour || !prod.performanceSchedule) return;
     const color = (prod as { color?: string | null }).color || PROD_COLORS[idx % PROD_COLORS.length];
     const { weekPattern, matineePattern } = prod.performanceSchedule;
-    if (weekPattern === 0) return; // no pattern set yet
+    if (weekPattern === 0 && matineePattern === 0) return; // no pattern set yet
 
     // Derive run boundaries from key dates
+    // Opening: first preview / press night / performance key date
     const OPENING_TYPES = ["preview", "press_night", "performance"];
     const openingKd = prod.keyDates.find(k => OPENING_TYPES.includes(k.type));
-    const closingKd = prod.keyDates.find(k => k.type === "get_out")
-      ?? prod.keyDates.filter(k => k.type === "performance" && k.endDate).slice(-1)[0];
+
+    // Closing: get_out date, or the latest end date of any performance key date
+    const getOutKd = prod.keyDates.find(k => k.type === "get_out");
+    const perfWithEnd = prod.keyDates.filter(k => k.type === "performance" && k.endDate);
+    const lastPerfKd = perfWithEnd.length > 0 ? perfWithEnd[perfWithEnd.length - 1] : null;
+    // Also consider the last performance key date's startDate as a fallback closing
+    const anyPerfKd = prod.keyDates.filter(k => k.type === "performance");
+    const lastAnyPerfKd = anyPerfKd.length > 0 ? anyPerfKd[anyPerfKd.length - 1] : null;
+
+    const closingKd = getOutKd ?? lastPerfKd ?? lastAnyPerfKd;
     const openingStr = openingKd?.startDate ? new Date(openingKd.startDate).toISOString().slice(0, 10) : null;
     const closingStr = closingKd
-      ? new Date(closingKd.type === "get_out" ? closingKd.startDate : (closingKd.endDate ?? closingKd.startDate)).toISOString().slice(0, 10)
+      ? new Date(
+          closingKd.type === "get_out"
+            ? closingKd.startDate
+            : (closingKd.endDate ?? closingKd.startDate)
+        ).toISOString().slice(0, 10)
       : null;
     if (!openingStr || !closingStr) return;
 

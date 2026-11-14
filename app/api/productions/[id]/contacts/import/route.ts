@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { toFile } from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Claude API can take 15–30s on large documents
@@ -81,24 +81,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const text = Buffer.from(buffer).toString("utf-8");
     docContent = { type: "text", text: `Contact sheet data:\n\n${text}` };
   } else {
-    // Assume PDF
-    const base64 = Buffer.from(buffer).toString("base64");
-    docContent = { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } };
+    // PDF — upload via Files API to avoid large inline base64 payloads causing connection resets
+    let fileId: string;
+    try {
+      const uploadedFile = await client.files.upload({
+        file: await toFile(Buffer.from(buffer), file.name || "contact-sheet.pdf", { type: "application/pdf" }),
+        expires_in_seconds: 3600,
+      });
+      fileId = uploadedFile.id;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Contacts import: failed to upload PDF to Files API", msg);
+      return NextResponse.json({ error: `PDF upload failed: ${msg}` }, { status: 502 });
+    }
+    docContent = { type: "document", source: { type: "file", file_id: fileId } };
   }
 
   const SECTION_PRESETS = ["Creative Team", "Production Team", "Show Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage", "General"];
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-5-5",
-    max_tokens: 16000,
-    messages: [
-      {
-        role: "user",
-        content: [
-          docContent,
-          {
-            type: "text",
-            text: `This is a contact sheet for a theatre/live production. Extract all contacts.
+  const PROMPT = `This is a contact sheet for a theatre/live production. Extract all contacts.
 
 Section headers: rows that contain only a category label (often ALL-CAPS, e.g. CREATIVES, CAST, PRODUCTION, COMPANY) with no name/email/phone data are section dividers — not contacts. Use them to group the people below.
 
@@ -121,12 +122,28 @@ Return ONLY valid JSON (no markdown, no explanation):
   ]
 }
 
-Omit any field if unknown. Skip rows with no name. Include every named person.`,
-          },
-        ],
-      },
-    ],
-  });
+Omit any field if unknown. Skip rows with no name. Include every named person.`;
+
+  let message;
+  try {
+    message = await client.messages.create({
+      model: "claude-sonnet-5-5",
+      max_tokens: 16000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            docContent,
+            { type: "text", text: PROMPT },
+          ],
+        },
+      ],
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Contacts import: Anthropic API error", msg);
+    return NextResponse.json({ error: `AI processing failed: ${msg}` }, { status: 502 });
+  }
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
   // Try to extract JSON object from the response regardless of surrounding markdown

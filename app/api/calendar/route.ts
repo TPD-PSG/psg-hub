@@ -127,42 +127,52 @@ export async function GET() {
 
   // Performance schedule events for non-touring productions
   productions.forEach((prod, idx) => {
-    if (prod.isTour || !prod.performanceSchedule) return;
+    if (prod.isTour) return;
     const color = (prod as { color?: string | null }).color || PROD_COLORS[idx % PROD_COLORS.length];
-    const { weekPattern, matineePattern } = prod.performanceSchedule;
-    if (weekPattern === 0 && matineePattern === 0) return; // no pattern set yet
-
-    // Derive run boundaries from key dates
-    // Opening: first preview / press night / performance key date
-    const OPENING_TYPES = ["preview", "press_night", "performance"];
-    const openingKd = prod.keyDates.find(k => OPENING_TYPES.includes(k.type));
-
-    // Closing: get_out date, or the latest end date of any performance key date
-    const getOutKd = prod.keyDates.find(k => k.type === "get_out");
-    const perfWithEnd = prod.keyDates.filter(k => k.type === "performance" && k.endDate);
-    const lastPerfKd = perfWithEnd.length > 0 ? perfWithEnd[perfWithEnd.length - 1] : null;
-    // Also consider the last performance key date's startDate as a fallback closing
-    const anyPerfKd = prod.keyDates.filter(k => k.type === "performance");
-    const lastAnyPerfKd = anyPerfKd.length > 0 ? anyPerfKd[anyPerfKd.length - 1] : null;
-
-    const closingKd = getOutKd ?? lastPerfKd ?? lastAnyPerfKd;
-    const openingStr = openingKd?.startDate ? new Date(openingKd.startDate).toISOString().slice(0, 10) : null;
-    const closingStr = closingKd
-      ? new Date(
-          closingKd.type === "get_out"
-            ? closingKd.startDate
-            : (closingKd.endDate ?? closingKd.startDate)
-        ).toISOString().slice(0, 10)
-      : (prod.endDate ? new Date(prod.endDate).toISOString().slice(0, 10) : null);
-    const openingStrFinal = openingStr ?? (prod.startDate ? new Date(prod.startDate).toISOString().slice(0, 10) : null);
-    if (!openingStrFinal || !closingStr) return;
+    const { weekPattern, matineePattern } = prod.performanceSchedule ?? { weekPattern: 0, matineePattern: 0 };
+    const hasAddOverrides = prod.performanceOverrides.some(o => o.type === "add" || o.type === "matinee_add");
+    if (weekPattern === 0 && matineePattern === 0 && !hasAddOverrides) return;
 
     const prodVenue = prod.venueRef
       ? `${prod.venueRef.name}${prod.venueRef.city ? ` · ${prod.venueRef.city}` : ""}`
       : (prod.venue ?? undefined);
     const href = `/productions/${prod.id}?section=schedule`;
 
-    const dates = computePerformanceDates(weekPattern, matineePattern, prod.performanceOverrides, openingStrFinal, closingStr);
+    let dates: { date: string; evening: boolean; matinee: boolean }[];
+
+    if (weekPattern !== 0 || matineePattern !== 0) {
+      // Pattern-based: need opening/closing boundaries
+      const OPENING_TYPES = ["preview", "press_night", "performance"];
+      const openingKd = prod.keyDates.find(k => OPENING_TYPES.includes(k.type));
+      const getOutKd = prod.keyDates.find(k => k.type === "get_out");
+      const perfWithEnd = prod.keyDates.filter(k => k.type === "performance" && k.endDate);
+      const lastPerfKd = perfWithEnd.length > 0 ? perfWithEnd[perfWithEnd.length - 1] : null;
+      const anyPerfKd = prod.keyDates.filter(k => k.type === "performance");
+      const lastAnyPerfKd = anyPerfKd.length > 0 ? anyPerfKd[anyPerfKd.length - 1] : null;
+      const closingKd = getOutKd ?? lastPerfKd ?? lastAnyPerfKd;
+      const openingStr = openingKd?.startDate ? new Date(openingKd.startDate).toISOString().slice(0, 10) : null;
+      const closingStr = closingKd
+        ? new Date(closingKd.type === "get_out" ? closingKd.startDate : (closingKd.endDate ?? closingKd.startDate)).toISOString().slice(0, 10)
+        : (prod.endDate ? new Date(prod.endDate).toISOString().slice(0, 10) : null);
+      const openingStrFinal = openingStr ?? (prod.startDate ? new Date(prod.startDate).toISOString().slice(0, 10) : null);
+      if (!openingStrFinal || !closingStr) return;
+      dates = computePerformanceDates(weekPattern, matineePattern, prod.performanceOverrides, openingStrFinal, closingStr);
+    } else {
+      // No base pattern — build from explicit add overrides only
+      const dateMap = new Map<string, { evening: boolean; matinee: boolean }>();
+      prod.performanceOverrides.forEach(o => {
+        const entry = dateMap.get(o.date) ?? { evening: false, matinee: false };
+        if (o.type === "add") entry.evening = true;
+        if (o.type === "matinee_add") entry.matinee = true;
+        if (o.type === "remove") entry.evening = false;
+        if (o.type === "matinee_remove") entry.matinee = false;
+        dateMap.set(o.date, entry);
+      });
+      dates = [...dateMap.entries()]
+        .filter(([, v]) => v.evening || v.matinee)
+        .map(([date, v]) => ({ date, evening: v.evening, matinee: v.matinee }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+    }
     dates.forEach(({ date, evening, matinee }) => {
       const label = evening && matinee ? " (eve + mat)" : !evening && matinee ? " (matinee only)" : "";
       events.push({

@@ -64,7 +64,7 @@ export async function GET() {
   const productions = await prisma.production.findMany({
     where,
     select: {
-      id: true, name: true, color: true, venue: true, isTour: true,
+      id: true, name: true, color: true, venue: true, isTour: true, startDate: true, endDate: true,
       venueRef: { select: { name: true, city: true } },
       keyDates: { orderBy: { startDate: "asc" } },
       tourStops: {
@@ -153,15 +153,16 @@ export async function GET() {
             ? closingKd.startDate
             : (closingKd.endDate ?? closingKd.startDate)
         ).toISOString().slice(0, 10)
-      : null;
-    if (!openingStr || !closingStr) return;
+      : (prod.endDate ? new Date(prod.endDate).toISOString().slice(0, 10) : null);
+    const openingStrFinal = openingStr ?? (prod.startDate ? new Date(prod.startDate).toISOString().slice(0, 10) : null);
+    if (!openingStrFinal || !closingStr) return;
 
     const prodVenue = prod.venueRef
       ? `${prod.venueRef.name}${prod.venueRef.city ? ` · ${prod.venueRef.city}` : ""}`
       : (prod.venue ?? undefined);
     const href = `/productions/${prod.id}?section=schedule`;
 
-    const dates = computePerformanceDates(weekPattern, matineePattern, prod.performanceOverrides, openingStr, closingStr);
+    const dates = computePerformanceDates(weekPattern, matineePattern, prod.performanceOverrides, openingStrFinal, closingStr);
     dates.forEach(({ date, evening, matinee }) => {
       const label = evening && matinee ? " (eve + mat)" : !evening && matinee ? " (matinee only)" : "";
       events.push({

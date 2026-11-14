@@ -72,6 +72,27 @@ export default function SchedulePage() {
     if (!dayMap[day]) dayMap[day] = [];
     dayMap[day].push({ kind: "timed", event: e });
   });
+
+  // Fill in empty days between first and last performance for each production
+  const prodPerfDates = new Map<number, string[]>();
+  calEvents.forEach(e => {
+    const list = prodPerfDates.get(e.productionId) ?? [];
+    list.push(e.startDate.slice(0, 10));
+    prodPerfDates.set(e.productionId, list);
+  });
+  prodPerfDates.forEach(dates => {
+    if (dates.length < 2) return;
+    const sorted = [...dates].sort();
+    const cur = new Date(sorted[0]);
+    const end = new Date(sorted[sorted.length - 1]);
+    cur.setDate(cur.getDate() + 1);
+    while (cur < end) {
+      const dateStr = cur.toISOString().slice(0, 10);
+      if (!dayMap[dateStr]) dayMap[dateStr] = [];
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
   const days = Object.keys(dayMap).sort();
   const today = new Date().toISOString().slice(0, 10);
 

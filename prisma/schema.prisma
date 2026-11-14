@@ -84,6 +84,28 @@ model Production {
   productionLinks     ProductionLink[]
   hsDocuments         HSDocument[]
   toolboxSignatures   ToolboxTalkSignature[]
+  performanceSchedule PerformanceSchedule?
+  performanceOverrides PerformanceDateOverride[]
+}
+
+model PerformanceSchedule {
+  id           Int        @id @default(autoincrement())
+  productionId Int        @unique
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  // Bitmask: bit 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+  weekPattern     Int     @default(0)
+  matineePattern  Int     @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model PerformanceDateOverride {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  date         String     // YYYY-MM-DD
+  type         String     // "add" | "remove" | "matinee_add" | "matinee_remove"
+  createdAt    DateTime   @default(now())
 }
 
 model ProductionLink {

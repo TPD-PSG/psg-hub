@@ -110,6 +110,8 @@ type HaulageMovement = {
 };
 type TeamMember = { user: { id: number; name: string; email: string; role: string } };
 type VenueRef = { id: number; name: string; city: string | null; capacity: number | null };
+type PerfSchedule = { weekPattern: number; matineePattern: number } | null;
+type PerfOverride = { id: number; date: string; type: string };
 type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; advancingStatus: string; contraEstimate: number | null; contraActual: number | null; loadInDate: string | null; startDate: string | null; endDate: string | null; performanceStart: string | null; performanceEnd: string | null; notes: string | null };
 type Production = {
   id: number;
@@ -333,6 +335,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     if (Array.isArray(data)) setTourStops(data);
   }
 
+  // Performance schedule
+  const [perfSchedule, setPerfSchedule] = useState<PerfSchedule>(null);
+  const [perfOverrides, setPerfOverrides] = useState<PerfOverride[]>([]);
+  async function reloadPerfSchedule() {
+    const data = await fetch(`/api/productions/${id}/performance-schedule`).then(r => r.json());
+    setPerfSchedule(data.schedule ?? null);
+    if (Array.isArray(data.overrides)) setPerfOverrides(data.overrides);
+  }
+
   async function saveStop(e: React.FormEvent) {
     e.preventDefault();
     if (editStop) {
@@ -492,6 +503,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     reloadKeyDates();
     reloadTourStops();
     reloadContacts();
+    reloadPerfSchedule();
   }, [id]);
 
   async function reloadKeyDates() {
@@ -1139,6 +1151,18 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               ))}
             </div>
           </div>
+
+          {/* ── Performance Schedule ── */}
+          {!prod.isTour && (
+            <PerformanceSchedulePanel
+              productionId={prod.id}
+              openingNight={keyDates.find(k => k.type === "preview" || k.type === "press_night" || k.type === "performance")?.startDate ?? prod.startDate}
+              closingNight={keyDates.find(k => k.type === "get_out")?.startDate ?? keyDates.find(k => k.type === "performance")?.endDate ?? prod.endDate}
+              schedule={perfSchedule}
+              overrides={perfOverrides}
+              onSave={reloadPerfSchedule}
+            />
+          )}
 
           {/* ── Daily Schedule ── */}
           <div>
@@ -3665,6 +3689,239 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
         </div>
         <div className="px-5 py-4">{children}</div>
       </div>
+    </div>
+  );
+}
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function PerformanceSchedulePanel({
+  productionId, openingNight, closingNight, schedule, overrides, onSave,
+}: {
+  productionId: number;
+  openingNight: string | null | undefined;
+  closingNight: string | null | undefined;
+  schedule: PerfSchedule;
+  overrides: PerfOverride[];
+  onSave: () => void;
+}) {
+  const [weekPattern, setWeekPattern] = useState(schedule?.weekPattern ?? 0);
+  const [matineePattern, setMatineePattern] = useState(schedule?.matineePattern ?? 0);
+  const [saving, setSaving] = useState(false);
+
+  // Sync when schedule prop changes (e.g. after first save)
+  useEffect(() => {
+    setWeekPattern(schedule?.weekPattern ?? 0);
+    setMatineePattern(schedule?.matineePattern ?? 0);
+  }, [schedule?.weekPattern, schedule?.matineePattern]);
+
+  function toggleBit(pattern: number, bit: number) { return pattern ^ (1 << bit); }
+  function hasBit(pattern: number, bit: number) { return !!(pattern & (1 << bit)); }
+
+  async function savePattern() {
+    setSaving(true);
+    await fetch(`/api/productions/${productionId}/performance-schedule`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weekPattern, matineePattern }),
+    });
+    setSaving(false);
+    onSave();
+  }
+
+  async function toggleOverride(dateStr: string, isCurrentlyOn: boolean, isMatinee: boolean) {
+    const type = isMatinee
+      ? (isCurrentlyOn ? "matinee_remove" : "matinee_add")
+      : (isCurrentlyOn ? "remove" : "add");
+    // Remove any conflicting override for this date+kind first
+    const conflicting = overrides.find(o => o.date === dateStr && (
+      isMatinee ? (o.type === "matinee_add" || o.type === "matinee_remove")
+                : (o.type === "add" || o.type === "remove")
+    ));
+    if (conflicting) {
+      await fetch(`/api/productions/${productionId}/performance-schedule`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: dateStr, type: conflicting.type }),
+      });
+    }
+    await fetch(`/api/productions/${productionId}/performance-schedule`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: dateStr, type }),
+    });
+    onSave();
+  }
+
+  // Build calendar grid
+  const start = openingNight ? new Date(openingNight) : null;
+  const end = closingNight ? new Date(closingNight) : null;
+
+  const overrideMap = new Map<string, string>();
+  overrides.forEach(o => overrideMap.set(`${o.date}:${o.type.startsWith("matinee") ? "matinee" : "evening"}`, o.type));
+
+  function getDayBit(date: Date) {
+    const d = date.getDay(); // 0=Sun
+    return d === 0 ? 6 : d - 1; // Mon=0 ... Sun=6
+  }
+
+  function isPerformance(date: Date) {
+    const dateStr = date.toISOString().slice(0, 10);
+    const bit = getDayBit(date);
+    const baseOn = hasBit(weekPattern, bit);
+    const override = overrideMap.get(`${dateStr}:evening`);
+    if (override === "add") return true;
+    if (override === "remove") return false;
+    return baseOn;
+  }
+
+  function isMatinee(date: Date) {
+    const dateStr = date.toISOString().slice(0, 10);
+    const bit = getDayBit(date);
+    const baseOn = hasBit(matineePattern, bit);
+    const override = overrideMap.get(`${dateStr}:matinee`);
+    if (override === "matinee_add") return true;
+    if (override === "matinee_remove") return false;
+    return baseOn;
+  }
+
+  // Build weeks
+  type CalDay = { date: Date; dateStr: string; inRun: boolean; perf: boolean; matinee: boolean };
+  const weeks: CalDay[][] = [];
+  if (start && end) {
+    // Go back to Monday of opening week
+    const cur = new Date(start);
+    const startDay = cur.getDay(); // 0=Sun
+    const daysBack = startDay === 0 ? 6 : startDay - 1;
+    cur.setDate(cur.getDate() - daysBack);
+
+    while (cur <= end || weeks.length === 0) {
+      const week: CalDay[] = [];
+      for (let d = 0; d < 7; d++) {
+        const date = new Date(cur);
+        const dateStr = date.toISOString().slice(0, 10);
+        const inRun = date >= start && date <= end;
+        week.push({ date, dateStr, inRun, perf: inRun && isPerformance(date), matinee: inRun && isMatinee(date) });
+        cur.setDate(cur.getDate() + 1);
+      }
+      weeks.push(week);
+      if (cur > end) break;
+    }
+  }
+
+  const totalPerf = weeks.flat().filter(d => d.perf).length;
+  const totalMatinee = weeks.flat().filter(d => d.matinee && d.perf).length;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-white">Performance Schedule</h3>
+        {totalPerf > 0 && (
+          <span className="text-xs" style={{ color: "var(--psg-muted)" }}>
+            {totalPerf} performance{totalPerf !== 1 ? "s" : ""}
+            {totalMatinee > 0 ? ` · ${totalMatinee} matinee${totalMatinee !== 1 ? "s" : ""}` : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Pattern pickers */}
+      <div className="rounded-lg border p-4 mb-4 space-y-3" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+        <div>
+          <p className="text-xs mb-2" style={{ color: "var(--psg-muted)" }}>Performance days</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {DAYS.map((day, i) => (
+              <button key={day} type="button"
+                onClick={() => setWeekPattern(p => toggleBit(p, i))}
+                className="px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                style={hasBit(weekPattern, i)
+                  ? { backgroundColor: "var(--psg-blue)", color: "#fff" }
+                  : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
+                {day}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-xs mb-2" style={{ color: "var(--psg-muted)" }}>Matinee days</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {DAYS.map((day, i) => (
+              <button key={day} type="button"
+                onClick={() => setMatineePattern(p => toggleBit(p, i))}
+                className="px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                style={hasBit(matineePattern, i)
+                  ? { backgroundColor: "#7c3aed", color: "#fff" }
+                  : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--psg-muted)", border: "1px solid var(--psg-card-border)" }}>
+                {day}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button onClick={savePattern} disabled={saving}
+          className="text-white text-xs px-3 py-1.5 rounded font-medium hover:opacity-90 disabled:opacity-50"
+          style={{ backgroundColor: "var(--psg-blue)" }}>
+          {saving ? "Saving…" : "Save pattern"}
+        </button>
+      </div>
+
+      {/* Calendar grid */}
+      {!start || !end ? (
+        <p className="text-sm py-2" style={{ color: "var(--psg-muted)" }}>
+          Set an opening night and closing night in Key Dates to see the calendar.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="text-xs border-collapse w-full" style={{ minWidth: 420 }}>
+            <thead>
+              <tr>
+                {DAYS.map(d => (
+                  <th key={d} className="text-center pb-1.5 font-medium" style={{ color: "var(--psg-muted)", width: "14.28%" }}>{d}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.map((week, wi) => (
+                <tr key={wi}>
+                  {week.map(({ date, dateStr, inRun, perf, matinee }) => {
+                    const hasOverride = overrideMap.has(`${dateStr}:evening`) || overrideMap.has(`${dateStr}:matinee`);
+                    return (
+                      <td key={dateStr} className="p-0.5" style={{ verticalAlign: "top" }}>
+                        <div
+                          className="rounded p-1 text-center transition-colors"
+                          style={{
+                            backgroundColor: !inRun ? "transparent"
+                              : perf ? "rgba(59,130,246,0.15)"
+                              : "rgba(255,255,255,0.03)",
+                            border: inRun ? `1px solid ${perf ? "rgba(59,130,246,0.3)" : "var(--psg-card-border)"}` : "1px solid transparent",
+                            opacity: !inRun ? 0.3 : 1,
+                            cursor: inRun ? "pointer" : "default",
+                            minHeight: 44,
+                          }}
+                          onClick={() => inRun && toggleOverride(dateStr, perf, false)}
+                          onContextMenu={e => { if (inRun) { e.preventDefault(); toggleOverride(dateStr, matinee, true); } }}
+                          title={inRun ? `${dateStr}${perf ? " · Performance" : " · Dark"}${matinee ? " · Matinee" : ""}\nClick to toggle · Right-click to toggle matinee` : undefined}
+                        >
+                          <div className="font-medium" style={{ color: perf ? "#fff" : "var(--psg-muted)" }}>
+                            {date.getDate()}
+                          </div>
+                          {matinee && perf && (
+                            <div className="mt-0.5">
+                              <span className="text-xs rounded px-1" style={{ backgroundColor: "#7c3aed33", color: "#a78bfa", fontSize: 9 }}>M</span>
+                            </div>
+                          )}
+                          {hasOverride && (
+                            <div className="mt-0.5 mx-auto w-1 h-1 rounded-full" style={{ backgroundColor: "#f59e0b" }} />
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs mt-2" style={{ color: "var(--psg-muted)" }}>
+            Click a date to toggle it on/off · Right-click to toggle matinee · <span style={{ color: "#f59e0b" }}>●</span> = overridden from pattern
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -63,20 +63,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let docContent: Anthropic.MessageParam["content"][number];
 
   if (isDocx) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mammoth = require("mammoth") as { extractRawText: (input: { buffer: Buffer }) => Promise<{ value: string }> };
-    const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
-    docContent = { type: "text", text: `Contact sheet document:\n\n${result.value}` };
-  } else if (isXlsx) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const XLSX = require("xlsx") as typeof import("xlsx");
-    const wb = XLSX.read(Buffer.from(buffer), { type: "buffer" });
-    const rows: string[] = [];
-    for (const sheetName of wb.SheetNames) {
-      rows.push(`Sheet: ${sheetName}`);
-      rows.push(XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]));
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mammoth = require("mammoth") as { extractRawText: (input: { buffer: Buffer }) => Promise<{ value: string }> };
+      const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
+      docContent = { type: "text", text: `Contact sheet document:\n\n${result.value}` };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Contacts import: DOCX parse error", msg);
+      return NextResponse.json({ error: `Could not read DOCX file: ${msg}` }, { status: 400 });
     }
-    docContent = { type: "text", text: `Contact sheet data:\n\n${rows.join("\n")}` };
+  } else if (isXlsx) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const XLSX = require("xlsx") as typeof import("xlsx");
+      const wb = XLSX.read(Buffer.from(buffer), { type: "buffer" });
+      const rows: string[] = [];
+      for (const sheetName of wb.SheetNames) {
+        rows.push(`Sheet: ${sheetName}`);
+        rows.push(XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]));
+      }
+      docContent = { type: "text", text: `Contact sheet data:\n\n${rows.join("\n")}` };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Contacts import: XLSX parse error", msg);
+      return NextResponse.json({ error: `Could not read Excel file: ${msg}` }, { status: 400 });
+    }
   } else if (isCsv) {
     const text = Buffer.from(buffer).toString("utf-8");
     docContent = { type: "text", text: `Contact sheet data:\n\n${text}` };

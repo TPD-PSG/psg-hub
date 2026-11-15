@@ -133,6 +133,7 @@ const BLANK = {
   title: "", description: "", assigneeUserId: "", assigneeName: "",
   status: "todo", priority: "medium", dueDate: "",
   requiresSignoff: false, signoffUserId: "",
+  moveToListId: "" as string, // "" = don't change, special value used only on edit
 };
 
 // Sentinel value for "no list" (tasks not assigned to any list)
@@ -226,9 +227,17 @@ export default function TasksPanel({ productionId }: Props) {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    const listIdForTask = productionId !== undefined && activeListId !== NO_LIST_ID
-      ? Number(activeListId)
-      : null;
+    let listIdForTask: number | null;
+    if (editTask && form.moveToListId !== "") {
+      // User explicitly chose a target list (or "General") while editing
+      listIdForTask = form.moveToListId === NO_LIST_ID ? null : Number(form.moveToListId);
+    } else if (editTask) {
+      // No move requested — keep existing list
+      listIdForTask = editTask.taskListId;
+    } else {
+      // New task — put it in the active list
+      listIdForTask = productionId !== undefined && activeListId !== NO_LIST_ID ? Number(activeListId) : null;
+    }
     const payload = {
       ...form,
       productionId: productionId ?? quickAddProductionId ?? null,
@@ -436,7 +445,7 @@ export default function TasksPanel({ productionId }: Props) {
                 )}
               </div>
               <div className="space-y-2">
-                {groupTasks.map((task) => <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />)}
+                {groupTasks.map((task) => <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "", moveToListId: "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />)}
               </div>
             </div>
           ))}
@@ -444,7 +453,7 @@ export default function TasksPanel({ productionId }: Props) {
       ) : (
         <div className="space-y-2">
           {filtered.map((task) => (
-            <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />
+            <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "", moveToListId: "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />
           ))}
         </div>
       )}
@@ -492,6 +501,18 @@ export default function TasksPanel({ productionId }: Props) {
                   </F>
                 </div>
               </div>
+
+              {editTask && productionId !== undefined && (lists.length > 0) && (
+                <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
+                  <F label="Move to list">
+                    <select className={inp} style={inpStyle} value={form.moveToListId} onChange={e => setForm(f => ({ ...f, moveToListId: e.target.value }))}>
+                      <option value="">— keep in current list —</option>
+                      <option value={NO_LIST_ID}>General (no list)</option>
+                      {lists.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                  </F>
+                </div>
+              )}
 
               <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
                 <div className="flex items-center gap-2 mb-2">

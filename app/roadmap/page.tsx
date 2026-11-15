@@ -52,6 +52,7 @@ export default function RoadmapPage() {
   const isAdmin = (session?.user as any)?.role === "admin";
 
   const [items, setItems] = useState<RoadmapItem[]>([]);
+  const [expandedDone, setExpandedDone] = useState<Set<number>>(new Set());
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<RoadmapItem | null>(null);
   const BLANK = { title: "", body: "", category: "general", status: "idea" };
@@ -148,8 +149,54 @@ export default function RoadmapPage() {
                 <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">{colItems.length}</span>
               </div>
 
-              <div className="space-y-3">
-                {colItems.map(item => (
+              <div className="space-y-2">
+                {colItems.map(item => {
+                  const isCollapsed = col.key === "done" || col.key === "wont_do";
+                  const isExpanded = expandedDone.has(item.id);
+                  if (isCollapsed) {
+                    return (
+                      <div key={item.id} className="rounded-lg border group overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+                        <button
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
+                          onClick={() => setExpandedDone(s => { const n = new Set(s); isExpanded ? n.delete(item.id) : n.add(item.id); return n; })}
+                        >
+                          <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{isExpanded ? "▾" : "▸"}</span>
+                          <span className="text-xs font-medium text-white flex-1 truncate">{item.title}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${CAT_COLORS[item.category] ?? "bg-white/10 text-white/60"}`}>
+                            {CAT_LABELS[item.category] ?? item.category}
+                          </span>
+                        </button>
+                        {isExpanded && (
+                          <div className="px-3 pb-3 border-t" style={{ borderColor: "var(--psg-card-border)" }}>
+                            {item.body && <p className="text-xs mt-2 leading-relaxed" style={{ color: "var(--psg-muted)" }}>{item.body}</p>}
+                            <div className="flex items-center gap-2 mt-2">
+                              <Avatar user={item.createdByUser} />
+                              <span className="text-[10px] flex-1" style={{ color: "var(--psg-muted)" }}>
+                                {item.createdByUser?.name ?? "Unknown"} · {new Date(item.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {STATUSES.filter(s => s.key !== item.status).map(s => (
+                                <button key={s.key} onClick={() => moveStatus(item, s.key)}
+                                  className="text-[10px] px-1.5 py-0.5 rounded border hover:bg-white/10 transition-colors"
+                                  style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>→ {s.label}</button>
+                              ))}
+                              {(isAdmin || item.createdByUser?.id === userId) && (
+                                <>
+                                  <button onClick={() => { setEditItem(item); setForm({ title: item.title, body: item.body ?? "", category: item.category, status: item.status }); setShowForm(true); }}
+                                    className="text-[10px] px-1.5 py-0.5 rounded border hover:bg-white/10 transition-colors"
+                                    style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
+                                  {isAdmin && <button onClick={() => togglePin(item)} className="text-[10px] px-1.5 py-0.5 rounded border hover:bg-white/10 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>{item.pinned ? "Unpin" : "Pin"}</button>}
+                                  <button onClick={() => deleteItem(item)} className="text-[10px] px-1.5 py-0.5 rounded border hover:bg-red-900/20 text-red-400 transition-colors" style={{ borderColor: "rgba(248,113,113,0.3)" }}>Delete</button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
                   <div key={item.id} className="rounded-lg border p-4 group" style={{ borderColor: item.pinned ? "var(--psg-blue)" : "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
                     <div className="flex items-start gap-2 mb-2">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${CAT_COLORS[item.category] ?? "bg-white/10 text-white/60"}`}>
@@ -159,22 +206,17 @@ export default function RoadmapPage() {
                     </div>
                     <p className="text-sm font-medium text-white mb-1">{item.title}</p>
                     {item.body && <p className="text-xs mb-2 leading-relaxed" style={{ color: "var(--psg-muted)" }}>{item.body}</p>}
-
                     <div className="flex items-center gap-2 mt-3">
                       <Avatar user={item.createdByUser} />
                       <span className="text-[10px] flex-1" style={{ color: "var(--psg-muted)" }}>
                         {item.createdByUser?.name ?? "Unknown"} · {new Date(item.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                       </span>
                     </div>
-
-                    {/* Actions */}
                     <div className="flex flex-wrap gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                       {STATUSES.filter(s => s.key !== item.status).map(s => (
                         <button key={s.key} onClick={() => moveStatus(item, s.key)}
                           className="text-[10px] px-1.5 py-0.5 rounded border hover:bg-white/10 transition-colors"
-                          style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
-                          → {s.label}
-                        </button>
+                          style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>→ {s.label}</button>
                       ))}
                       {(isAdmin || item.createdByUser?.id === userId) && (
                         <>
@@ -193,7 +235,8 @@ export default function RoadmapPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {colItems.length === 0 && (
                   <div className="rounded-lg border border-dashed flex items-center justify-center py-8" style={{ borderColor: "var(--psg-card-border)" }}>
                     <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Nothing here</p>

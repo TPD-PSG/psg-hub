@@ -111,36 +111,49 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const SECTION_PRESETS = ["Creative Team", "Production Team", "Show Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage", "General"];
 
-  const PROMPT = `This is a contact sheet for a theatre/live production. Extract all contacts.
+  const PROMPT = `This is a contact sheet for a theatre/live production. Extract every named person using the extract_contacts tool.
 
-Section headers: rows that contain only a category label (often ALL-CAPS, e.g. CREATIVES, CAST, PRODUCTION, COMPANY) with no name/email/phone data are section dividers — not contacts. Use them to group the people below.
+Section headers: rows/cells that contain only a category label (often ALL-CAPS, e.g. CREATIVES, CAST, PRODUCTION, COMPANY) with no name/email/phone data are section dividers — not contacts. Use them to group the people below.
 
 Map each section to the closest name from this list: ${SECTION_PRESETS.join(", ")}
 If nothing fits, use the section heading from the document as-is.
 
-For each person extract:
-- section: group they belong to
-- name: full name (skip rows with no name)
-- role: job title/role
-- company: organisation they represent (if shown)
-- phone: phone number(s) — combine multiples with " / "
-- email: email address
-- notes: any other relevant info
-
-Return ONLY valid JSON (no markdown, no explanation):
-{
-  "contacts": [
-    { "section": "...", "name": "...", "role": "...", "company": "...", "phone": "...", "email": "...", "notes": "..." }
-  ]
-}
-
-Omit any field if unknown. Skip rows with no name. Include every named person.`;
+Skip any row with no name. Include every named person. Call extract_contacts once with all contacts.`;
 
   let message;
   try {
     message = await client.messages.create({
       model: "claude-sonnet-5-5",
       max_tokens: 16000,
+      tools: [
+        {
+          name: "extract_contacts",
+          description: "Output all extracted contacts from the contact sheet",
+          input_schema: {
+            type: "object" as const,
+            properties: {
+              contacts: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    section: { type: "string", description: "Group/section this person belongs to" },
+                    name: { type: "string", description: "Full name" },
+                    role: { type: "string", description: "Job title or role" },
+                    company: { type: "string", description: "Organisation they represent" },
+                    phone: { type: "string", description: "Phone number(s), combine multiples with ' / '" },
+                    email: { type: "string", description: "Email address" },
+                    notes: { type: "string", description: "Any other relevant info" },
+                  },
+                  required: ["section", "name"],
+                },
+              },
+            },
+            required: ["contacts"],
+          },
+        },
+      ],
+      tool_choice: { type: "tool" as const, name: "extract_contacts" },
       messages: [
         {
           role: "user",
@@ -157,18 +170,14 @@ Omit any field if unknown. Skip rows with no name. Include every named person.`;
     return NextResponse.json({ error: `AI processing failed: ${msg}` }, { status: 502 });
   }
 
-  const text = message.content[0].type === "text" ? message.content[0].text : "";
-  // Try to extract JSON object from the response regardless of surrounding markdown
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  const cleaned = jsonMatch ? jsonMatch[0] : text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-  let extracted: { contacts?: unknown[] };
-  try {
-    extracted = JSON.parse(cleaned);
-  } catch {
-    console.error("Contacts import: failed to parse AI response", text.slice(0, 500));
-    return NextResponse.json({ error: "AI returned an unreadable response — please try again" }, { status: 502 });
+  const toolBlock = message.content.find(b => b.type === "tool_use" && b.name === "extract_contacts");
+  if (!toolBlock || toolBlock.type !== "tool_use") {
+    console.error("Contacts import: no tool_use block in response", JSON.stringify(message.content).slice(0, 300));
+    return NextResponse.json({ error: "AI did not return structured contacts — please try again" }, { status: 502 });
   }
-  const contacts = Array.isArray(extracted.contacts) ? extracted.contacts : [];
+  const contacts = Array.isArray((toolBlock.input as { contacts?: unknown[] }).contacts)
+    ? (toolBlock.input as { contacts: unknown[] }).contacts
+    : [];
 
   return NextResponse.json({ contacts });
 }

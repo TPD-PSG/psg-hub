@@ -153,7 +153,7 @@ Skip any row with no name. Include every named person. Call extract_contacts onc
           },
         },
       ],
-      tool_choice: { type: "tool" as const, name: "extract_contacts" },
+      tool_choice: { type: "auto" as const },
       messages: [
         {
           role: "user",
@@ -171,13 +171,24 @@ Skip any row with no name. Include every named person. Call extract_contacts onc
   }
 
   const toolBlock = message.content.find(b => b.type === "tool_use" && b.name === "extract_contacts");
-  if (!toolBlock || toolBlock.type !== "tool_use") {
-    console.error("Contacts import: no tool_use block in response", JSON.stringify(message.content).slice(0, 300));
-    return NextResponse.json({ error: "AI did not return structured contacts — please try again" }, { status: 502 });
+  if (toolBlock && toolBlock.type === "tool_use") {
+    const contacts = Array.isArray((toolBlock.input as { contacts?: unknown[] }).contacts)
+      ? (toolBlock.input as { contacts: unknown[] }).contacts
+      : [];
+    return NextResponse.json({ contacts });
   }
-  const contacts = Array.isArray((toolBlock.input as { contacts?: unknown[] }).contacts)
-    ? (toolBlock.input as { contacts: unknown[] }).contacts
-    : [];
 
-  return NextResponse.json({ contacts });
+  // Fallback: Claude returned text — try JSON parsing
+  const textBlock = message.content.find(b => b.type === "text");
+  const rawText = textBlock && textBlock.type === "text" ? textBlock.text : "";
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+  const cleaned = jsonMatch ? jsonMatch[0] : rawText.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+  try {
+    const extracted = JSON.parse(cleaned) as { contacts?: unknown[] };
+    const contacts = Array.isArray(extracted.contacts) ? extracted.contacts : [];
+    return NextResponse.json({ contacts });
+  } catch {
+    console.error("Contacts import: failed to parse AI response", rawText.slice(0, 500));
+    return NextResponse.json({ error: "AI returned an unreadable response — please try again" }, { status: 502 });
+  }
 }

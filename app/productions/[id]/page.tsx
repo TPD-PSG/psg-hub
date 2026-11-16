@@ -627,10 +627,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     reload();
   }
 
-  async function renameDepartment(oldName: string, newName: string, lineIds: number[]) {
+  async function renameDepartment(oldName: string, newName: string, lines: BudgetLine[]) {
     const trimmed = newName.trim();
     if (!trimmed || trimmed === oldName) { setRenamingDept(null); return; }
-    await Promise.all(lineIds.map(id => fetch(`/api/budget-lines/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ department: trimmed }) })));
+    await Promise.all(lines.map(l => fetch(`/api/budget-lines/${l.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ department: trimmed, description: l.description, nominalCode: l.nominalCode ?? "", budgeted: String(l.budgeted), notes: l.notes ?? "" }),
+    })));
     setRenamingDept(null);
     reload();
   }
@@ -1359,7 +1363,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs shrink-0 transition-transform" style={{ color: "var(--psg-muted)", transform: isDeptExpanded ? "rotate(90deg)" : "none" }}>▸</span>
                           {renamingDept === dept ? (
-                            <form onSubmit={e => { e.preventDefault(); renameDepartment(dept, deptRenameValue, lines.map(l => l.id)); }} onClick={e => e.stopPropagation()} className="flex items-center gap-2">
+                            <form onSubmit={e => { e.preventDefault(); renameDepartment(dept, deptRenameValue, lines); }} onClick={e => e.stopPropagation()} className="flex items-center gap-2">
                               <input
                                 autoFocus
                                 className="text-sm font-semibold text-white rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"

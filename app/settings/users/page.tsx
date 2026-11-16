@@ -105,7 +105,12 @@ export default function UsersPage() {
                 <td className="px-4 py-3 font-medium text-white">{u.name}</td>
                 <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{u.email}</td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.role === "admin" ? "bg-blue-900/60 text-blue-300" : "bg-white/10 text-white/60"}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    u.role === "admin" ? "bg-blue-900/60 text-blue-300" :
+                    u.role === "client" ? "bg-emerald-900/60 text-emerald-300" :
+                    u.role === "freelancer" ? "bg-amber-900/60 text-amber-300" :
+                    "bg-white/10 text-white/60"
+                  }`}>
                     {u.role}
                   </span>
                 </td>
@@ -158,6 +163,8 @@ export default function UsersPage() {
                   <select className={inp} style={inpStyle} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
                     <option value="member">Member</option>
                     <option value="admin">Admin</option>
+                    <option value="client">Client</option>
+                    <option value="freelancer">Freelancer</option>
                   </select>
                 </div>
                 {error && <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded px-3 py-2">{error}</p>}

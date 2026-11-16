@@ -9,6 +9,9 @@ const MODULES = [
   { key: "venues", label: "Venues" },
   { key: "tasks", label: "Tasks" },
   { key: "property", label: "Property" },
+  { key: "finance", label: "Finance" },
+  { key: "sales", label: "Sales" },
+  { key: "marketing", label: "Marketing" },
 ];
 
 type Permissions = { modules: string[]; allProductions: boolean };
@@ -131,7 +134,12 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{u.email}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isAdmin ? "bg-purple-900/60 text-purple-300" : "bg-white/10 text-white/60"}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      isAdmin ? "bg-purple-900/60 text-purple-300" :
+                      u.role === "client" ? "bg-emerald-900/60 text-emerald-300" :
+                      u.role === "freelancer" ? "bg-amber-900/60 text-amber-300" :
+                      "bg-white/10 text-white/60"
+                    }`}>
                       {u.role}
                     </span>
                   </td>
@@ -192,6 +200,8 @@ export default function AdminUsersPage() {
                   <select className={inp} style={inpStyle} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
                     <option value="member">Member</option>
                     <option value="admin">Admin (full access)</option>
+                    <option value="client">Client</option>
+                    <option value="freelancer">Freelancer</option>
                   </select>
                 </div>
                 <div>

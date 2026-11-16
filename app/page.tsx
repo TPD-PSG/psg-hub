@@ -512,23 +512,35 @@ export default function HomePage() {
                 sub={openMaint.length > 0 ? `${openMaint.length} open issue${openMaint.length !== 1 ? "s" : ""}` : "No open issues"}
                 badge={urgentMaint.length || undefined} />
             )}
-            <CompactTile href="/suppliers" icon="📦" title="Supplier Register" sub="Contractors, venues & services" />
+            {canAccess(perms, "suppliers", role) && (
+              <CompactTile href="/suppliers" icon="📦" title="Supplier Register" sub="Contractors, venues & services" />
+            )}
           </div>
         </>
       )}
 
-      <SectionHeading title="Marketing" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <CompactTile href="/marketing" icon="📣" title="Content Calendar" sub="Schedule & plan social media posts" />
-        <CompactTile href="/marketing?view=list" icon="📋" title="Post List" sub="All posts across platforms" />
-      </div>
+      {canAccess(perms, "marketing", role) && (
+        <>
+          <SectionHeading title="Marketing" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <CompactTile href="/marketing" icon="📣" title="Content Calendar" sub="Schedule & plan social media posts" />
+            <CompactTile href="/marketing?view=list" icon="📋" title="Post List" sub="All posts across platforms" />
+          </div>
+        </>
+      )}
 
       <SectionHeading title="Hub" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <CompactTile href="/roadmap" icon="💡" title="Ideas & Roadmap" sub="Feature requests & improvements" />
+        {canAccess(perms, "marketing", role) && (
+          <CompactTile href="/roadmap" icon="💡" title="Ideas & Roadmap" sub="Feature requests & improvements" />
+        )}
         <CompactTile href="/helpdesk" icon="🎫" title="Help Desk" sub="Report an issue or request help" />
-        <CompactTile href="/ask" icon="🤖" title="Ask Me Anything" sub="Questions answered from company docs" />
-        <CompactTile href="/fun" icon="🎭" title="Fun Corner" sub="This is not a place of entertainment" />
+        {canAccess(perms, "ask", role) && (
+          <CompactTile href="/ask" icon="🤖" title="Ask Me Anything" sub="Questions answered from company docs" />
+        )}
+        {canAccess(perms, "fun", role) && (
+          <CompactTile href="/fun" icon="🎭" title="Fun Corner" sub="This is not a place of entertainment" />
+        )}
       </div>
 
       {role === "admin" && (

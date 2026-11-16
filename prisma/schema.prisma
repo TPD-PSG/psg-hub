@@ -33,6 +33,8 @@ model User {
   expensesSubmitted   ProductionExpense[] @relation("ExpenseSubmitter")
   marketingPosts      MarketingPost[]    @relation("MarketingPostCreator")
   showReports         ShowReport[]       @relation("ShowReportCreatedBy")
+  variationsRequested BudgetVariation[]  @relation("VariationRequester")
+  variationsApproved  BudgetVariation[]  @relation("VariationApprover")
 }
 
 model Production {
@@ -65,7 +67,8 @@ model Production {
 
   events      Event[]
   keyDates    ProductionKeyDate[]
-  budgetLines BudgetLine[]
+  budgetLines      BudgetLine[]
+  budgetVariations BudgetVariation[]
   crew        ProductionCrew[]
   hotelBookings     HotelBooking[]
   haulageMovements  HaulageMovement[]
@@ -173,7 +176,41 @@ model BudgetLine {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  expenses     Expense[]
+  expenses          Expense[]
+  variationItems    BudgetVariationItem[]
+}
+
+model BudgetVariation {
+  id              Int       @id @default(autoincrement())
+  productionId    Int
+  production      Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  type            String    // reallocation | additional_spend | saving
+  status          String    @default("draft") // draft | pending_approval | approved | rejected
+  title           String
+  justification   String?
+  clientRef       String?   // client PO / email ref / sign-off code
+  requestedById   Int?
+  requestedBy     User?     @relation("VariationRequester", fields: [requestedById], references: [id])
+  requestedAt     DateTime  @default(now())
+  approvedById    Int?
+  approvedBy      User?     @relation("VariationApprover", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  rejectionReason String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items           BudgetVariationItem[]
+}
+
+model BudgetVariationItem {
+  id            Int             @id @default(autoincrement())
+  variationId   Int
+  variation     BudgetVariation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  budgetLineId  Int
+  budgetLine    BudgetLine      @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  amount        Float           // positive = increase, negative = decrease
+  note          String?
 }
 
 model HaulageMovement {

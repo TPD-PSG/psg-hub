@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
+import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF } from "@/lib/exports";
 
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
@@ -1597,6 +1598,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               </div>}
             </div>
           )}
+
+          {/* Budget Reallocation panel */}
+          <div className="rounded-lg border p-4" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+            <BudgetReallocationPanel
+              productionId={prod.id}
+              budgetLines={prod.budgetLines.map(l => ({ id: l.id, department: l.department, description: l.description }))}
+              isAdmin={isAdmin}
+            />
+          </div>
 
           {/* Rechargeable haulage panel */}
           {prod.haulageMovements.some((m) => m.rechargeable) && (

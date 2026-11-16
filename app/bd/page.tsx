@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Client = { id: number; name: string; type: string };
+type Client = { id: number; name: string; type: string; website?: string | null; address?: string | null; notes?: string | null; billingName?: string | null; billingAddress?: string | null; billingEmail?: string | null };
 type BDTask = { id: number; description: string; dueDate: string | null; completedAt: string | null };
 type Opportunity = {
   id: number; title: string; type: string; stage: string;
@@ -26,7 +26,7 @@ const CLIENT_TYPES = ["promoter","venue","council","broadcaster","corporate","ot
 
 const BLANK_OPP = { title: "", type: "production", stage: "lead", value: "", clientId: "", description: "", closeDate: "", notes: "" };
 const BLANK_TASK = { description: "", dueDate: "" };
-const BLANK_CLIENT = { name: "", type: "promoter", website: "", address: "", notes: "" };
+const BLANK_CLIENT = { name: "", type: "promoter", website: "", address: "", notes: "", billingName: "", billingAddress: "", billingEmail: "" };
 const BLANK_CONTACT = { name: "", role: "", email: "", phone: "" };
 
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -67,6 +67,8 @@ export default function BDPage() {
   // Client form
   const [showClientForm, setShowClientForm] = useState(false);
   const [clientForm, setClientForm] = useState(BLANK_CLIENT);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [editClientForm, setEditClientForm] = useState(BLANK_CLIENT);
   const [contactForm, setContactForm] = useState(BLANK_CONTACT);
   const [showContactForm, setShowContactForm] = useState<number | null>(null);
 
@@ -139,6 +141,14 @@ export default function BDPage() {
     await fetch("/api/clients", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(clientForm) });
     setShowClientForm(false);
     setClientForm(BLANK_CLIENT);
+    reload();
+  }
+
+  async function saveEditClient(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingClient) return;
+    await fetch(`/api/clients/${editingClient.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editClientForm) });
+    setEditingClient(null);
     reload();
   }
 
@@ -473,6 +483,79 @@ export default function BDPage() {
         </div>
       )}
 
+      {/* Clients list */}
+      {clients.length > 0 && (
+        <div className="rounded-lg border" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--psg-card-border)" }}>
+            <span className="text-sm font-semibold text-white">Clients ({clients.length})</span>
+          </div>
+          <div className="divide-y" style={{ borderColor: "var(--psg-card-border)" }}>
+            {clients.map(c => (
+              <div key={c.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-white">{c.name}</div>
+                  <div className="text-xs capitalize" style={{ color: "var(--psg-muted)" }}>{c.type}</div>
+                  {c.billingName && <div className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Bill to: {c.billingName}</div>}
+                  {c.billingEmail && <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{c.billingEmail}</div>}
+                </div>
+                <button onClick={() => { setEditingClient(c); setEditClientForm({ name: c.name, type: c.type, website: c.website ?? "", address: c.address ?? "", notes: c.notes ?? "", billingName: c.billingName ?? "", billingAddress: c.billingAddress ?? "", billingEmail: c.billingEmail ?? "" }); }} className="text-xs px-2 py-1 rounded border shrink-0 hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Edit client modal */}
+      {editingClient && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="rounded-xl shadow-2xl w-full max-w-md border" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
+              <h2 className="font-semibold text-white">Edit Client</h2>
+              <button onClick={() => setEditingClient(null)} className="text-xl leading-none hover:text-white" style={{ color: "var(--psg-muted)" }}>×</button>
+            </div>
+            <div className="px-5 py-4 max-h-[70vh] overflow-y-auto">
+              <form onSubmit={saveEditClient} className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Name *</label>
+                  <input required className={inp} style={inpStyle} value={editClientForm.name} onChange={e => setEditClientForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Type</label>
+                  <select className={inp} style={inpStyle} value={editClientForm.type} onChange={e => setEditClientForm(f => ({ ...f, type: e.target.value }))}>
+                    {CLIENT_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Website</label>
+                  <input className={inp} style={inpStyle} value={editClientForm.website} onChange={e => setEditClientForm(f => ({ ...f, website: e.target.value }))} placeholder="https://" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Notes</label>
+                  <textarea rows={2} className={inp} style={inpStyle} value={editClientForm.notes} onChange={e => setEditClientForm(f => ({ ...f, notes: e.target.value }))} />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-widest pt-1" style={{ color: "var(--psg-muted)" }}>Billing Details</p>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Billing Name</label>
+                  <input className={inp} style={inpStyle} value={editClientForm.billingName} onChange={e => setEditClientForm(f => ({ ...f, billingName: e.target.value }))} placeholder="Legal entity name" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Billing Address</label>
+                  <textarea rows={3} className={inp} style={inpStyle} value={editClientForm.billingAddress} onChange={e => setEditClientForm(f => ({ ...f, billingAddress: e.target.value }))} placeholder="Full billing address" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Billing Email</label>
+                  <input type="email" className={inp} style={inpStyle} value={editClientForm.billingEmail} onChange={e => setEditClientForm(f => ({ ...f, billingEmail: e.target.value }))} placeholder="accounts@..." />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="submit" className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "var(--psg-blue)" }}>Save</button>
+                  <button type="button" onClick={() => setEditingClient(null)} className="border px-4 py-2 rounded text-sm hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Client form modal */}
       {showClientForm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -500,6 +583,19 @@ export default function BDPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Notes</label>
                   <textarea rows={2} className={inp} style={inpStyle} value={clientForm.notes} onChange={e => setClientForm(f => ({ ...f, notes: e.target.value }))} />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-widest pt-1" style={{ color: "var(--psg-muted)" }}>Billing Details</p>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Billing Name</label>
+                  <input className={inp} style={inpStyle} value={clientForm.billingName} onChange={e => setClientForm(f => ({ ...f, billingName: e.target.value }))} placeholder="Legal entity name" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Billing Address</label>
+                  <textarea rows={3} className={inp} style={inpStyle} value={clientForm.billingAddress} onChange={e => setClientForm(f => ({ ...f, billingAddress: e.target.value }))} placeholder="Full billing address" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Billing Email</label>
+                  <input type="email" className={inp} style={inpStyle} value={clientForm.billingEmail} onChange={e => setClientForm(f => ({ ...f, billingEmail: e.target.value }))} placeholder="accounts@..." />
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button type="submit" className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "var(--psg-blue)" }}>Add Client</button>

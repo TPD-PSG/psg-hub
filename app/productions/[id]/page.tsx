@@ -135,6 +135,8 @@ type Production = {
   advancingStatus: string;
   contraEstimate: number | null;
   contraActual: number | null;
+  bdClientId: number | null;
+  bdClient: { id: number; name: string; type: string; address: string | null; website: string | null; billingName: string | null; billingAddress: string | null; billingEmail: string | null } | null;
   events: Event[];
   budgetLines: BudgetLine[];
   crew: ProductionCrew[];
@@ -503,7 +505,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [eventForm, setEventForm] = useState({ title: "", type: "Rehearsal", startAt: "", endAt: "", location: "", notes: "" });
   const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" });
   const [expenseForm, setExpenseForm] = useState<typeof BLANK_EXPENSE & { id?: number }>(BLANK_EXPENSE);
-  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", internalStatus: "pencil", productionManager: "", color: "", notes: "", reportEmail: "", sharepointUrl: "" });
+  const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", internalStatus: "pencil", productionManager: "", color: "", notes: "", reportEmail: "", sharepointUrl: "", bdClientId: "" });
+  const [allBdClients, setAllBdClients] = useState<{ id: number; name: string; type: string }[]>([]);
+  useEffect(() => { fetch("/api/clients").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllBdClients(d); }); }, []);
 
   useEffect(() => {
     reload();
@@ -598,7 +602,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       isTour: data.isTour ?? false,
       startDate: data.startDate ? data.startDate.slice(0, 10) : "",
       endDate: data.endDate ? data.endDate.slice(0, 10) : "",
-      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", internalStatus: data.internalStatus ?? "pencil", productionManager: data.productionManager ?? "", color: data.color ?? "", notes: data.notes ?? "", reportEmail: data.reportEmail ?? "", sharepointUrl: data.sharepointUrl ?? "",
+      status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", internalStatus: data.internalStatus ?? "pencil", productionManager: data.productionManager ?? "", color: data.color ?? "", notes: data.notes ?? "", reportEmail: data.reportEmail ?? "", sharepointUrl: data.sharepointUrl ?? "", bdClientId: data.bdClientId ? String(data.bdClientId) : "",
     });
   }
 
@@ -1045,6 +1049,20 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ANN_COLORS[prod.announcementStatus] ?? "bg-white/10 text-white/50"}`}>{ANN_LABELS[prod.announcementStatus] ?? prod.announcementStatus}</span>
             {prod.isTour && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-900/60 text-purple-300">Tour</span>}
           </div>
+          {prod.bdClient && (
+            <div className="mt-1.5 flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-white">{prod.bdClient.name}</span>
+              {prod.bdClient.billingName && prod.bdClient.billingName !== prod.bdClient.name && (
+                <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingName}</span>
+              )}
+              {prod.bdClient.billingAddress && (
+                <span className="text-xs whitespace-pre-line" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingAddress}</span>
+              )}
+              {prod.bdClient.billingEmail && (
+                <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingEmail}</span>
+              )}
+            </div>
+          )}
           {prod.venueRef && <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{prod.venueRef.name}{prod.venueRef.city ? ` · ${prod.venueRef.city}` : ""}</p>}
           {!prod.venueRef && prod.venue && <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{prod.venue}</p>}
           {prod.isTour && tourStops.length > 0 && <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{tourStops.length} tour {tourStops.length === 1 ? "stop" : "stops"}</p>}
@@ -3593,6 +3611,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               </F>
             </div>
             <F label="Proj Lead / Production Manager"><input className={inp} style={inpStyle} value={prodForm.productionManager} onChange={(e) => setProdForm((f) => ({ ...f, productionManager: e.target.value }))} placeholder="e.g. Toby / Tom" /></F>
+            <F label="Client (from BD)">
+              <select className={inp} style={inpStyle} value={prodForm.bdClientId} onChange={e => setProdForm(f => ({ ...f, bdClientId: e.target.value }))}>
+                <option value="">— none —</option>
+                {allBdClients.map(c => <option key={c.id} value={c.id}>{c.name} · {c.type}</option>)}
+              </select>
+            </F>
             <F label="Venue (from database)">
               <select className={inp} style={inpStyle} value={prodForm.venueId} onChange={e => setProdForm(f => ({ ...f, venueId: e.target.value }))}>
                 <option value="">— none / freetext below —</option>

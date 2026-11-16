@@ -12,7 +12,7 @@ model User {
   name         String
   email        String   @unique
   passwordHash String
-  role         String   @default("member") // admin | member
+  role         String   @default("member") // admin | member | client | freelancer
   preferences  String?  // JSON: { widgets: string[] }
   permissions  String?  // JSON: { modules: string[], allProductions: boolean }
   avatarUrl    String?
@@ -62,6 +62,8 @@ model Production {
   advancingStatus String  @default("triage")
   contraEstimate  Float?
   contraActual    Float?
+  bdClientId      Int?
+  bdClient        Client?   @relation("ProductionBDClient", fields: [bdClientId], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -313,10 +315,14 @@ model Client {
   website       String?
   address       String?
   notes         String?
+  billingName    String?
+  billingAddress String?
+  billingEmail   String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   contacts      Contact[]
   opportunities Opportunity[]
+  productions   Production[]  @relation("ProductionBDClient")
 }
 
 model Contact {

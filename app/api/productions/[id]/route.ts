@@ -57,6 +57,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
         orderBy: { createdAt: "asc" },
       },
       venueRef: { select: { id: true, name: true, city: true, capacity: true } },
+      bdClient: { select: { id: true, name: true, type: true, address: true, website: true, contacts: { select: { id: true, name: true, role: true, email: true, phone: true }, take: 5 } } },
     },
   });
   if (!production) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -88,6 +89,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       reportEmail: body.reportEmail || null,
       sharepointUrl: body.sharepointUrl || null,
       haulageBudgetLineId: body.haulageBudgetLineId ? Number(body.haulageBudgetLineId) : null,
+      bdClientId: body.bdClientId ? Number(body.bdClientId) : null,
     },
   });
   return NextResponse.json(production);

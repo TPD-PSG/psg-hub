@@ -23,6 +23,9 @@ export async function POST(req: Request) {
       website: data.website || null,
       address: data.address || null,
       notes: data.notes || null,
+      billingName: data.billingName || null,
+      billingAddress: data.billingAddress || null,
+      billingEmail: data.billingEmail || null,
     },
     include: { contacts: true },
   });

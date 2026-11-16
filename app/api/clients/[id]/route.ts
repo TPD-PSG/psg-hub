@@ -9,7 +9,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const data = await req.json();
   const client = await prisma.client.update({
     where: { id: parseInt(id) },
-    data: { name: data.name, type: data.type, website: data.website ?? null, address: data.address ?? null, notes: data.notes ?? null },
+    data: { name: data.name, type: data.type, website: data.website ?? null, address: data.address ?? null, notes: data.notes ?? null, billingName: data.billingName ?? null, billingAddress: data.billingAddress ?? null, billingEmail: data.billingEmail ?? null },
     include: { contacts: true },
   });
   return NextResponse.json(client);

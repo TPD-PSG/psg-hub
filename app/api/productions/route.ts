@@ -9,6 +9,7 @@ const include = {
   events: { orderBy: { startAt: "asc" as const } },
   team: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } }, orderBy: { createdAt: "asc" as const } },
   venueRef: { select: { name: true, city: true } },
+  bdClient: { select: { id: true, name: true, type: true, address: true, website: true, contacts: { select: { id: true, name: true, role: true, email: true, phone: true }, take: 5 } } },
 };
 
 export async function GET(req: NextRequest) {

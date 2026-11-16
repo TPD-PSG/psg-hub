@@ -252,6 +252,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [bookingForm, setBookingForm] = useState<typeof BLANK_BOOKING & { id?: number }>(BLANK_BOOKING);
   const [budgetView, setBudgetView] = useState<"summary" | "detail">("detail");
   const [expandedBudgetLines, setExpandedBudgetLines] = useState<Set<number>>(new Set());
+  const [expandedBudgetDepts, setExpandedBudgetDepts] = useState<Set<string>>(new Set());
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Spend document state
@@ -1301,165 +1302,217 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             </div>
           )}
 
-          {/* Detail view — per department with line items */}
+          {/* Detail view — grouped by department */}
           {budgetView === "detail" && (
             <div className="space-y-4">
               {prod.budgetLines.length === 0 && <p className="text-center py-10" style={{ color: "var(--psg-muted)" }}>No budget lines yet.</p>}
-              {prod.budgetLines.map((line) => {
-                const lineMovements = prod.haulageMovements.filter((m) => m.budgetLineId === line.id);
-                const lineHaulageEst = lineMovements.reduce((s, m) => s + (m.estimatedCost ?? 0), 0);
-                const lineHaulageAct = lineMovements.reduce((s, m) => s + (m.actualCost ?? 0), 0);
-                const lineEst = line.expenses.reduce((s, x) => s + x.estimated, 0) + lineHaulageEst;
-                const lineCom = line.expenses.reduce((s, x) => s + x.committed, 0) + lineHaulageAct;
-                const lineSpt = line.expenses.reduce((s, x) => s + x.spent, 0);
-                const pct = line.budgeted > 0 ? Math.min((lineCom / line.budgeted) * 100, 100) : 0;
-                const byPhase = PHASES.reduce((acc, p) => {
-                  acc[p] = line.expenses.filter((x) => !x.isPSGExpense && x.phase === p);
-                  return acc;
-                }, {} as Record<string, Expense[]>);
-                const psgExpenses = line.expenses.filter((x) => x.isPSGExpense);
+              {(() => {
+                // Group lines by department, preserving order of first appearance
+                const deptOrder: string[] = [];
+                const deptLines: Record<string, typeof prod.budgetLines> = {};
+                for (const line of prod.budgetLines) {
+                  if (!deptLines[line.department]) { deptOrder.push(line.department); deptLines[line.department] = []; }
+                  deptLines[line.department].push(line);
+                }
+                return deptOrder.map((dept) => {
+                  const lines = deptLines[dept];
+                  // Aggregate figures for the department header
+                  const deptEst = lines.reduce((s, l) => {
+                    const lm = prod.haulageMovements.filter(m => m.budgetLineId === l.id);
+                    return s + l.expenses.reduce((e, x) => e + x.estimated, 0) + lm.reduce((e, m) => e + (m.estimatedCost ?? 0), 0);
+                  }, 0);
+                  const deptCom = lines.reduce((s, l) => {
+                    const lm = prod.haulageMovements.filter(m => m.budgetLineId === l.id);
+                    return s + l.expenses.reduce((e, x) => e + x.committed, 0) + lm.reduce((e, m) => e + (m.actualCost ?? 0), 0);
+                  }, 0);
+                  const deptSpt = lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.spent, 0), 0);
+                  const deptAlloc = lines.reduce((s, l) => s + l.budgeted, 0);
+                  const deptPct = deptAlloc > 0 ? Math.min((deptCom / deptAlloc) * 100, 100) : 0;
+                  const isDeptExpanded = expandedBudgetDepts.has(dept);
+                  const toggleDept = () => setExpandedBudgetDepts(s => { const n = new Set(s); isDeptExpanded ? n.delete(dept) : n.add(dept); return n; });
 
-                const isExpanded = expandedBudgetLines.has(line.id);
-                const toggleExpanded = () => setExpandedBudgetLines(s => { const n = new Set(s); isExpanded ? n.delete(line.id) : n.add(line.id); return n; });
-
-                return (
-                  <div key={line.id} className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-                    {/* Department header — click to expand */}
-                    <div
-                      className="px-4 py-3 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-white/5 transition-colors"
-                      style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
-                      onClick={toggleExpanded}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs shrink-0 transition-transform" style={{ color: "var(--psg-muted)", transform: isExpanded ? "rotate(90deg)" : "none" }}>▸</span>
-                        <span className="font-semibold text-sm text-white truncate">{line.description}</span>
-                        <span className="text-xs shrink-0" style={{ color: "var(--psg-muted)" }}>{line.department}</span>
-                        {line.nominalCode && <span className="text-xs font-mono px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{line.nominalCode}</span>}
-                      </div>
-                      <div className="flex items-center gap-4 text-xs shrink-0">
-                        <span className="text-yellow-300">PM: {fmt(lineEst)}</span>
-                        <span className="text-orange-300">Net: {fmt(lineCom)}</span>
-                        <span className="text-green-400">Gross: {fmt(lineSpt)}</span>
-                        <span className="font-semibold text-white">Alloc: {fmt(line.budgeted)}</span>
-                        <span className={`font-semibold ${line.budgeted - lineCom < 0 ? "text-red-400" : "text-green-400"}`}>
-                          Remaining: {fmt(line.budgeted - lineCom)}
-                        </span>
-                      </div>
-                      <div className="flex gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ Spend</button>
-                        <button onClick={() => { setPSGExpenseForm(BLANK_PSG_EXPENSE); setEditingPSGExpense(null); setPsgReceiptFile(null); setShowPSGExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ PSG Expense</button>
-                        <button onClick={() => { setEditBudgetLine(line); setBudgetForm({ department: line.department, description: line.description, nominalCode: line.nominalCode ?? "", budgeted: String(line.budgeted), notes: line.notes ?? "" }); setShowBudgetForm(true); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
-                        <button onClick={() => deleteBudgetLine(line.id)} className="text-xs text-red-400 hover:text-red-300">Delete</button>
-                      </div>
-                    </div>
-                    {/* Budget bar */}
-                    <div className="h-2" style={{ backgroundColor: "var(--psg-card-border)" }}>
-                      <div className={`h-full transition-all ${pct >= 100 ? "bg-red-500" : pct >= 75 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} />
-                    </div>
-                    {!isExpanded && null}
-                    {isExpanded && <>
-
-                    {/* Haulage movements linked to this budget line */}
-                    {lineMovements.length > 0 && (
-                      <div>
-                        <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.04)" }}>
-                          Haulage Movements
+                  return (
+                    <div key={dept} className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                      {/* Department header */}
+                      <div
+                        className="px-4 py-3 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-white/5 transition-colors"
+                        style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
+                        onClick={toggleDept}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs shrink-0 transition-transform" style={{ color: "var(--psg-muted)", transform: isDeptExpanded ? "rotate(90deg)" : "none" }}>▸</span>
+                          <span className="font-semibold text-sm text-white truncate">{dept}</span>
+                          <span className="text-xs shrink-0 px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{lines.length} line{lines.length !== 1 ? "s" : ""}</span>
                         </div>
-                        <table className="w-full text-xs">
-                          <tbody>
-                            {lineMovements.map((m) => (
-                              <tr key={m.id} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
-                                <td className="px-4 py-2 text-white w-1/4">{m.haulageCompany}</td>
-                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{m.fromLocation} → {m.toLocation}</td>
-                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{fmtDate(m.departureAt)}</td>
-                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{m.cargo || "—"}</td>
-                                <td className="px-3 py-2 text-right text-yellow-300 font-medium">{m.estimatedCost != null ? fmt(m.estimatedCost) : "—"}</td>
-                                <td className="px-3 py-2 text-right text-orange-300 font-medium">{m.actualCost != null ? fmt(m.actualCost) : "—"}</td>
-                                <td className="px-3 py-2 text-right">—</td>
-                                {m.rechargeable && <td className="px-2 py-2"><span className="text-orange-400 border border-orange-400/40 rounded px-1 py-0.5">Invoice</span></td>}
-                                {!m.rechargeable && <td className="px-2 py-2" />}
-                                <td className="px-3 py-2" />
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <div className="flex items-center gap-4 text-xs shrink-0">
+                          <span className="text-yellow-300">PM: {fmt(deptEst)}</span>
+                          <span className="text-orange-300">Net: {fmt(deptCom)}</span>
+                          <span className="text-green-400">Gross: {fmt(deptSpt)}</span>
+                          <span className="font-semibold text-white">Alloc: {fmt(deptAlloc)}</span>
+                          <span className={`font-semibold ${deptAlloc - deptCom < 0 ? "text-red-400" : "text-green-400"}`}>Remaining: {fmt(deptAlloc - deptCom)}</span>
+                        </div>
                       </div>
-                    )}
+                      {/* Department progress bar */}
+                      <div className="h-2" style={{ backgroundColor: "var(--psg-card-border)" }}>
+                        <div className={`h-full transition-all ${deptPct >= 100 ? "bg-red-500" : deptPct >= 75 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${deptPct}%` }} />
+                      </div>
 
-                    {/* Line items grouped by phase */}
-                    {PHASES.map((phase) => {
-                      const items = byPhase[phase];
-                      if (items.length === 0) return null;
-                      return (
-                        <div key={phase}>
-                          <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: PHASE_COLORS[phase] ?? "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.02)" }}>
-                            {phase}
+                      {/* Individual lines inside the department */}
+                      {isDeptExpanded && lines.map((line) => {
+                        const lineMovements = prod.haulageMovements.filter((m) => m.budgetLineId === line.id);
+                        const lineHaulageEst = lineMovements.reduce((s, m) => s + (m.estimatedCost ?? 0), 0);
+                        const lineHaulageAct = lineMovements.reduce((s, m) => s + (m.actualCost ?? 0), 0);
+                        const lineEst = line.expenses.reduce((s, x) => s + x.estimated, 0) + lineHaulageEst;
+                        const lineCom = line.expenses.reduce((s, x) => s + x.committed, 0) + lineHaulageAct;
+                        const lineSpt = line.expenses.reduce((s, x) => s + x.spent, 0);
+                        const pct = line.budgeted > 0 ? Math.min((lineCom / line.budgeted) * 100, 100) : 0;
+                        const byPhase = PHASES.reduce((acc, p) => {
+                          acc[p] = line.expenses.filter((x) => !x.isPSGExpense && x.phase === p);
+                          return acc;
+                        }, {} as Record<string, Expense[]>);
+                        const psgExpenses = line.expenses.filter((x) => x.isPSGExpense);
+                        const isLineExpanded = expandedBudgetLines.has(line.id);
+                        const toggleLine = () => setExpandedBudgetLines(s => { const n = new Set(s); isLineExpanded ? n.delete(line.id) : n.add(line.id); return n; });
+
+                        return (
+                          <div key={line.id} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
+                            {/* Line row — click to expand expenses */}
+                            <div
+                              className="px-4 py-2.5 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-white/5 transition-colors"
+                              style={{ paddingLeft: "2rem" }}
+                              onClick={toggleLine}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs shrink-0" style={{ color: "var(--psg-muted)", transform: isLineExpanded ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s" }}>▸</span>
+                                <span className="text-sm text-white truncate">{line.description}</span>
+                                {line.nominalCode && <span className="text-xs font-mono px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{line.nominalCode}</span>}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs shrink-0">
+                                <span className="text-yellow-300">PM: {fmt(lineEst)}</span>
+                                <span className="text-orange-300">Net: {fmt(lineCom)}</span>
+                                <span className="text-green-400">Gross: {fmt(lineSpt)}</span>
+                                <span className="text-white">Alloc: {fmt(line.budgeted)}</span>
+                                <span className={pct >= 100 ? "text-red-400" : ""}>{Math.round(pct)}%</span>
+                              </div>
+                              <div className="flex gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ Spend</button>
+                                <button onClick={() => { setPSGExpenseForm(BLANK_PSG_EXPENSE); setEditingPSGExpense(null); setPsgReceiptFile(null); setShowPSGExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ PSG Expense</button>
+                                <button onClick={() => { setEditBudgetLine(line); setBudgetForm({ department: line.department, description: line.description, nominalCode: line.nominalCode ?? "", budgeted: String(line.budgeted), notes: line.notes ?? "" }); setShowBudgetForm(true); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
+                                <button onClick={() => deleteBudgetLine(line.id)} className="text-xs text-red-400 hover:text-red-300">Delete</button>
+                              </div>
+                            </div>
+                            {/* Line progress bar */}
+                            <div className="h-1" style={{ backgroundColor: "var(--psg-card-border)", marginLeft: "2rem" }}>
+                              <div className={`h-full transition-all ${pct >= 100 ? "bg-red-500" : pct >= 75 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} />
+                            </div>
+
+                            {/* Expanded: expenses */}
+                            {isLineExpanded && <>
+                              {/* Haulage movements linked to this budget line */}
+                              {lineMovements.length > 0 && (
+                                <div>
+                                  <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.04)" }}>
+                                    Haulage Movements
+                                  </div>
+                                  <table className="w-full text-xs">
+                                    <tbody>
+                                      {lineMovements.map((m) => (
+                                        <tr key={m.id} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
+                                          <td className="px-4 py-2 text-white w-1/4">{m.haulageCompany}</td>
+                                          <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{m.fromLocation} → {m.toLocation}</td>
+                                          <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{fmtDate(m.departureAt)}</td>
+                                          <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{m.cargo || "—"}</td>
+                                          <td className="px-3 py-2 text-right text-yellow-300 font-medium">{m.estimatedCost != null ? fmt(m.estimatedCost) : "—"}</td>
+                                          <td className="px-3 py-2 text-right text-orange-300 font-medium">{m.actualCost != null ? fmt(m.actualCost) : "—"}</td>
+                                          <td className="px-3 py-2 text-right">—</td>
+                                          {m.rechargeable && <td className="px-2 py-2"><span className="text-orange-400 border border-orange-400/40 rounded px-1 py-0.5">Invoice</span></td>}
+                                          {!m.rechargeable && <td className="px-2 py-2" />}
+                                          <td className="px-3 py-2" />
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+
+                              {/* Line items grouped by phase */}
+                              {PHASES.map((phase) => {
+                                const items = byPhase[phase];
+                                if (items.length === 0) return null;
+                                return (
+                                  <div key={phase}>
+                                    <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: PHASE_COLORS[phase] ?? "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.02)" }}>
+                                      {phase}
+                                    </div>
+                                    <table className="w-full text-xs">
+                                      <tbody>
+                                        {items.map((x) => (
+                                          <tr key={x.id} className="border-t hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
+                                            <td className="px-4 py-2 text-white w-1/4">{x.description}</td>
+                                            <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.supplier || "—"}</td>
+                                            <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.poNumber ? `PO: ${x.poNumber}` : ""}</td>
+                                            <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.paymentDue ? fmtShortDate(x.paymentDue) : ""}</td>
+                                            <td className="px-3 py-2 text-right text-yellow-300 font-medium">{x.estimated > 0 ? fmt(x.estimated) : "—"}</td>
+                                            <td className="px-3 py-2 text-right text-orange-300 font-medium">{x.committed > 0 ? fmt(x.committed) : "—"}</td>
+                                            <td className="px-3 py-2 text-right text-green-400 font-medium">{x.spent > 0 ? fmt(x.spent) : "—"}</td>
+                                            <td className="px-3 py-2">
+                                              <button
+                                                onClick={() => toggleIssued(x)}
+                                                className={`px-2 py-0.5 rounded-full ${x.issuedForPayment ? "bg-green-900/60 text-green-300" : "bg-white/10 text-white/40"}`}
+                                              >
+                                                {x.issuedForPayment ? "Issued" : "Pending"}
+                                              </button>
+                                            </td>
+                                            {x.vatExempt && <td className="px-2 py-2 text-white/30 text-xs">No VAT</td>}
+                                            {!x.vatExempt && <td className="px-2 py-2" />}
+                                            <td className="px-3 py-2 opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
+                                              <button onClick={() => openEditExpense(x, line.id)} className="text-blue-400 hover:text-blue-300">Edit</button>
+                                              <button onClick={() => deleteExpense(x.id)} className="text-red-400 hover:text-red-300">×</button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                );
+                              })}
+
+                              {/* PSG Expenses section */}
+                              {psgExpenses.length > 0 && (
+                                <div>
+                                  <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: "rgb(165,180,252)", backgroundColor: "rgba(99,102,241,0.06)" }}>
+                                    PSG Expenses
+                                  </div>
+                                  <table className="w-full text-xs">
+                                    <tbody>
+                                      {psgExpenses.map((x) => (
+                                        <tr key={x.id} className="border-t hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
+                                          <td className="px-4 py-2 text-white w-1/4">{x.description}</td>
+                                          <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.supplier || "—"}</td>
+                                          <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.paymentMethod || "—"}</td>
+                                          <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.paymentDue ? fmtShortDate(x.paymentDue) : ""}</td>
+                                          <td className="px-3 py-2 text-right" />
+                                          <td className="px-3 py-2 text-right text-orange-300 font-medium">{x.committed > 0 ? fmt(x.committed) : "—"}</td>
+                                          <td className="px-3 py-2 text-right text-green-400 font-medium">{x.spent > 0 ? fmt(x.spent) : "—"}</td>
+                                          <td className="px-3 py-2" />
+                                          <td className="px-3 py-2 opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
+                                            <button onClick={() => { setPSGExpenseForm({ description: x.description, supplier: x.supplier ?? "", committed: String(x.committed), spent: String(x.spent), paymentDue: x.paymentDue ? x.paymentDue.slice(0, 10) : "", notes: x.notes ?? "", paymentMethod: x.paymentMethod ?? "", id: x.id }); setEditingPSGExpense(x); setPsgReceiptFile(null); setShowPSGExpenseForm(null); }} className="text-blue-400 hover:text-blue-300">Edit</button>
+                                            <button onClick={() => deletePSGExpense(x.id)} className="text-red-400 hover:text-red-300">×</button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </>}
                           </div>
-                          <table className="w-full text-xs">
-                            <tbody>
-                              {items.map((x) => (
-                                <tr key={x.id} className="border-t hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
-                                  <td className="px-4 py-2 text-white w-1/4">{x.description}</td>
-                                  <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.supplier || "—"}</td>
-                                  <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.poNumber ? `PO: ${x.poNumber}` : ""}</td>
-                                  <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.paymentDue ? fmtShortDate(x.paymentDue) : ""}</td>
-                                  <td className="px-3 py-2 text-right text-yellow-300 font-medium">{x.estimated > 0 ? fmt(x.estimated) : "—"}</td>
-                                  <td className="px-3 py-2 text-right text-orange-300 font-medium">{x.committed > 0 ? fmt(x.committed) : "—"}</td>
-                                  <td className="px-3 py-2 text-right text-green-400 font-medium">{x.spent > 0 ? fmt(x.spent) : "—"}</td>
-                                  <td className="px-3 py-2">
-                                    <button
-                                      onClick={() => toggleIssued(x)}
-                                      className={`px-2 py-0.5 rounded-full ${x.issuedForPayment ? "bg-green-900/60 text-green-300" : "bg-white/10 text-white/40"}`}
-                                    >
-                                      {x.issuedForPayment ? "Issued" : "Pending"}
-                                    </button>
-                                  </td>
-                                  {x.vatExempt && <td className="px-2 py-2 text-white/30 text-xs">No VAT</td>}
-                                  {!x.vatExempt && <td className="px-2 py-2" />}
-                                  <td className="px-3 py-2 opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
-                                    <button onClick={() => openEditExpense(x, line.id)} className="text-blue-400 hover:text-blue-300">Edit</button>
-                                    <button onClick={() => deleteExpense(x.id)} className="text-red-400 hover:text-red-300">×</button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      );
-                    })}
-
-                    {/* PSG Expenses section */}
-                    {psgExpenses.length > 0 && (
-                      <div>
-                        <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-widest border-t" style={{ borderColor: "var(--psg-card-border)", color: "rgb(165,180,252)", backgroundColor: "rgba(99,102,241,0.06)" }}>
-                          PSG Expenses
-                        </div>
-                        <table className="w-full text-xs">
-                          <tbody>
-                            {psgExpenses.map((x) => (
-                              <tr key={x.id} className="border-t hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
-                                <td className="px-4 py-2 text-white w-1/4">{x.description}</td>
-                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.supplier || "—"}</td>
-                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.paymentMethod || "—"}</td>
-                                <td className="px-3 py-2" style={{ color: "var(--psg-muted)" }}>{x.paymentDue ? fmtShortDate(x.paymentDue) : ""}</td>
-                                <td className="px-3 py-2 text-right" />
-                                <td className="px-3 py-2 text-right text-orange-300 font-medium">{x.committed > 0 ? fmt(x.committed) : "—"}</td>
-                                <td className="px-3 py-2 text-right text-green-400 font-medium">{x.spent > 0 ? fmt(x.spent) : "—"}</td>
-                                <td className="px-3 py-2" />
-                                <td className="px-3 py-2 opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
-                                  <button onClick={() => { setPSGExpenseForm({ description: x.description, supplier: x.supplier ?? "", committed: String(x.committed), spent: String(x.spent), paymentDue: x.paymentDue ? x.paymentDue.slice(0, 10) : "", notes: x.notes ?? "", paymentMethod: x.paymentMethod ?? "", id: x.id }); setEditingPSGExpense(x); setPsgReceiptFile(null); setShowPSGExpenseForm(null); }} className="text-blue-400 hover:text-blue-300">Edit</button>
-                                  <button onClick={() => deletePSGExpense(x.id)} className="text-red-400 hover:text-red-300">×</button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                    </>}
-                  </div>
-                );
-              })}
+                        );
+                      })}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
 

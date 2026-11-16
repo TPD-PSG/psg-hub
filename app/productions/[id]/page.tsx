@@ -381,6 +381,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const BLANK_CONTACT = { section: "General", name: "", company: "", role: "", phone: "", email: "", notes: "" };
   const [contactForm, setContactForm] = useState(BLANK_CONTACT);
   const [dragContactId, setDragContactId] = useState<number | null>(null);
+  const [dragSectionName, setDragSectionName] = useState<string | null>(null);
   const [showContra, setShowContra] = useState(false);
   // Contact sheet import
   const contactImportRef = useRef<HTMLInputElement>(null);
@@ -2612,15 +2613,50 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           ) : (
             <div className="space-y-6">
               {Array.from(new Set(contacts.map(c => c.section))).map(section => (
-                <div key={section}>
-                  <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>{section}</div>
+                <div
+                  key={section}
+                  draggable
+                  onDragStart={e => { e.stopPropagation(); setDragSectionName(section); setDragContactId(null); }}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (!dragSectionName || dragSectionName === section) { setDragSectionName(null); return; }
+                    // Reorder contacts so dragSectionName block moves before this section's block
+                    const sections = Array.from(new Set(contacts.map(c => c.section)));
+                    const fromIdx = sections.indexOf(dragSectionName);
+                    const toIdx = sections.indexOf(section);
+                    if (fromIdx === -1 || toIdx === -1) { setDragSectionName(null); return; }
+                    const newSections = [...sections];
+                    const [moved] = newSections.splice(fromIdx, 1);
+                    newSections.splice(toIdx, 0, moved);
+                    // Rebuild contacts in new section order, keeping within-section order
+                    const next: typeof contacts = [];
+                    for (const s of newSections) {
+                      next.push(...contacts.filter(c => c.section === s));
+                    }
+                    const updated = next.map((c, i) => ({ ...c, sortOrder: i }));
+                    setContacts(updated);
+                    setDragSectionName(null);
+                    fetch(`/api/productions/${id}/contacts/reorder`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ order: updated.map(x => ({ id: x.id, sortOrder: x.sortOrder })) }),
+                    });
+                  }}
+                  onDragEnd={() => setDragSectionName(null)}
+                  className={`transition-opacity ${dragSectionName === section ? "opacity-40" : ""}`}
+                >
+                  <div className="flex items-center gap-1.5 mb-2 cursor-grab active:cursor-grabbing group/sec">
+                    <span className="opacity-0 group-hover/sec:opacity-30 text-xs select-none" style={{ color: "var(--psg-muted)" }}>⠿</span>
+                    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>{section}</span>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {contacts.filter(c => c.section === section).map((c) => (
                       <div
                         key={c.id}
                         draggable
-                        onDragStart={() => setDragContactId(c.id)}
-                        onDragOver={e => { e.preventDefault(); }}
+                        onDragStart={e => { e.stopPropagation(); setDragContactId(c.id); setDragSectionName(null); }}
+                        onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
                         onDrop={() => {
                           if (dragContactId === null || dragContactId === c.id) return;
                           const draggedIdx = contacts.findIndex(x => x.id === dragContactId);

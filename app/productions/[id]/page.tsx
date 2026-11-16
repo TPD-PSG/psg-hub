@@ -1345,12 +1345,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                           <span className="text-xs shrink-0 px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{lines.length} line{lines.length !== 1 ? "s" : ""}</span>
                         </div>
                         <div className="flex items-center gap-4 text-xs shrink-0">
+                          <span className="font-semibold text-white">Alloc: {fmt(deptAlloc)}</span>
+                          <span className={`font-semibold ${deptAlloc - deptCom < 0 ? "text-red-400" : "text-green-400"}`}>Remaining: {fmt(deptAlloc - deptCom)}</span>
+                          <span className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
                           <span className="text-yellow-300">PM: {fmt(deptEst)}</span>
                           <span className="text-orange-300">Net: {fmt(deptCom)}</span>
                           <span className="text-green-400">Gross: {fmt(deptSpt)}</span>
-                          <span className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
-                          <span className="font-semibold text-white">Alloc: {fmt(deptAlloc)}</span>
-                          <span className={`font-semibold ${deptAlloc - deptCom < 0 ? "text-red-400" : "text-green-400"}`}>Remaining: {fmt(deptAlloc - deptCom)}</span>
                         </div>
                       </div>
                       {/* Department progress bar */}
@@ -1389,12 +1389,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                                 {line.nominalCode && <span className="text-xs font-mono px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{line.nominalCode}</span>}
                               </div>
                               <div className="flex items-center gap-3 text-xs shrink-0">
+                                <span className="text-white">Alloc: {fmt(line.budgeted)}</span>
+                                <span className={pct >= 100 ? "text-red-400" : ""}>{Math.round(pct)}%</span>
+                                <span className="w-0.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
                                 <span className="text-yellow-300">PM: {fmt(lineEst)}</span>
                                 <span className="text-orange-300">Net: {fmt(lineCom)}</span>
                                 <span className="text-green-400">Gross: {fmt(lineSpt)}</span>
-                                <span className="w-0.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
-                                <span className="text-white">Alloc: {fmt(line.budgeted)}</span>
-                                <span className={pct >= 100 ? "text-red-400" : ""}>{Math.round(pct)}%</span>
                               </div>
                               <div className="flex gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                                 <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ Spend</button>

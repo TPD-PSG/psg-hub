@@ -253,6 +253,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [budgetView, setBudgetView] = useState<"summary" | "detail">("detail");
   const [expandedBudgetLines, setExpandedBudgetLines] = useState<Set<number>>(new Set());
   const [expandedBudgetDepts, setExpandedBudgetDepts] = useState<Set<string>>(new Set());
+  const [renamingDept, setRenamingDept] = useState<string | null>(null);
+  const [deptRenameValue, setDeptRenameValue] = useState("");
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Spend document state
@@ -615,6 +617,20 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   async function deleteBudgetLine(lid: number) {
     if (!confirm("Delete this budget line and all its items?")) return;
     await fetch(`/api/budget-lines/${lid}`, { method: "DELETE" });
+    reload();
+  }
+
+  async function deleteDepartment(lineIds: number[]) {
+    if (!confirm(`Delete this department and all ${lineIds.length} line${lineIds.length !== 1 ? "s" : ""} within it?`)) return;
+    await Promise.all(lineIds.map(id => fetch(`/api/budget-lines/${id}`, { method: "DELETE" })));
+    reload();
+  }
+
+  async function renameDepartment(oldName: string, newName: string, lineIds: number[]) {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) { setRenamingDept(null); return; }
+    await Promise.all(lineIds.map(id => fetch(`/api/budget-lines/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ department: trimmed }) })));
+    setRenamingDept(null);
     reload();
   }
 
@@ -1341,7 +1357,21 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs shrink-0 transition-transform" style={{ color: "var(--psg-muted)", transform: isDeptExpanded ? "rotate(90deg)" : "none" }}>▸</span>
-                          <span className="font-semibold text-sm text-white truncate">{dept}</span>
+                          {renamingDept === dept ? (
+                            <form onSubmit={e => { e.preventDefault(); renameDepartment(dept, deptRenameValue, lines.map(l => l.id)); }} onClick={e => e.stopPropagation()} className="flex items-center gap-2">
+                              <input
+                                autoFocus
+                                className="text-sm font-semibold text-white rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)", border: "1px solid" }}
+                                value={deptRenameValue}
+                                onChange={e => setDeptRenameValue(e.target.value)}
+                              />
+                              <button type="submit" className="text-xs text-blue-400 hover:text-blue-300">Save</button>
+                              <button type="button" onClick={() => setRenamingDept(null)} className="text-xs" style={{ color: "var(--psg-muted)" }}>Cancel</button>
+                            </form>
+                          ) : (
+                            <span className="font-semibold text-sm text-white truncate">{dept}</span>
+                          )}
                           <span className="text-xs shrink-0 px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{lines.length} line{lines.length !== 1 ? "s" : ""}</span>
                         </div>
                         <div className="flex items-center gap-4 text-xs shrink-0">
@@ -1351,6 +1381,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                           <span className="text-yellow-300">PM: {fmt(deptEst)}</span>
                           <span className="text-orange-300">Net: {fmt(deptCom)}</span>
                           <span className="text-green-400">Gross: {fmt(deptSpt)}</span>
+                          <span className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
+                          <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => { setRenamingDept(dept); setDeptRenameValue(dept); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
+                            <button onClick={() => deleteDepartment(lines.map(l => l.id))} className="text-xs text-red-400 hover:text-red-300">Delete</button>
+                          </div>
                         </div>
                       </div>
                       {/* Department progress bar */}

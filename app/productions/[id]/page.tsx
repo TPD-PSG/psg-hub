@@ -251,6 +251,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const BLANK_BOOKING = { hotelId: "", crewId: "", guestName: "", roomType: "", roomNumber: "", checkIn: "", checkOut: "", ratePerNight: "", totalCost: "", confirmationNo: "", isPaid: false, notes: "" };
   const [bookingForm, setBookingForm] = useState<typeof BLANK_BOOKING & { id?: number }>(BLANK_BOOKING);
   const [budgetView, setBudgetView] = useState<"summary" | "detail">("detail");
+  const [expandedBudgetLines, setExpandedBudgetLines] = useState<Set<number>>(new Set());
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Spend document state
@@ -1318,14 +1319,22 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 }, {} as Record<string, Expense[]>);
                 const psgExpenses = line.expenses.filter((x) => x.isPSGExpense);
 
+                const isExpanded = expandedBudgetLines.has(line.id);
+                const toggleExpanded = () => setExpandedBudgetLines(s => { const n = new Set(s); isExpanded ? n.delete(line.id) : n.add(line.id); return n; });
+
                 return (
                   <div key={line.id} className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-                    {/* Department header */}
-                    <div className="px-4 py-3 flex items-center justify-between gap-4" style={{ backgroundColor: "rgba(255,255,255,0.04)", borderBottom: "1px solid var(--psg-card-border)" }}>
-                      <div>
-                        <span className="font-semibold text-sm text-white">{line.description}</span>
-                        <span className="ml-2 text-xs" style={{ color: "var(--psg-muted)" }}>{line.department}</span>
-                        {line.nominalCode && <span className="ml-1 text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{line.nominalCode}</span>}
+                    {/* Department header — click to expand */}
+                    <div
+                      className="px-4 py-3 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-white/5 transition-colors"
+                      style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
+                      onClick={toggleExpanded}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs shrink-0 transition-transform" style={{ color: "var(--psg-muted)", transform: isExpanded ? "rotate(90deg)" : "none" }}>▸</span>
+                        <span className="font-semibold text-sm text-white truncate">{line.description}</span>
+                        <span className="text-xs shrink-0" style={{ color: "var(--psg-muted)" }}>{line.department}</span>
+                        {line.nominalCode && <span className="text-xs font-mono px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{line.nominalCode}</span>}
                       </div>
                       <div className="flex items-center gap-4 text-xs shrink-0">
                         <span className="text-yellow-300">PM: {fmt(lineEst)}</span>
@@ -1333,7 +1342,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <span className="text-green-400">Gross: {fmt(lineSpt)}</span>
                         <span style={{ color: "var(--psg-muted)" }}>/ {fmt(line.budgeted)}</span>
                       </div>
-                      <div className="flex gap-2 shrink-0">
+                      <div className="flex gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                         <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ Spend</button>
                         <button onClick={() => { setPSGExpenseForm(BLANK_PSG_EXPENSE); setEditingPSGExpense(null); setPsgReceiptFile(null); setShowPSGExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ PSG Expense</button>
                         <button onClick={() => { setEditBudgetLine(line); setBudgetForm({ department: line.department, description: line.description, nominalCode: line.nominalCode ?? "", budgeted: String(line.budgeted), notes: line.notes ?? "" }); setShowBudgetForm(true); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
@@ -1344,6 +1353,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <div className="h-1" style={{ backgroundColor: "var(--psg-card-border)" }}>
                       <div className={`h-full transition-all ${pct >= 100 ? "bg-red-500" : pct >= 75 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} />
                     </div>
+                    {!isExpanded && null}
+                    {isExpanded && <>
 
                     {/* Haulage movements linked to this budget line */}
                     {lineMovements.length > 0 && (
@@ -1442,6 +1453,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         </table>
                       </div>
                     )}
+                    </>}
                   </div>
                 );
               })}

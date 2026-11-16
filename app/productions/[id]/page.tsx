@@ -453,6 +453,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   const [showEventForm, setShowEventForm] = useState(false);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
+  const [editBudgetLine, setEditBudgetLine] = useState<BudgetLine | null>(null);
   const [showExpenseForm, setShowExpenseForm] = useState<number | null>(null);
   const [showPSGExpenseForm, setShowPSGExpenseForm] = useState<number | null>(null);
   const [editingPSGExpense, setEditingPSGExpense] = useState<Expense | null>(null);
@@ -598,7 +599,12 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   async function saveBudgetLine(e: React.FormEvent) {
     e.preventDefault();
-    await fetch(`/api/productions/${id}/budget`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(budgetForm) });
+    if (editBudgetLine) {
+      await fetch(`/api/budget-lines/${editBudgetLine.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(budgetForm) });
+      setEditBudgetLine(null);
+    } else {
+      await fetch(`/api/productions/${id}/budget`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(budgetForm) });
+    }
     setShowBudgetForm(false);
     setBudgetForm({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" });
     reload();
@@ -1330,6 +1336,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       <div className="flex gap-2 shrink-0">
                         <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ Spend</button>
                         <button onClick={() => { setPSGExpenseForm(BLANK_PSG_EXPENSE); setEditingPSGExpense(null); setPsgReceiptFile(null); setShowPSGExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ PSG Expense</button>
+                        <button onClick={() => { setEditBudgetLine(line); setBudgetForm({ department: line.department, description: line.description, nominalCode: line.nominalCode ?? "", budgeted: String(line.budgeted), notes: line.notes ?? "" }); setShowBudgetForm(true); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
                         <button onClick={() => deleteBudgetLine(line.id)} className="text-xs text-red-400 hover:text-red-300">Delete</button>
                       </div>
                     </div>
@@ -2024,7 +2031,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Modal: Add Department/Budget Line */}
       {showBudgetForm && (
-        <Modal title="Add Budget Department" onClose={() => setShowBudgetForm(false)}>
+        <Modal title={editBudgetLine ? "Edit Budget Line" : "Add Budget Department"} onClose={() => { setShowBudgetForm(false); setEditBudgetLine(null); setBudgetForm({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" }); }}>
           <form onSubmit={saveBudgetLine} className="space-y-3">
             <F label="Department">
               <input list="budget-departments" required className={inp} style={inpStyle} value={budgetForm.department} onChange={(e) => setBudgetForm((f) => ({ ...f, department: e.target.value }))} placeholder="e.g. Scenery" />
@@ -2036,7 +2043,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <F label="Nominal Code"><input className={inp} style={inpStyle} value={budgetForm.nominalCode} onChange={(e) => setBudgetForm((f) => ({ ...f, nominalCode: e.target.value }))} placeholder="e.g. 4100" /></F>
             <F label="Overall Allocation (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={budgetForm.budgeted} onChange={(e) => setBudgetForm((f) => ({ ...f, budgeted: e.target.value }))} /></F>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={budgetForm.notes} onChange={(e) => setBudgetForm((f) => ({ ...f, notes: e.target.value }))} /></F>
-            <Btns onCancel={() => setShowBudgetForm(false)} />
+            <Btns onCancel={() => { setShowBudgetForm(false); setEditBudgetLine(null); setBudgetForm({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" }); }} label={editBudgetLine ? "Save Changes" : "Add"} />
           </form>
         </Modal>
       )}

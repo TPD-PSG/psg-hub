@@ -102,7 +102,11 @@ export default function AdminUsersPage() {
       body: JSON.stringify(inviteForm),
     });
     setInviteSending(false);
-    if (!res.ok) { setInviteError((await res.json()).error ?? "Failed to send invite"); return; }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setInviteError(data.error ?? "Failed to send invite");
+      return;
+    }
     setInviteSent(true);
   }
 

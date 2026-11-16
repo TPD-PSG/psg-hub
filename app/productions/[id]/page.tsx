@@ -231,6 +231,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = (session?.user as any)?.role === "admin";
+  const userRole = (session?.user as any)?.role ?? "member";
   const searchParams = useSearchParams();
   const [prod, setProd] = useState<Production | null>(null);
   const tab: TabKey = (searchParams.get("section") as TabKey) ?? "schedule";
@@ -1648,6 +1649,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               productionId={prod.id}
               budgetLines={prod.budgetLines.map(l => ({ id: l.id, department: l.department, description: l.description }))}
               isAdmin={isAdmin}
+              canApprove={isAdmin || userRole === "client"}
             />
           </div>
 

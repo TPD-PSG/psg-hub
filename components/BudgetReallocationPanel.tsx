@@ -49,10 +49,12 @@ export default function BudgetReallocationPanel({
   productionId,
   budgetLines,
   isAdmin,
+  canApprove,
 }: {
   productionId: number;
   budgetLines: BudgetLine[];
   isAdmin: boolean;
+  canApprove?: boolean;
 }) {
   const [variations, setVariations] = useState<Variation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -355,7 +357,7 @@ export default function BudgetReallocationPanel({
                       Submit for Approval
                     </button>
                   )}
-                  {v.status === "pending_approval" && isAdmin && (
+                  {v.status === "pending_approval" && (isAdmin || canApprove) && (
                     <>
                       <button onClick={() => updateStatus(v.id, "approved")} className="text-xs border px-3 py-1.5 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(74,222,128,0.4)", color: "rgb(74,222,128)" }}>
                         Approve

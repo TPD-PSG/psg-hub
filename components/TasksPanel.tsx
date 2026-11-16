@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import UserAvatar from "@/components/UserAvatar";
 
 type User = { id: number; name: string; email: string; avatarUrl?: string | null };
@@ -44,6 +44,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
+const NO_LIST_ID = "__none__";
 
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -54,18 +55,81 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
   );
 }
 
-function TaskCard({ task, onQuickStatus, onEdit, onDelete, showProduction }: {
+type InlineForm = {
+  title: string; description: string; assigneeUserId: string; assigneeName: string;
+  status: string; priority: string; dueDate: string;
+  requiresSignoff: boolean; signoffUserId: string; moveToListId: string;
+};
+
+function TaskCard({
+  task, users, lists, productionId, onQuickStatus, onSave, onDelete, showProduction,
+}: {
   task: Task;
+  users: User[];
+  lists: TaskList[];
+  productionId?: number;
   onQuickStatus: (task: Task, status: string) => void;
-  onEdit: (task: Task) => void;
+  onSave: (task: Task, form: InlineForm) => Promise<void>;
   onDelete: (id: number) => void;
   showProduction: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<InlineForm>({
+    title: task.title,
+    description: task.description ?? "",
+    assigneeUserId: task.assigneeUserId?.toString() ?? "",
+    assigneeName: task.assigneeName ?? "",
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate ? task.dueDate.slice(0, 10) : "",
+    requiresSignoff: task.requiresSignoff,
+    signoffUserId: task.signoffUserId?.toString() ?? "",
+    moveToListId: "",
+  });
+
+  // Keep form in sync if task prop changes (e.g. after quick-status)
+  const prevId = useRef(task.id);
+  useEffect(() => {
+    if (task.id !== prevId.current || !expanded) {
+      prevId.current = task.id;
+      setForm({
+        title: task.title,
+        description: task.description ?? "",
+        assigneeUserId: task.assigneeUserId?.toString() ?? "",
+        assigneeName: task.assigneeName ?? "",
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate ? task.dueDate.slice(0, 10) : "",
+        requiresSignoff: task.requiresSignoff,
+        signoffUserId: task.signoffUserId?.toString() ?? "",
+        moveToListId: "",
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task]);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(task, form);
+    setSaving(false);
+    setExpanded(false);
+  }
+
   return (
-    <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-      <div className="flex items-start gap-3">
+    <div
+      className="rounded-lg border overflow-hidden transition-colors"
+      style={{ backgroundColor: "var(--psg-card-bg)", borderColor: expanded ? "var(--psg-blue)" : "var(--psg-card-border)" }}
+    >
+      {/* ── Summary row — click anywhere (except checkbox/delete) to expand ── */}
+      <div
+        className="flex items-start gap-3 p-3 cursor-pointer select-none"
+        onClick={() => setExpanded(v => !v)}
+      >
+        {/* Checkbox */}
         <button
-          onClick={() => onQuickStatus(task, task.status === "done" ? "todo" : (task.requiresSignoff ? "awaiting_signoff" : "done"))}
+          onClick={e => { e.stopPropagation(); onQuickStatus(task, task.status === "done" ? "todo" : (task.requiresSignoff ? "awaiting_signoff" : "done")); }}
           className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
           style={task.status === "done"
             ? { backgroundColor: "var(--psg-blue)", borderColor: "var(--psg-blue)" }
@@ -77,67 +141,134 @@ function TaskCard({ task, onQuickStatus, onEdit, onDelete, showProduction }: {
         </button>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-2 flex-wrap">
-            <span className={`font-medium text-sm ${task.status === "done" ? "line-through opacity-50" : ""}`}>{task.title}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`font-medium text-sm ${task.status === "done" ? "line-through opacity-50" : "text-white"}`}>{task.title}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[task.status]}`}>{STATUS_LABELS[task.status]}</span>
-            <span className={`text-xs font-semibold ${PRIORITY_COLORS[task.priority]}`}>
-              {task.priority === "high" ? "▲ High" : task.priority === "low" ? "▼ Low" : ""}
-            </span>
-          </div>
-
-          {task.description && <div className="text-sm mt-1" style={{ color: "var(--psg-muted)" }}>{task.description}</div>}
-
-          <div className="flex flex-wrap gap-3 mt-2 text-xs" style={{ color: "var(--psg-muted)" }}>
-            {(task.assigneeUser || task.assigneeName) && (
-              <span className="flex items-center gap-1">
-                {task.assigneeUser && <UserAvatar name={task.assigneeUser.name} avatarUrl={task.assigneeUser.avatarUrl} size={18} />}
-                <span>Assigned to: <span className="text-white/70">{task.assigneeUser?.name ?? task.assigneeName}</span></span>
+            {task.priority !== "medium" && (
+              <span className={`text-xs font-semibold ${PRIORITY_COLORS[task.priority]}`}>
+                {task.priority === "high" ? "▲ High" : "▼ Low"}
               </span>
             )}
-            {task.requiresSignoff && task.signoffUser && (
-              <span className={`flex items-center gap-1 ${task.status === "awaiting_signoff" ? "text-yellow-400 font-medium" : ""}`}>
-                <UserAvatar name={task.signoffUser.name} avatarUrl={task.signoffUser.avatarUrl} size={18} />
-                Sign-off: {task.signoffUser.name}
-                {task.signoffAt ? ` ✓ ${new Date(task.signoffAt).toLocaleDateString("en-GB")}` : ""}
+          </div>
+          <div className="flex flex-wrap gap-3 mt-1 text-xs" style={{ color: "var(--psg-muted)" }}>
+            {(task.assigneeUser || task.assigneeName) && (
+              <span className="flex items-center gap-1">
+                {task.assigneeUser && <UserAvatar name={task.assigneeUser.name} avatarUrl={task.assigneeUser.avatarUrl} size={16} />}
+                {task.assigneeUser?.name ?? task.assigneeName}
               </span>
             )}
             {task.dueDate && (
               <span className={new Date(task.dueDate) < new Date() && task.status !== "done" ? "text-red-400" : ""}>
-                Due: {new Date(task.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                Due: {new Date(task.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
               </span>
             )}
-            {showProduction && task.production && (
-              <span>Production: <span className="text-white/70">{task.production.name}</span></span>
+            {task.requiresSignoff && task.signoffUser && (
+              <span className={task.status === "awaiting_signoff" ? "text-yellow-400 font-medium" : ""}>
+                Sign-off: {task.signoffUser.name}
+                {task.signoffAt ? ` ✓` : ""}
+              </span>
             )}
+            {showProduction && task.production && <span>{task.production.name}</span>}
           </div>
         </div>
 
-        <div className="flex gap-1 shrink-0">
-          {task.status !== "in_progress" && task.status !== "done" && (
-            <button onClick={() => onQuickStatus(task, "in_progress")} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Start</button>
-          )}
-          {task.requiresSignoff && task.status !== "awaiting_signoff" && task.status !== "done" && (
-            <button onClick={() => onQuickStatus(task, "awaiting_signoff")} className="text-xs px-2 py-1 rounded" style={{ color: "#facc15", backgroundColor: "rgba(250,204,21,0.1)" }}>Request sign-off</button>
-          )}
-          <button onClick={() => onEdit(task)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Edit</button>
-          <button onClick={() => onDelete(task.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>✕</button>
-        </div>
+        <span className="text-xs shrink-0 mt-0.5 transition-transform" style={{ color: "var(--psg-muted)", transform: expanded ? "rotate(180deg)" : "none" }}>▾</span>
       </div>
+
+      {/* ── Inline edit panel ── */}
+      {expanded && (
+        <form
+          onSubmit={handleSave}
+          onClick={e => e.stopPropagation()}
+          className="border-t px-3 pb-3 pt-3 space-y-3"
+          style={{ borderColor: "var(--psg-card-border)" }}
+        >
+          <F label="Title">
+            <input required className={inp} style={inpStyle} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+          </F>
+          <F label="Description">
+            <textarea rows={2} className={inp} style={inpStyle} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          </F>
+
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Status">
+              <select className={inp} style={inpStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                {Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </F>
+            <F label="Priority">
+              <select className={inp} style={inpStyle} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </F>
+          </div>
+
+          <F label="Due date">
+            <input type="date" className={inp} style={inpStyle} value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+          </F>
+
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Assign to">
+              <select className={inp} style={inpStyle} value={form.assigneeUserId} onChange={e => setForm(f => ({ ...f, assigneeUserId: e.target.value, assigneeName: e.target.value ? "" : f.assigneeName }))}>
+                <option value="">— select —</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </F>
+            <F label="Or name (free text)">
+              <input className={inp} style={inpStyle} placeholder="External…" value={form.assigneeName} onChange={e => setForm(f => ({ ...f, assigneeName: e.target.value, assigneeUserId: e.target.value ? "" : f.assigneeUserId }))} />
+            </F>
+          </div>
+
+          {productionId !== undefined && lists.length > 0 && (
+            <F label="Move to list">
+              <select className={inp} style={inpStyle} value={form.moveToListId} onChange={e => setForm(f => ({ ...f, moveToListId: e.target.value }))}>
+                <option value="">— keep in current list —</option>
+                <option value={NO_LIST_ID}>General (no list)</option>
+                {lists.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </F>
+          )}
+
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id={`signoff-${task.id}`} checked={form.requiresSignoff} onChange={e => setForm(f => ({ ...f, requiresSignoff: e.target.checked }))} className="w-4 h-4" />
+            <label htmlFor={`signoff-${task.id}`} className="text-sm">Requires sign-off</label>
+          </div>
+          {form.requiresSignoff && (
+            <F label="Sign-off from">
+              <select className={inp} style={inpStyle} value={form.signoffUserId} onChange={e => setForm(f => ({ ...f, signoffUserId: e.target.value }))}>
+                <option value="">— select —</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </F>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={() => onDelete(task.id)}
+              className="text-xs px-3 py-1.5 rounded border transition-colors text-red-400 hover:bg-red-900/20"
+              style={{ borderColor: "rgba(248,113,113,0.3)" }}
+            >Delete</button>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setExpanded(false)} className="text-sm px-3 py-1.5 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.07)" }}>Cancel</button>
+              <button type="submit" disabled={saving} className="text-sm px-4 py-1.5 rounded font-medium text-white" style={{ backgroundColor: "var(--psg-blue)" }}>{saving ? "Saving…" : "Save"}</button>
+            </div>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
 
 type Props = { productionId?: number };
 
-const BLANK = {
+const BLANK: InlineForm = {
   title: "", description: "", assigneeUserId: "", assigneeName: "",
   status: "todo", priority: "medium", dueDate: "",
-  requiresSignoff: false, signoffUserId: "",
-  moveToListId: "" as string, // "" = don't change, special value used only on edit
+  requiresSignoff: false, signoffUserId: "", moveToListId: "",
 };
-
-// Sentinel value for "no list" (tasks not assigned to any list)
-const NO_LIST_ID = "__none__";
 
 export default function TasksPanel({ productionId }: Props) {
   const [lists, setLists] = useState<TaskList[]>([]);
@@ -146,12 +277,9 @@ export default function TasksPanel({ productionId }: Props) {
   const [users, setUsers] = useState<User[]>([]);
   const [statusFilter, setStatusFilter] = useState("active");
 
-  // Task form
-  const [showForm, setShowForm] = useState(false);
-  const [editTask, setEditTask] = useState<Task | null>(null);
-  const [form, setForm] = useState(BLANK);
-
-  // Quick-add: productionId to pre-fill when adding from a group header
+  // New-task form (modal — only for creating, not editing)
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newForm, setNewForm] = useState<InlineForm>(BLANK);
   const [quickAddProductionId, setQuickAddProductionId] = useState<number | null>(null);
 
   // List management
@@ -225,32 +353,42 @@ export default function TasksPanel({ productionId }: Props) {
     await reloadTasks();
   }
 
-  async function save(e: React.FormEvent) {
+  async function createTask(e: React.FormEvent) {
     e.preventDefault();
-    let listIdForTask: number | null;
-    if (editTask && form.moveToListId !== "") {
-      // User explicitly chose a target list (or "General") while editing
-      listIdForTask = form.moveToListId === NO_LIST_ID ? null : Number(form.moveToListId);
-    } else if (editTask) {
-      // No move requested — keep existing list
-      listIdForTask = editTask.taskListId;
+    const listId = productionId !== undefined && activeListId !== NO_LIST_ID ? Number(activeListId) : null;
+    await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...newForm,
+        productionId: productionId ?? quickAddProductionId ?? null,
+        taskListId: listId,
+        assigneeUserId: newForm.assigneeUserId ? Number(newForm.assigneeUserId) : null,
+        signoffUserId: newForm.signoffUserId ? Number(newForm.signoffUserId) : null,
+      }),
+    });
+    setShowNewForm(false); setNewForm(BLANK); setQuickAddProductionId(null);
+    await reloadTasks();
+  }
+
+  async function saveTask(task: Task, form: InlineForm) {
+    let listId: number | null;
+    if (form.moveToListId !== "") {
+      listId = form.moveToListId === NO_LIST_ID ? null : Number(form.moveToListId);
     } else {
-      // New task — put it in the active list
-      listIdForTask = productionId !== undefined && activeListId !== NO_LIST_ID ? Number(activeListId) : null;
+      listId = task.taskListId;
     }
-    const payload = {
-      ...form,
-      productionId: productionId ?? quickAddProductionId ?? null,
-      taskListId: listIdForTask,
-      assigneeUserId: form.assigneeUserId ? Number(form.assigneeUserId) : null,
-      signoffUserId: form.signoffUserId ? Number(form.signoffUserId) : null,
-    };
-    if (editTask) {
-      await fetch(`/api/tasks/${editTask.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    } else {
-      await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    }
-    setShowForm(false); setEditTask(null); setForm(BLANK); setQuickAddProductionId(null);
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...form,
+        taskListId: listId,
+        productionId: task.productionId,
+        assigneeUserId: form.assigneeUserId ? Number(form.assigneeUserId) : null,
+        signoffUserId: form.signoffUserId ? Number(form.signoffUserId) : null,
+      }),
+    });
     await reloadTasks();
   }
 
@@ -288,7 +426,6 @@ export default function TasksPanel({ productionId }: Props) {
     done: tasks.filter(t => t.status === "done").length,
   };
 
-  // Group tasks by production for standalone "my tasks" view
   const groupedTasks: { label: string; tasks: Task[]; productionId: number | null }[] = [];
   if (productionId === undefined) {
     const groups = new Map<string, { tasks: Task[]; prodId: number | null }>();
@@ -297,7 +434,6 @@ export default function TasksPanel({ productionId }: Props) {
       if (!groups.has(key)) groups.set(key, { tasks: [], prodId: t.production?.id ?? null });
       groups.get(key)!.tasks.push(t);
     }
-    // Company-wide last
     const sorted = Array.from(groups.entries()).sort(([a], [b]) => {
       if (a === "Company-wide") return 1;
       if (b === "Company-wide") return -1;
@@ -317,82 +453,57 @@ export default function TasksPanel({ productionId }: Props) {
       {/* ── List tabs ── */}
       {productionId !== undefined && (
         <div className="flex items-center gap-1 mb-4 flex-wrap">
-          {/* General (no list) tab */}
           <button
             onClick={() => setActiveListId(NO_LIST_ID)}
             className="text-sm px-3 py-1.5 rounded-md font-medium transition-colors"
             style={activeListId === NO_LIST_ID
               ? { backgroundColor: "var(--psg-blue)", color: "white" }
               : { backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}
-          >
-            General
-          </button>
+          >General</button>
 
           {lists.map(list => (
             <div key={list.id} className="relative group flex items-center gap-0.5">
               {renamingListId === list.id ? (
                 <form onSubmit={e => { e.preventDefault(); renameList(list.id); }} className="flex items-center gap-1">
-                  <input
-                    autoFocus
-                    value={renamingValue}
-                    onChange={e => setRenamingValue(e.target.value)}
+                  <input autoFocus value={renamingValue} onChange={e => setRenamingValue(e.target.value)}
                     onBlur={() => renameList(list.id)}
                     className="text-sm px-2 py-1 rounded border text-white focus:outline-none"
-                    style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-blue)", width: Math.max(80, renamingValue.length * 8 + 24) }}
-                  />
+                    style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-blue)", width: Math.max(80, renamingValue.length * 8 + 24) }} />
                 </form>
               ) : (
                 <>
-                  <button
-                    onClick={() => setActiveListId(String(list.id))}
+                  <button onClick={() => setActiveListId(String(list.id))}
                     className="text-sm px-3 py-1.5 rounded-md font-medium transition-colors"
                     style={activeListId === String(list.id)
                       ? { backgroundColor: "var(--psg-blue)", color: "white" }
-                      : { backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}
-                  >
+                      : { backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>
                     {list.name}
                   </button>
                   <div className="hidden group-hover:flex items-center gap-0.5 ml-0.5">
-                    <button
-                      onClick={() => { setRenamingListId(list.id); setRenamingValue(list.name); }}
-                      title="Rename list"
-                      className="w-5 h-5 flex items-center justify-center rounded text-xs hover:bg-white/10 transition-colors"
-                      style={{ color: "var(--psg-muted)" }}
-                    >✎</button>
-                    <button
-                      onClick={() => deleteList(list.id, list.name)}
-                      title="Delete list"
-                      className="w-5 h-5 flex items-center justify-center rounded text-xs hover:bg-red-500/20 transition-colors"
-                      style={{ color: "var(--psg-muted)" }}
-                    >✕</button>
+                    <button onClick={() => { setRenamingListId(list.id); setRenamingValue(list.name); }} title="Rename"
+                      className="w-5 h-5 flex items-center justify-center rounded text-xs hover:bg-white/10" style={{ color: "var(--psg-muted)" }}>✎</button>
+                    <button onClick={() => deleteList(list.id, list.name)} title="Delete"
+                      className="w-5 h-5 flex items-center justify-center rounded text-xs hover:bg-red-500/20" style={{ color: "var(--psg-muted)" }}>✕</button>
                   </div>
                 </>
               )}
             </div>
           ))}
 
-          {/* New list */}
           {showNewList ? (
             <form onSubmit={e => { e.preventDefault(); addList(); }} className="flex items-center gap-1">
-              <input
-                autoFocus
-                value={newListName}
-                onChange={e => setNewListName(e.target.value)}
+              <input autoFocus value={newListName} onChange={e => setNewListName(e.target.value)}
                 onBlur={() => { if (!newListName.trim()) setShowNewList(false); }}
                 placeholder="List name…"
                 className="text-sm px-2 py-1 rounded border text-white focus:outline-none"
-                style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-blue)", width: 140 }}
-              />
+                style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-blue)", width: 140 }} />
               <button type="submit" className="text-sm px-2 py-1 rounded font-medium text-white" style={{ backgroundColor: "var(--psg-blue)" }}>Add</button>
               <button type="button" onClick={() => { setShowNewList(false); setNewListName(""); }} className="text-sm px-2 py-1 rounded" style={{ color: "var(--psg-muted)" }}>✕</button>
             </form>
           ) : (
-            <button
-              onClick={() => setShowNewList(true)}
+            <button onClick={() => setShowNewList(true)}
               className="text-sm px-2.5 py-1.5 rounded-md transition-colors"
-              style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.04)" }}
-              title="New list"
-            >+ List</button>
+              style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.04)" }}>+ List</button>
           )}
         </div>
       )}
@@ -402,7 +513,7 @@ export default function TasksPanel({ productionId }: Props) {
         <div className="flex gap-2">
           {[
             { key: "active", label: `Active (${counts.active})` },
-            { key: "signoff", label: `Sign-off needed (${counts.signoff})` },
+            { key: "signoff", label: `Sign-off (${counts.signoff})` },
             { key: "done", label: `Done (${counts.done})` },
             { key: "all", label: "All" },
           ].map(({ key, label }) => (
@@ -415,7 +526,7 @@ export default function TasksPanel({ productionId }: Props) {
             </button>
           ))}
         </div>
-        <button onClick={() => { setEditTask(null); setForm(BLANK); setShowForm(true); }}
+        <button onClick={() => { setNewForm(BLANK); setShowNewForm(true); }}
           className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
           + Add Task{productionId !== undefined ? ` to ${activeListName}` : ""}
         </button>
@@ -427,7 +538,6 @@ export default function TasksPanel({ productionId }: Props) {
           {tasks.length === 0 ? "No tasks yet." : "No tasks in this filter."}
         </div>
       ) : productionId === undefined ? (
-        // Standalone "my tasks" view — grouped by production
         <div className="space-y-6">
           {groupedTasks.map(({ label, tasks: groupTasks, productionId: groupProdId }) => (
             <div key={label}>
@@ -436,102 +546,82 @@ export default function TasksPanel({ productionId }: Props) {
                 <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "var(--psg-muted)" }}>{groupTasks.length}</span>
                 <div className="flex-1 h-px" style={{ backgroundColor: "var(--psg-card-border)" }} />
                 {groupProdId !== null && (
-                  <button
-                    onClick={() => { setQuickAddProductionId(groupProdId); setEditTask(null); setForm(BLANK); setShowForm(true); }}
-                    className="text-xs px-2 py-0.5 rounded transition-colors hover:bg-white/10"
-                    style={{ color: "var(--psg-muted)" }}
-                    title={`Add task to ${label}`}
-                  >+ add</button>
+                  <button onClick={() => { setQuickAddProductionId(groupProdId); setNewForm(BLANK); setShowNewForm(true); }}
+                    className="text-xs px-2 py-0.5 rounded hover:bg-white/10" style={{ color: "var(--psg-muted)" }}>+ add</button>
                 )}
               </div>
               <div className="space-y-2">
-                {groupTasks.map((task) => <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "", moveToListId: "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />)}
+                {groupTasks.map(task => (
+                  <TaskCard key={task.id} task={task} users={users} lists={lists}
+                    productionId={productionId} onQuickStatus={quickStatus} onSave={saveTask}
+                    onDelete={deleteTask} showProduction={false} />
+                ))}
               </div>
             </div>
           ))}
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((task) => (
-            <TaskCard key={task.id} task={task} onQuickStatus={quickStatus} onEdit={(t) => { setEditTask(t); setForm({ title: t.title, description: t.description ?? "", assigneeUserId: t.assigneeUserId?.toString() ?? "", assigneeName: t.assigneeName ?? "", status: t.status, priority: t.priority, dueDate: t.dueDate ? t.dueDate.slice(0, 10) : "", requiresSignoff: t.requiresSignoff, signoffUserId: t.signoffUserId?.toString() ?? "", moveToListId: "" }); setShowForm(true); }} onDelete={deleteTask} showProduction={false} />
+          {filtered.map(task => (
+            <TaskCard key={task.id} task={task} users={users} lists={lists}
+              productionId={productionId} onQuickStatus={quickStatus} onSave={saveTask}
+              onDelete={deleteTask} showProduction={false} />
           ))}
         </div>
       )}
 
-      {/* ── Task form modal ── */}
-      {showForm && (
+      {/* ── New task modal (create only) ── */}
+      {showNewForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
           <div className="w-full max-w-lg rounded-xl shadow-2xl overflow-y-auto max-h-[90vh]" style={{ backgroundColor: "var(--psg-card-bg)", border: "1px solid var(--psg-card-border)" }}>
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-              <h2 className="font-semibold">{editTask ? "Edit Task" : productionId !== undefined ? `New Task — ${activeListName}` : quickAddProductionId ? `New Task — ${groupedTasks.find(g => g.productionId === quickAddProductionId)?.label ?? ""}` : "New Task"}</h2>
-              <button onClick={() => { setShowForm(false); setEditTask(null); setForm(BLANK); }} className="text-xl leading-none" style={{ color: "var(--psg-muted)" }}>×</button>
+              <h2 className="font-semibold">
+                {productionId !== undefined ? `New Task — ${activeListName}` : quickAddProductionId ? `New Task — ${groupedTasks.find(g => g.productionId === quickAddProductionId)?.label ?? ""}` : "New Task"}
+              </h2>
+              <button onClick={() => { setShowNewForm(false); setNewForm(BLANK); }} className="text-xl leading-none" style={{ color: "var(--psg-muted)" }}>×</button>
             </div>
-            <form onSubmit={save} className="p-4 space-y-3">
-              <F label="Title *"><input required className={inp} style={inpStyle} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></F>
-              <F label="Description"><textarea rows={2} className={inp} style={inpStyle} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></F>
-
+            <form onSubmit={createTask} className="p-4 space-y-3">
+              <F label="Title *"><input required className={inp} style={inpStyle} value={newForm.title} onChange={e => setNewForm(f => ({ ...f, title: e.target.value }))} /></F>
+              <F label="Description"><textarea rows={2} className={inp} style={inpStyle} value={newForm.description} onChange={e => setNewForm(f => ({ ...f, description: e.target.value }))} /></F>
               <div className="grid grid-cols-2 gap-3">
                 <F label="Status">
-                  <select className={inp} style={inpStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                  <select className={inp} style={inpStyle} value={newForm.status} onChange={e => setNewForm(f => ({ ...f, status: e.target.value }))}>
                     {Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </F>
                 <F label="Priority">
-                  <select className={inp} style={inpStyle} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
+                  <select className={inp} style={inpStyle} value={newForm.priority} onChange={e => setNewForm(f => ({ ...f, priority: e.target.value }))}>
+                    <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
                   </select>
                 </F>
               </div>
-
-              <F label="Due date"><input type="date" className={inp} style={inpStyle} value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} /></F>
-
-              <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
-                <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Assignment</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <F label="Assign to (Hub user)">
-                    <select className={inp} style={inpStyle} value={form.assigneeUserId} onChange={e => setForm(f => ({ ...f, assigneeUserId: e.target.value, assigneeName: e.target.value ? "" : f.assigneeName }))}>
-                      <option value="">— select —</option>
-                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </F>
-                  <F label="Or assignee name (free text)">
-                    <input className={inp} style={inpStyle} placeholder="External contact…" value={form.assigneeName} onChange={e => setForm(f => ({ ...f, assigneeName: e.target.value, assigneeUserId: e.target.value ? "" : f.assigneeUserId }))} />
-                  </F>
-                </div>
+              <F label="Due date"><input type="date" className={inp} style={inpStyle} value={newForm.dueDate} onChange={e => setNewForm(f => ({ ...f, dueDate: e.target.value }))} /></F>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Assign to">
+                  <select className={inp} style={inpStyle} value={newForm.assigneeUserId} onChange={e => setNewForm(f => ({ ...f, assigneeUserId: e.target.value, assigneeName: e.target.value ? "" : f.assigneeName }))}>
+                    <option value="">— select —</option>
+                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                </F>
+                <F label="Or name (free text)">
+                  <input className={inp} style={inpStyle} placeholder="External…" value={newForm.assigneeName} onChange={e => setNewForm(f => ({ ...f, assigneeName: e.target.value, assigneeUserId: e.target.value ? "" : f.assigneeUserId }))} />
+                </F>
               </div>
-
-              {editTask && productionId !== undefined && (lists.length > 0) && (
-                <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
-                  <F label="Move to list">
-                    <select className={inp} style={inpStyle} value={form.moveToListId} onChange={e => setForm(f => ({ ...f, moveToListId: e.target.value }))}>
-                      <option value="">— keep in current list —</option>
-                      <option value={NO_LIST_ID}>General (no list)</option>
-                      {lists.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                    </select>
-                  </F>
-                </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="new-signoff" checked={newForm.requiresSignoff} onChange={e => setNewForm(f => ({ ...f, requiresSignoff: e.target.checked }))} className="w-4 h-4" />
+                <label htmlFor="new-signoff" className="text-sm">Requires sign-off</label>
+              </div>
+              {newForm.requiresSignoff && (
+                <F label="Sign-off from">
+                  <select className={inp} style={inpStyle} value={newForm.signoffUserId} onChange={e => setNewForm(f => ({ ...f, signoffUserId: e.target.value }))}>
+                    <option value="">— select —</option>
+                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                </F>
               )}
-
-              <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <input type="checkbox" id="signoff" checked={form.requiresSignoff} onChange={e => setForm(f => ({ ...f, requiresSignoff: e.target.checked }))} className="w-4 h-4" />
-                  <label htmlFor="signoff" className="text-sm font-medium">Requires sign-off</label>
-                </div>
-                {form.requiresSignoff && (
-                  <F label="Sign-off from">
-                    <select className={inp} style={inpStyle} value={form.signoffUserId} onChange={e => setForm(f => ({ ...f, signoffUserId: e.target.value }))}>
-                      <option value="">— select person —</option>
-                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </F>
-                )}
-              </div>
-
               <div className="flex gap-2 justify-end pt-2">
-                <button type="button" onClick={() => { setShowForm(false); setEditTask(null); setForm(BLANK); }} className="px-4 py-2 rounded text-sm" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.08)" }}>Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded text-sm font-medium text-white" style={{ backgroundColor: "var(--psg-blue)" }}>{editTask ? "Save Changes" : "Add Task"}</button>
+                <button type="button" onClick={() => { setShowNewForm(false); setNewForm(BLANK); }} className="px-4 py-2 rounded text-sm" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.08)" }}>Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded text-sm font-medium text-white" style={{ backgroundColor: "var(--psg-blue)" }}>Add Task</button>
               </div>
             </form>
           </div>

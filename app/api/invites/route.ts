@@ -7,6 +7,7 @@ import crypto from "crypto";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  try {
   const session = await auth();
   if (!session || (session.user as any).role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -66,4 +67,8 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Server error: ${msg}` }, { status: 500 });
+  }
 }

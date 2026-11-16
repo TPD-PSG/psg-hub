@@ -35,6 +35,8 @@ const BLANK = { name: "", email: "", password: "", role: "member", color: "" };
 
 const MEMBER_COLORS = ["#f59e0b","#10b981","#3b82f6","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16","#f97316","#14b8a6"];
 
+const INVITE_BLANK = { name: "", email: "", role: "member" };
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -42,6 +44,11 @@ export default function AdminUsersPage() {
   const [form, setForm] = useState(BLANK);
   const [perms, setPerms] = useState<Permissions>(defaultPerms());
   const [error, setError] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteForm, setInviteForm] = useState(INVITE_BLANK);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteSending, setInviteSending] = useState(false);
 
   useEffect(() => { reload(); }, []);
 
@@ -85,6 +92,20 @@ export default function AdminUsersPage() {
     await reload();
   }
 
+  async function sendInvite(e: React.FormEvent) {
+    e.preventDefault();
+    setInviteError("");
+    setInviteSending(true);
+    const res = await fetch("/api/invites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(inviteForm),
+    });
+    setInviteSending(false);
+    if (!res.ok) { setInviteError((await res.json()).error ?? "Failed to send invite"); return; }
+    setInviteSent(true);
+  }
+
   async function deleteUser(id: number) {
     if (!confirm("Delete this user? This cannot be undone.")) return;
     const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
@@ -106,9 +127,14 @@ export default function AdminUsersPage() {
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>Manage Hub access and permissions</p>
         </div>
-        <button onClick={openCreate} className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
-          + Add User
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setInviteForm(INVITE_BLANK); setInviteError(""); setInviteSent(false); setShowInvite(true); }} className="px-4 py-2 rounded font-medium text-sm border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+            ✉ Invite User
+          </button>
+          <button onClick={openCreate} className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
+            + Add User
+          </button>
+        </div>
       </div>
 
       <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
@@ -265,6 +291,55 @@ export default function AdminUsersPage() {
                 <button type="submit" className="px-4 py-2 rounded text-sm font-medium text-white" style={{ backgroundColor: "var(--psg-blue)" }}>{editUser ? "Save Changes" : "Create User"}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invite modal */}
+      {showInvite && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="rounded-xl shadow-2xl w-full max-w-md border" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
+              <h2 className="font-semibold text-white">Invite User</h2>
+              <button onClick={() => setShowInvite(false)} className="text-xl leading-none hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>×</button>
+            </div>
+            <div className="px-5 py-4">
+              {inviteSent ? (
+                <div className="text-center py-4 space-y-2">
+                  <p className="text-2xl">✉️</p>
+                  <p className="font-semibold text-white">Invitation sent!</p>
+                  <p className="text-sm" style={{ color: "var(--psg-muted)" }}>An email has been sent to {inviteForm.email} with a link to set their password.</p>
+                  <button onClick={() => setShowInvite(false)} className="mt-4 px-4 py-2 rounded text-sm text-white" style={{ backgroundColor: "var(--psg-blue)" }}>Done</button>
+                </div>
+              ) : (
+                <form onSubmit={sendInvite} className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Name *</label>
+                    <input required className={inp} style={inpStyle} value={inviteForm.name} onChange={e => setInviteForm(f => ({ ...f, name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Email *</label>
+                    <input required type="email" className={inp} style={inpStyle} value={inviteForm.email} onChange={e => setInviteForm(f => ({ ...f, email: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Role</label>
+                    <select className={inp} style={inpStyle} value={inviteForm.role} onChange={e => setInviteForm(f => ({ ...f, role: e.target.value }))}>
+                      <option value="member">Member</option>
+                      <option value="admin">Admin (full access)</option>
+                      <option value="client">Client</option>
+                      <option value="freelancer">Freelancer</option>
+                    </select>
+                  </div>
+                  {inviteError && <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded px-3 py-2">{inviteError}</p>}
+                  <div className="flex gap-3 pt-2">
+                    <button type="submit" disabled={inviteSending} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50" style={{ backgroundColor: "var(--psg-blue)" }}>
+                      {inviteSending ? "Sending…" : "Send Invitation"}
+                    </button>
+                    <button type="button" onClick={() => setShowInvite(false)} className="border px-4 py-2 rounded text-sm hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}

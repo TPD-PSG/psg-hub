@@ -926,3 +926,14 @@ model ToolboxTalkSignature {
   agreedSafety   Boolean  @default(false)
   createdAt    DateTime   @default(now())
 }
+
+model UserInvite {
+  id        Int       @id @default(autoincrement())
+  token     String    @unique
+  email     String
+  name      String
+  role      String    @default("member")
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}

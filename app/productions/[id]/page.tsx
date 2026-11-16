@@ -256,6 +256,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [expandedBudgetDepts, setExpandedBudgetDepts] = useState<Set<string>>(new Set());
   const [renamingDept, setRenamingDept] = useState<string | null>(null);
   const [deptRenameValue, setDeptRenameValue] = useState("");
+  const [budgetDeptOrder, setBudgetDeptOrder] = useState<string[] | null>(null);
+  const [dragDept, setDragDept] = useState<string | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Spend document state
@@ -578,6 +580,17 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   async function reload() {
     const data = await fetch(`/api/productions/${id}`).then((r) => r.json());
     setProd(data);
+    // Restore saved dept order, pruning any depts that no longer exist
+    try {
+      const saved = localStorage.getItem(`budget-dept-order-${id}`);
+      if (saved) {
+        const parsed: string[] = JSON.parse(saved);
+        const existing = new Set(data.budgetLines.map((l: { department: string }) => l.department));
+        const filtered = parsed.filter((d: string) => existing.has(d));
+        const missing = [...existing].filter(d => !parsed.includes(d));
+        setBudgetDeptOrder([...filtered, ...missing]);
+      }
+    } catch {}
     setProdForm({
       name: data.name, type: data.type, venue: data.venue ?? "",
       venueId: data.venueId ? String(data.venueId) : "",
@@ -1328,13 +1341,17 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="space-y-4">
               {prod.budgetLines.length === 0 && <p className="text-center py-10" style={{ color: "var(--psg-muted)" }}>No budget lines yet.</p>}
               {(() => {
-                // Group lines by department, preserving order of first appearance
-                const deptOrder: string[] = [];
+                // Group lines by department
+                const naturalOrder: string[] = [];
                 const deptLines: Record<string, typeof prod.budgetLines> = {};
                 for (const line of prod.budgetLines) {
-                  if (!deptLines[line.department]) { deptOrder.push(line.department); deptLines[line.department] = []; }
+                  if (!deptLines[line.department]) { naturalOrder.push(line.department); deptLines[line.department] = []; }
                   deptLines[line.department].push(line);
                 }
+                // Use saved order if available, else natural order
+                const deptOrder = budgetDeptOrder
+                  ? [...budgetDeptOrder.filter(d => deptLines[d]), ...naturalOrder.filter(d => !budgetDeptOrder.includes(d))]
+                  : naturalOrder;
                 return deptOrder.map((dept) => {
                   const lines = deptLines[dept];
                   // Aggregate figures for the department header
@@ -1353,7 +1370,28 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   const toggleDept = () => setExpandedBudgetDepts(s => { const n = new Set(s); isDeptExpanded ? n.delete(dept) : n.add(dept); return n; });
 
                   return (
-                    <div key={dept} className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                    <div
+                      key={dept}
+                      draggable
+                      onDragStart={e => { e.stopPropagation(); setDragDept(dept); }}
+                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                      onDrop={e => {
+                        e.preventDefault(); e.stopPropagation();
+                        if (!dragDept || dragDept === dept) { setDragDept(null); return; }
+                        const fromIdx = deptOrder.indexOf(dragDept);
+                        const toIdx = deptOrder.indexOf(dept);
+                        if (fromIdx === -1 || toIdx === -1) { setDragDept(null); return; }
+                        const next = [...deptOrder];
+                        const [moved] = next.splice(fromIdx, 1);
+                        next.splice(toIdx, 0, moved);
+                        setBudgetDeptOrder(next);
+                        try { localStorage.setItem(`budget-dept-order-${id}`, JSON.stringify(next)); } catch {}
+                        setDragDept(null);
+                      }}
+                      onDragEnd={() => setDragDept(null)}
+                      className={`rounded-lg border overflow-hidden transition-opacity ${dragDept === dept ? "opacity-40" : ""}`}
+                      style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}
+                    >
                       {/* Department header */}
                       <div
                         className="px-4 py-3 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-white/5 transition-colors"
@@ -1361,6 +1399,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         onClick={toggleDept}
                       >
                         <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs shrink-0 cursor-grab active:cursor-grabbing opacity-30 hover:opacity-70 transition-opacity" style={{ color: "var(--psg-muted)" }} onClick={e => e.stopPropagation()}>⠿</span>
                           <span className="text-xs shrink-0 transition-transform" style={{ color: "var(--psg-muted)", transform: isDeptExpanded ? "rotate(90deg)" : "none" }}>▸</span>
                           {renamingDept === dept ? (
                             <form onSubmit={e => { e.preventDefault(); renameDepartment(dept, deptRenameValue, lines); }} onClick={e => e.stopPropagation()} className="flex items-center gap-2">

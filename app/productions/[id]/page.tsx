@@ -1340,7 +1340,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <span className="text-yellow-300">PM: {fmt(lineEst)}</span>
                         <span className="text-orange-300">Net: {fmt(lineCom)}</span>
                         <span className="text-green-400">Gross: {fmt(lineSpt)}</span>
-                        <span style={{ color: "var(--psg-muted)" }}>/ {fmt(line.budgeted)}</span>
+                        <span className="font-semibold text-white">Alloc: {fmt(line.budgeted)}</span>
+                        <span className={`font-semibold ${line.budgeted - lineCom < 0 ? "text-red-400" : "text-green-400"}`}>
+                          Remaining: {fmt(line.budgeted - lineCom)}
+                        </span>
                       </div>
                       <div className="flex gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                         <button onClick={() => { setExpenseForm(BLANK_EXPENSE); resetSpendDocState(); setShowExpenseForm(line.id); }} className="text-xs border px-2 py-1 rounded hover:bg-white/5 transition-colors" style={{ borderColor: "rgba(99,102,241,0.5)", color: "rgb(165,180,252)" }}>+ Spend</button>
@@ -1350,7 +1353,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       </div>
                     </div>
                     {/* Budget bar */}
-                    <div className="h-1" style={{ backgroundColor: "var(--psg-card-border)" }}>
+                    <div className="h-2" style={{ backgroundColor: "var(--psg-card-border)" }}>
                       <div className={`h-full transition-all ${pct >= 100 ? "bg-red-500" : pct >= 75 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} />
                     </div>
                     {!isExpanded && null}

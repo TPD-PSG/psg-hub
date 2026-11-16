@@ -22,7 +22,8 @@ export async function GET(req: NextRequest) {
   const showArchived = searchParams.get("archived") === "1";
 
   const where: Record<string, unknown> = { archived: showArchived };
-  if (role !== "admin" && !perms.allProductions && userId) {
+  const restrictToTeam = role === "client" || role === "freelancer" || (role !== "admin" && !perms.allProductions);
+  if (restrictToTeam && userId) {
     where.team = { some: { userId } };
   }
 

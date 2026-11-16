@@ -1348,6 +1348,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                           <span className="text-yellow-300">PM: {fmt(deptEst)}</span>
                           <span className="text-orange-300">Net: {fmt(deptCom)}</span>
                           <span className="text-green-400">Gross: {fmt(deptSpt)}</span>
+                          <span className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
                           <span className="font-semibold text-white">Alloc: {fmt(deptAlloc)}</span>
                           <span className={`font-semibold ${deptAlloc - deptCom < 0 ? "text-red-400" : "text-green-400"}`}>Remaining: {fmt(deptAlloc - deptCom)}</span>
                         </div>
@@ -1391,6 +1392,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                                 <span className="text-yellow-300">PM: {fmt(lineEst)}</span>
                                 <span className="text-orange-300">Net: {fmt(lineCom)}</span>
                                 <span className="text-green-400">Gross: {fmt(lineSpt)}</span>
+                                <span className="w-0.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
                                 <span className="text-white">Alloc: {fmt(line.budgeted)}</span>
                                 <span className={pct >= 100 ? "text-red-400" : ""}>{Math.round(pct)}%</span>
                               </div>

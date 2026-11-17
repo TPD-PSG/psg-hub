@@ -112,14 +112,58 @@ function FinancePageInner() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [productions, setProductions] = useState<Production[]>([]);
-  const [tab, setTab] = useState<"sales" | "purchase" | "expenses" | "todo">("sales");
+  const [tab, setTab] = useState<"sales" | "purchase" | "expenses" | "todo" | "prod-spend">("sales");
 
   // Sync tab with URL search param so sidebar nav links work
   useEffect(() => {
     const t = searchParams.get("tab");
-    if (t === "purchase" || t === "expenses" || t === "todo") setTab(t);
+    if (t === "purchase" || t === "expenses" || t === "todo" || t === "prod-spend") setTab(t);
     else setTab("sales");
   }, [searchParams]);
+
+  // Production Expenses (budget spend)
+  type PSGExpense = {
+    id: number;
+    description: string;
+    supplier: string | null;
+    committed: number;
+    spent: number;
+    paymentDue: string | null;
+    issuedForPayment: boolean;
+    isPSGExpense: boolean;
+    notes: string | null;
+    budgetLine: {
+      id: number;
+      department: string;
+      description: string;
+      nominalCode: string | null;
+      production: { id: number; name: string };
+    };
+    documents: { id: number; type: string; name: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean }[];
+  };
+  type RechargeableMovement = {
+    id: number;
+    haulageCompany: string;
+    fromLocation: string;
+    toLocation: string;
+    departureAt: string;
+    estimatedCost: number | null;
+    actualCost: number | null;
+    rechargeable: boolean;
+    notes: string | null;
+    production: { id: number; name: string };
+  };
+  const [psgExpenses, setPsgExpenses] = useState<PSGExpense[]>([]);
+  const [rechargeableMovements, setRechargeableMovements] = useState<RechargeableMovement[]>([]);
+  const [prodSpendFilter, setProdSpendFilter] = useState({ productionId: "all", type: "all", search: "" });
+
+  async function reloadProdSpend() {
+    const d = await fetch("/api/finance/production-spend").then(r => r.json());
+    if (d.psgExpenses) setPsgExpenses(d.psgExpenses);
+    if (d.rechargeableMovements) setRechargeableMovements(d.rechargeableMovements);
+  }
+
+  useEffect(() => { if (tab === "prod-spend") reloadProdSpend(); }, [tab]);
 
   // Invoice To-Do list
   type InvoiceTodo = { id: number; client: string; description: string; amount: number | null; dueDate: string | null; notes: string | null; done: boolean; production: { id: number; name: string } | null };
@@ -270,7 +314,7 @@ function FinancePageInner() {
     setShowForm(true);
   }
 
-  function switchTab(t: "sales" | "purchase" | "expenses" | "todo") {
+  function switchTab(t: "sales" | "purchase" | "expenses" | "todo" | "prod-spend") {
     setTab(t);
     setFilterStatus("all");
     setSelectedInv(null);
@@ -302,7 +346,7 @@ function FinancePageInner() {
             {overdueCount > 0 && <span className="ml-2 text-red-400">{overdueCount} overdue</span>}
           </p>
         </div>
-        {tab !== "todo" && (
+        {tab !== "todo" && tab !== "prod-spend" && (
           <button onClick={openNew} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
             + {tab === "sales" ? "Sales Invoice" : tab === "purchase" ? "Purchase Invoice" : "Expense"}
           </button>
@@ -312,13 +356,13 @@ function FinancePageInner() {
       {/* Tabs */}
       <div className="flex items-center gap-4 flex-wrap">
         <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)" }}>
-          {(["sales", "purchase", "expenses", "todo"] as const).map(t => (
+          {(["sales", "purchase", "expenses", "todo", "prod-spend"] as const).map(t => (
             <button key={t} onClick={() => switchTab(t)} className="px-4 py-1.5 text-sm transition-colors" style={{ backgroundColor: tab === t ? "var(--psg-blue)" : "transparent", color: tab === t ? "#fff" : "var(--psg-muted)" }}>
-              {t === "sales" ? "Sales Invoices" : t === "purchase" ? "Purchase Invoices" : t === "expenses" ? "Expenses" : "Invoice To-Do"}
+              {t === "sales" ? "Sales Invoices" : t === "purchase" ? "Purchase Invoices" : t === "expenses" ? "Expenses" : t === "todo" ? "Invoice To-Do" : "Production Expenses"}
             </button>
           ))}
         </div>
-        {tab !== "todo" && (
+        {tab !== "todo" && tab !== "prod-spend" && (
           <div className="flex gap-1 flex-wrap">
             <button onClick={() => setFilterStatus("all")} className="px-3 py-1 rounded text-xs transition-colors" style={{ backgroundColor: filterStatus === "all" ? "rgba(255,255,255,0.1)" : "transparent", color: "var(--psg-muted)" }}>All</button>
             {(tab === "expenses" ? EXPENSE_STATUSES : invStatuses).map(s => (
@@ -432,7 +476,7 @@ function FinancePageInner() {
       )}
 
       {/* Invoice Table */}
-      {tab !== "expenses" && tab !== "todo" && (
+      {tab !== "expenses" && tab !== "todo" && tab !== "prod-spend" && (
         <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
           <table className="w-full text-sm">
             <thead>
@@ -538,6 +582,139 @@ function FinancePageInner() {
           </table>
         </div>
       )}
+
+      {/* Production Expenses Tab */}
+      {tab === "prod-spend" && (() => {
+        const allProductions = Array.from(new Map<number, string>([
+          ...psgExpenses.map(e => [e.budgetLine.production.id, e.budgetLine.production.name] as [number, string]),
+          ...rechargeableMovements.map(m => [m.production.id, m.production.name] as [number, string]),
+        ]).entries()).map(([id, name]) => ({ id, name }));
+
+        const filteredExpenses = psgExpenses.filter(e =>
+          (prodSpendFilter.productionId === "all" || String(e.budgetLine.production.id) === prodSpendFilter.productionId) &&
+          (prodSpendFilter.type === "all" || prodSpendFilter.type === "psg") &&
+          (!prodSpendFilter.search || e.description.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || (e.supplier ?? "").toLowerCase().includes(prodSpendFilter.search.toLowerCase()))
+        );
+        const filteredMovements = rechargeableMovements.filter(m =>
+          (prodSpendFilter.productionId === "all" || String(m.production.id) === prodSpendFilter.productionId) &&
+          (prodSpendFilter.type === "all" || prodSpendFilter.type === "haulage") &&
+          (!prodSpendFilter.search || m.haulageCompany.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || m.fromLocation.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || m.toLocation.toLowerCase().includes(prodSpendFilter.search.toLowerCase()))
+        );
+
+        const totalPSG = filteredExpenses.reduce((s, e) => s + e.spent, 0);
+        const totalHaulage = filteredMovements.reduce((s, m) => s + (m.actualCost ?? m.estimatedCost ?? 0), 0);
+
+        return (
+          <div className="space-y-4">
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <select className="rounded px-3 py-1.5 text-sm border focus:outline-none" style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+                value={prodSpendFilter.productionId} onChange={e => setProdSpendFilter(f => ({ ...f, productionId: e.target.value }))}>
+                <option value="all">All Productions</option>
+                {allProductions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <select className="rounded px-3 py-1.5 text-sm border focus:outline-none" style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+                value={prodSpendFilter.type} onChange={e => setProdSpendFilter(f => ({ ...f, type: e.target.value }))}>
+                <option value="all">All Types</option>
+                <option value="psg">PSG Expenses</option>
+                <option value="haulage">Rechargeable Haulage</option>
+              </select>
+              <input className="rounded px-3 py-1.5 text-sm border focus:outline-none flex-1 min-w-[180px]"
+                style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)", color: "white" }}
+                placeholder="Search…" value={prodSpendFilter.search} onChange={e => setProdSpendFilter(f => ({ ...f, search: e.target.value }))} />
+              <div className="text-sm ml-auto" style={{ color: "var(--psg-muted)" }}>
+                Total: <span className="text-white font-medium">{fmt(totalPSG + totalHaulage)}</span>
+              </div>
+            </div>
+
+            {/* PSG Expenses table */}
+            {(prodSpendFilter.type === "all" || prodSpendFilter.type === "psg") && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--psg-muted)" }}>
+                  PSG Expenses · {fmt(totalPSG)}
+                </h3>
+                <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <th className="px-4 py-3 text-left font-medium text-white">Production</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Department</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Description</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Supplier</th>
+                        <th className="px-4 py-3 text-right font-medium text-white">Committed</th>
+                        <th className="px-4 py-3 text-right font-medium text-white">Spent</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Payment Due</th>
+                        <th className="px-4 py-3 text-center font-medium text-white">Issued</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredExpenses.map(e => (
+                        <tr key={e.id} className="border-t hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)" }}>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{e.budgetLine.production.name}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{e.budgetLine.department}</td>
+                          <td className="px-4 py-3 font-medium text-white">{e.description}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{e.supplier ?? "—"}</td>
+                          <td className="px-4 py-3 text-right text-xs" style={{ color: "var(--psg-muted)" }}>{e.committed > 0 ? fmt(e.committed) : "—"}</td>
+                          <td className="px-4 py-3 text-right font-medium text-white">{fmt(e.spent)}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: e.paymentDue && new Date(e.paymentDue) < new Date() ? "#ef4444" : "var(--psg-muted)" }}>
+                            {e.paymentDue ? fmtDate(e.paymentDue) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {e.issuedForPayment
+                              ? <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#10b98122", color: "#10b981" }}>Yes</span>
+                              : <span className="text-xs" style={{ color: "var(--psg-muted)" }}>No</span>}
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredExpenses.length === 0 && (
+                        <tr><td colSpan={8} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No PSG expenses found</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Rechargeable Haulage table */}
+            {(prodSpendFilter.type === "all" || prodSpendFilter.type === "haulage") && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--psg-muted)" }}>
+                  Rechargeable Haulage · {fmt(totalHaulage)}
+                </h3>
+                <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <th className="px-4 py-3 text-left font-medium text-white">Production</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Haulage Company</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Route</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Departure</th>
+                        <th className="px-4 py-3 text-right font-medium text-white">Est. Cost</th>
+                        <th className="px-4 py-3 text-right font-medium text-white">Actual Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMovements.map(m => (
+                        <tr key={m.id} className="border-t hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)" }}>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{m.production.name}</td>
+                          <td className="px-4 py-3 font-medium text-white">{m.haulageCompany}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{m.fromLocation} → {m.toLocation}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{fmtDate(m.departureAt)}</td>
+                          <td className="px-4 py-3 text-right text-xs" style={{ color: "var(--psg-muted)" }}>{m.estimatedCost != null ? fmt(m.estimatedCost) : "—"}</td>
+                          <td className="px-4 py-3 text-right font-medium text-white">{m.actualCost != null ? fmt(m.actualCost) : "—"}</td>
+                        </tr>
+                      ))}
+                      {filteredMovements.length === 0 && (
+                        <tr><td colSpan={6} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No rechargeable haulage movements found</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Invoice detail panel */}
       {selectedInv && (

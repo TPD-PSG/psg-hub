@@ -3873,14 +3873,29 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 <div>
                   <p style={{ color: "var(--psg-muted)", fontSize: 12, marginBottom: 6 }}>Attendees</p>
                   {meetingContacts.length > 0 && (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 6, marginBottom: 8 }}>
-                      {meetingContacts.map(c => (
-                        <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: "var(--psg-text)" }}>
-                          <input type="checkbox" checked={meetingAttendeeIds.includes(c.id)}
-                            onChange={e => setMeetingAttendeeIds(prev => e.target.checked ? [...prev, c.id] : prev.filter(x => x !== c.id))} />
-                          <span>{c.name}{c.role ? ` (${c.role})` : ""}</span>
-                        </label>
-                      ))}
+                    <div style={{ marginBottom: 8 }}>
+                      <select
+                        value=""
+                        onChange={e => { const id = Number(e.target.value); if (id && !meetingAttendeeIds.includes(id)) setMeetingAttendeeIds(prev => [...prev, id]); }}
+                        className={inp} style={{ ...inpStyle, color: meetingAttendeeIds.length === meetingContacts.length ? "var(--psg-muted)" : "var(--psg-text)" }}>
+                        <option value="">+ Add from contacts…</option>
+                        {meetingContacts.filter(c => !meetingAttendeeIds.includes(c.id)).map(c => (
+                          <option key={c.id} value={c.id}>{c.name}{c.role ? ` (${c.role})` : ""}</option>
+                        ))}
+                      </select>
+                      {meetingAttendeeIds.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                          {meetingAttendeeIds.map(id => {
+                            const c = meetingContacts.find(x => x.id === id);
+                            return c ? (
+                              <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(61,68,212,0.2)", border: "1px solid var(--psg-blue)", borderRadius: 4, padding: "2px 8px", fontSize: 12, color: "var(--psg-text)" }}>
+                                {c.name}
+                                <button type="button" onClick={() => setMeetingAttendeeIds(prev => prev.filter(x => x !== id))} style={{ background: "none", border: "none", color: "var(--psg-muted)", cursor: "pointer", padding: 0, lineHeight: 1, fontSize: 14 }}>×</button>
+                              </span>
+                            ) : null;
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                   <input placeholder="Additional attendees (comma-separated)" value={meetingAttendeeExtra} onChange={e => setMeetingAttendeeExtra(e.target.value)} className={inp} style={inpStyle} />

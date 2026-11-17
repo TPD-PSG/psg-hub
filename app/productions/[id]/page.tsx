@@ -303,8 +303,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [noteForm, setNoteForm] = useState({ title: "", body: "", color: "" });
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [editingNote, setEditingNote] = useState<ProdNote | null>(null);
-  const dragNote = React.useRef<number | null>(null);
-  const dragOverNote = React.useRef<number | null>(null);
+  const dragNote = useRef<number | null>(null);
+  const dragOverNote = useRef<number | null>(null);
 
   async function reloadNotes() {
     const data = await fetch(`/api/productions/${id}/notes`).then(r => r.json());

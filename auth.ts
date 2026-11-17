@@ -38,16 +38,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   pages: { signIn: "/login" },
   callbacks: {
-    jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.role = (user as any).role;
         token.id = user.id;
         token.permissions = (user as any).permissions ?? null;
         token.avatarUrl = (user as any).avatarUrl ?? null;
+        token.permissionsCheckedAt = Date.now();
       }
       if (trigger === "update" && session) {
         if (session.avatarUrl !== undefined) token.avatarUrl = session.avatarUrl;
         if (session.permissions !== undefined) token.permissions = session.permissions;
+      }
+      // Re-fetch role + permissions from DB at most once every 5 minutes
+      const FIVE_MIN = 5 * 60 * 1000;
+      const checkedAt = (token.permissionsCheckedAt as number) ?? 0;
+      if (token.id && Date.now() - checkedAt > FIVE_MIN) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: Number(token.id) },
+            select: { role: true, permissions: true, avatarUrl: true },
+          });
+          if (dbUser) {
+            token.role = dbUser.role;
+            token.permissions = dbUser.permissions ?? null;
+            token.avatarUrl = dbUser.avatarUrl ?? null;
+          }
+        } catch {}
+        token.permissionsCheckedAt = Date.now();
       }
       return token;
     },

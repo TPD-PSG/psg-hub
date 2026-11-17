@@ -298,11 +298,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
   useEffect(() => { if (tab === "reports") reloadReports(); }, [tab, id]);
 
-  type ProdNote = { id: number; title: string; body: string; color: string | null; createdByUserId: number | null; createdByUser: { id: number; name: string; avatarUrl: string | null } | null; createdAt: string; updatedAt: string };
+  type ProdNote = { id: number; title: string; body: string; color: string | null; order: number; createdByUserId: number | null; createdByUser: { id: number; name: string; avatarUrl: string | null } | null; createdAt: string; updatedAt: string };
   const [notes, setNotes] = useState<ProdNote[]>([]);
   const [noteForm, setNoteForm] = useState({ title: "", body: "", color: "" });
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [editingNote, setEditingNote] = useState<ProdNote | null>(null);
+  const dragNote = React.useRef<number | null>(null);
+  const dragOverNote = React.useRef<number | null>(null);
 
   async function reloadNotes() {
     const data = await fetch(`/api/productions/${id}/notes`).then(r => r.json());
@@ -327,6 +329,19 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     if (!confirm("Delete this note?")) return;
     await fetch(`/api/production-notes/${noteId}`, { method: "DELETE" });
     reloadNotes();
+  }
+
+  async function handleNoteDrop() {
+    if (dragNote.current === null || dragOverNote.current === null || dragNote.current === dragOverNote.current) return;
+    const reordered = [...notes];
+    const from = reordered.findIndex(n => n.id === dragNote.current);
+    const to = reordered.findIndex(n => n.id === dragOverNote.current);
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    setNotes(reordered);
+    dragNote.current = null;
+    dragOverNote.current = null;
+    await fetch(`/api/productions/${id}/notes`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: reordered.map(n => n.id) }) });
   }
 
   async function saveReport(e: React.FormEvent) {
@@ -3676,7 +3691,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
               {notes.map(note => (
-                <div key={note.id} style={{ background: "var(--psg-card)", border: `1px solid ${note.color || "var(--psg-card-border)"}`, borderTopWidth: note.color ? 3 : 1, borderRadius: 8, padding: 16 }}>
+                <div key={note.id}
+                  draggable
+                  onDragStart={() => { dragNote.current = note.id; }}
+                  onDragEnter={() => { dragOverNote.current = note.id; }}
+                  onDragEnd={handleNoteDrop}
+                  onDragOver={e => e.preventDefault()}
+                  style={{ background: "var(--psg-card)", border: `1px solid ${note.color || "var(--psg-card-border)"}`, borderTopWidth: note.color ? 3 : 1, borderRadius: 8, padding: 16, cursor: "grab" }}>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 style={{ color: "var(--psg-text)", fontWeight: 600, fontSize: 15 }}>{note.title}</h3>
                     {(isAdmin || userRole === "member") && (

@@ -8,10 +8,21 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const notes = await prisma.productionNote.findMany({
     where: { productionId: Number(id) },
-    orderBy: { updatedAt: "desc" },
+    orderBy: { order: "asc" },
     include: { createdByUser: { select: { id: true, name: true, avatarUrl: true } } },
   });
   return NextResponse.json(notes);
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await params;
+  const { ids } = await req.json(); // ordered array of note ids
+  await Promise.all((ids as number[]).map((noteId: number, index: number) =>
+    prisma.productionNote.updateMany({ where: { id: noteId, productionId: Number(id) }, data: { order: index } })
+  ));
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

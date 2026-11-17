@@ -18,14 +18,13 @@ type Ticket = {
 
 const CATEGORIES = ["bug", "feature", "question", "other"];
 const PRIORITIES = ["low", "medium", "high", "urgent"];
-const STATUSES = ["open", "in_progress", "resolved", "closed"];
 
-const STATUS_COLORS: Record<string, string> = {
-  open: "#3b82f6",
-  in_progress: "#f59e0b",
-  resolved: "#10b981",
-  closed: "#6b7280",
-};
+const COLUMNS: { key: string; label: string; color: string }[] = [
+  { key: "open",        label: "Open",        color: "#3b82f6" },
+  { key: "in_progress", label: "In Progress",  color: "#f59e0b" },
+  { key: "resolved",    label: "Resolved",     color: "#10b981" },
+  { key: "closed",      label: "Closed",       color: "#6b7280" },
+];
 
 const PRIORITY_COLORS: Record<string, string> = {
   low: "#6b7280",
@@ -50,7 +49,7 @@ function badge(text: string, color: string) {
 }
 
 function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 const inp = "w-full rounded-lg px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -66,7 +65,7 @@ export default function HelpDeskPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(BLANK);
   const [submitting, setSubmitting] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
   async function load(all: boolean) {
     const r = await fetch(`/api/help-tickets${all ? "?all=1" : ""}`);
@@ -98,11 +97,14 @@ export default function HelpDeskPage() {
     load(showAll);
   }
 
-  const filtered = filterStatus === "all" ? tickets : tickets.filter(t => t.status === filterStatus);
+  function toggleExpanded(id: number) {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  }
+
   const openCount = tickets.filter(t => t.status === "open").length;
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -166,74 +168,101 @@ export default function HelpDeskPage() {
         </form>
       )}
 
-      {/* Status filter tabs */}
-      <div className="flex gap-1 rounded-lg overflow-hidden border w-fit text-xs" style={{ borderColor: "var(--psg-card-border)" }}>
-        {["all", ...STATUSES].map(s => {
-          const count = s === "all" ? tickets.length : tickets.filter(t => t.status === s).length;
-          return (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              className="px-3 py-1.5 capitalize transition-colors flex items-center gap-1.5"
-              style={filterStatus === s ? { backgroundColor: "var(--psg-blue)", color: "#fff" } : { backgroundColor: "transparent", color: "var(--psg-muted)" }}>
-              {s.replace("_", " ")}
-              {count > 0 && <span className="text-xs rounded-full px-1.5" style={{ backgroundColor: filterStatus === s ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)" }}>{count}</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Ticket list */}
-      {filtered.length === 0 ? (
+      {/* Kanban board */}
+      {tickets.length === 0 ? (
         <div className="text-sm py-10 text-center" style={{ color: "var(--psg-muted)" }}>
-          {filterStatus === "all" ? "No tickets yet — submit one above." : `No ${filterStatus.replace("_", " ")} tickets.`}
+          No tickets yet — submit one above.
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map(ticket => (
-            <div key={ticket.id} className="rounded-xl border p-5" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-              <div className="flex items-start gap-3 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-xs font-mono" style={{ color: "var(--psg-muted)" }}>#{ticket.id}</span>
-                    {badge(ticket.status, STATUS_COLORS[ticket.status] ?? "#6b7280")}
-                    {badge(ticket.priority, PRIORITY_COLORS[ticket.priority] ?? "#6b7280")}
-                    <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{CAT_LABELS[ticket.category]}</span>
-                  </div>
-                  <p className="text-sm font-semibold text-white">{ticket.title}</p>
-                  {ticket.description && (
-                    <p className="text-xs mt-1 whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{ticket.description}</p>
-                  )}
-                  <div className="flex items-center gap-3 mt-2 text-xs flex-wrap" style={{ color: "var(--psg-muted)" }}>
-                    <span>Submitted {fmtDate(ticket.createdAt)}</span>
-                    {showAll && ticket.createdByUser && <span>by {ticket.createdByUser.name}</span>}
-                    {ticket.resolvedAt && <span>· Resolved {fmtDate(ticket.resolvedAt)}</span>}
-                  </div>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+          {COLUMNS.map(col => {
+            const colTickets = tickets.filter(t => t.status === col.key);
+            return (
+              <div key={col.key} className="rounded-xl border flex flex-col min-h-32" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                {/* Column header */}
+                <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
+                  <span className="text-sm font-semibold text-white">{col.label}</span>
+                  <span className="ml-auto text-xs rounded-full px-2 py-0.5 font-medium" style={{ backgroundColor: col.color + "22", color: col.color }}>
+                    {colTickets.length}
+                  </span>
                 </div>
 
-                {/* Admin controls */}
-                {role === "admin" && (
-                  <div className="flex flex-col gap-2 shrink-0 min-w-32">
-                    <select
-                      value={ticket.status}
-                      onChange={e => updateTicket(ticket.id, { status: e.target.value })}
-                      className="text-xs rounded px-2 py-1 border"
-                      style={{ backgroundColor: "rgba(255,255,255,0.05)", borderColor: "var(--psg-card-border)", color: STATUS_COLORS[ticket.status] ?? "white" }}
-                    >
-                      {STATUSES.map(s => <option key={s} value={s} className="text-white capitalize">{s.replace("_", " ")}</option>)}
-                    </select>
-                    <select
-                      value={ticket.priority}
-                      onChange={e => updateTicket(ticket.id, { priority: e.target.value })}
-                      className="text-xs rounded px-2 py-1 border"
-                      style={{ backgroundColor: "rgba(255,255,255,0.05)", borderColor: "var(--psg-card-border)", color: PRIORITY_COLORS[ticket.priority] ?? "white" }}
-                    >
-                      {PRIORITIES.map(p => <option key={p} value={p} className="text-white capitalize">{p}</option>)}
-                    </select>
-                    <button onClick={() => deleteTicket(ticket.id)} className="text-xs text-red-400 hover:text-red-300 text-left transition-colors">Delete</button>
-                  </div>
-                )}
+                {/* Cards */}
+                <div className="flex flex-col gap-2 p-3 flex-1">
+                  {colTickets.length === 0 ? (
+                    <p className="text-xs py-4 text-center" style={{ color: "var(--psg-muted)" }}>No tickets</p>
+                  ) : (
+                    colTickets.map(ticket => {
+                      const isOpen = expanded[ticket.id];
+                      return (
+                        <div key={ticket.id} className="rounded-lg border p-3 space-y-2 cursor-pointer hover:border-white/20 transition-colors"
+                          style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: "var(--psg-card-border)" }}
+                          onClick={() => toggleExpanded(ticket.id)}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                <span className="text-xs font-mono" style={{ color: "var(--psg-muted)" }}>#{ticket.id}</span>
+                                {badge(ticket.priority, PRIORITY_COLORS[ticket.priority] ?? "#6b7280")}
+                              </div>
+                              <p className="text-sm font-medium text-white leading-snug">{ticket.title}</p>
+                            </div>
+                            <span className="text-xs shrink-0 mt-0.5" style={{ color: "var(--psg-muted)" }}>
+                              {isOpen ? "▲" : "▼"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{CAT_LABELS[ticket.category]}</span>
+                            <span className="text-xs ml-auto" style={{ color: "var(--psg-muted)" }}>{fmtDate(ticket.createdAt)}</span>
+                          </div>
+
+                          {/* Expanded detail */}
+                          {isOpen && (
+                            <div className="pt-2 space-y-2 border-t" style={{ borderColor: "var(--psg-card-border)" }} onClick={e => e.stopPropagation()}>
+                              {ticket.description && (
+                                <p className="text-xs whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{ticket.description}</p>
+                              )}
+                              {showAll && ticket.createdByUser && (
+                                <p className="text-xs" style={{ color: "var(--psg-muted)" }}>by {ticket.createdByUser.name}</p>
+                              )}
+                              {ticket.resolvedAt && (
+                                <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Resolved {fmtDate(ticket.resolvedAt)}</p>
+                              )}
+
+                              {/* Admin controls */}
+                              {role === "admin" && (
+                                <div className="flex flex-col gap-1.5 pt-1">
+                                  <select
+                                    value={ticket.status}
+                                    onChange={e => updateTicket(ticket.id, { status: e.target.value })}
+                                    className="text-xs rounded px-2 py-1 border w-full"
+                                    style={{ backgroundColor: "rgba(255,255,255,0.05)", borderColor: "var(--psg-card-border)", color: COLUMNS.find(c => c.key === ticket.status)?.color ?? "white" }}
+                                  >
+                                    {COLUMNS.map(c => <option key={c.key} value={c.key} className="text-white">{c.label}</option>)}
+                                  </select>
+                                  <select
+                                    value={ticket.priority}
+                                    onChange={e => updateTicket(ticket.id, { priority: e.target.value })}
+                                    className="text-xs rounded px-2 py-1 border w-full"
+                                    style={{ backgroundColor: "rgba(255,255,255,0.05)", borderColor: "var(--psg-card-border)", color: PRIORITY_COLORS[ticket.priority] ?? "white" }}
+                                  >
+                                    {PRIORITIES.map(p => <option key={p} value={p} className="text-white capitalize">{p}</option>)}
+                                  </select>
+                                  <button onClick={() => deleteTicket(ticket.id)} className="text-xs text-red-400 hover:text-red-300 text-left transition-colors">Delete</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -19,6 +19,7 @@ type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
   color?: string | null; permissions: string | null; createdAt: string;
 };
+type Production = { id: number; name: string; status: string };
 
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
@@ -49,8 +50,13 @@ export default function AdminUsersPage() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteSending, setInviteSending] = useState(false);
+  const [allProductions, setAllProductions] = useState<Production[]>([]);
+  const [selectedProductions, setSelectedProductions] = useState<number[]>([]);
 
   useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    fetch("/api/productions").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllProductions(d); });
+  }, []);
 
   async function reload() {
     const data = await fetch("/api/users").then((r) => r.json());
@@ -61,33 +67,52 @@ export default function AdminUsersPage() {
     setEditUser(null);
     setForm(BLANK);
     setPerms(defaultPerms());
+    setSelectedProductions([]);
     setError("");
     setShowForm(true);
   }
 
-  function openEdit(u: User) {
+  async function openEdit(u: User) {
     setEditUser(u);
     setForm({ name: u.name, email: u.email, password: "", role: u.role, color: u.color ?? "" });
     setPerms(parsePerms(u.permissions));
     setError("");
     setShowForm(true);
+    const ids = await fetch(`/api/users/${u.id}/productions`).then(r => r.json()).catch(() => []);
+    setSelectedProductions(Array.isArray(ids) ? ids : []);
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     const body = { ...form, permissions: perms, color: form.color || null };
+    let savedUserId: number | null = null;
     if (editUser) {
       const res = await fetch(`/api/users/${editUser.id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       if (!res.ok) { setError((await res.json()).error ?? "Error"); return; }
+      savedUserId = editUser.id;
     } else {
       const res = await fetch("/api/users", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       if (!res.ok) { setError((await res.json()).error ?? "Error"); return; }
+      const created = await res.json();
+      savedUserId = created.id;
     }
+
+    // Sync team memberships when "Team only" is selected
+    if (savedUserId && form.role !== "admin" && perms.modules.includes("productions") && !perms.allProductions) {
+      const current = await fetch(`/api/users/${savedUserId}/productions`).then(r => r.json()).catch(() => []) as number[];
+      const toAdd = selectedProductions.filter(id => !current.includes(id));
+      const toRemove = current.filter(id => !selectedProductions.includes(id));
+      await Promise.all([
+        ...toAdd.map(pid => fetch(`/api/productions/${pid}/team`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: savedUserId }) })),
+        ...toRemove.map(pid => fetch(`/api/productions/${pid}/team/${savedUserId}`, { method: "DELETE" })),
+      ]);
+    }
+
     setShowForm(false); setEditUser(null);
     await reload();
   }
@@ -285,6 +310,21 @@ export default function AdminUsersPage() {
                           </div>
                         </label>
                       </div>
+                      {!perms.allProductions && allProductions.length > 0 && (
+                        <div className="mt-3 rounded-lg border max-h-48 overflow-y-auto" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-dark-bg)" }}>
+                          {allProductions.map(p => (
+                            <label key={p.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-white/5 border-b last:border-b-0" style={{ borderColor: "var(--psg-card-border)" }}>
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded shrink-0"
+                                checked={selectedProductions.includes(p.id)}
+                                onChange={() => setSelectedProductions(s => s.includes(p.id) ? s.filter(x => x !== p.id) : [...s, p.id])}
+                              />
+                              <span className="text-sm truncate">{p.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

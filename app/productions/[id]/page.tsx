@@ -3806,7 +3806,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   <button type="submit" className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "#10b981", color: "#fff" }}>
                     {editingNote ? "Save" : "Add"}
                   </button>
-                  <button type="button" onClick={() => { setShowNoteForm(false); setEditingNote(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "var(--psg-card-border)", color: "var(--psg-text)" }}>
+                  <button type="button" onClick={() => { setShowNoteForm(false); setEditingNote(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "rgba(255,255,255,0.1)", color: "var(--psg-text)", border: "1px solid var(--psg-card-border)" }}>
                     Cancel
                   </button>
                 </div>
@@ -3902,7 +3902,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                       )}
                       <button type="button" onClick={() => generateMinutes()} disabled={generatingMinutes || !meetingTranscript.trim()}
                         className="px-3 py-1 rounded text-xs font-medium"
-                        style={{ background: generatingMinutes || !meetingTranscript.trim() ? "var(--psg-card-border)" : "#8b5cf6", color: generatingMinutes || !meetingTranscript.trim() ? "var(--psg-muted)" : "#fff" }}>
+                        style={{ background: generatingMinutes || !meetingTranscript.trim() ? "rgba(255,255,255,0.06)" : "#8b5cf6", color: generatingMinutes || !meetingTranscript.trim() ? "var(--psg-muted)" : "#fff", border: "1px solid var(--psg-card-border)", opacity: generatingMinutes || !meetingTranscript.trim() ? 0.6 : 1 }}>
                         {generatingMinutes ? "Generating…" : "✨ Generate"}
                       </button>
                       {meetingTranscript && <button type="button" onClick={() => setMeetingTranscript("")} className="px-2 py-1 rounded text-xs" style={{ color: "var(--psg-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
@@ -3918,7 +3918,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   <button type="submit" className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "#10b981", color: "#fff" }}>
                     {editingMeeting ? "Save" : "Create"}
                   </button>
-                  <button type="button" onClick={() => { setShowMeetingForm(false); setEditingMeeting(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "var(--psg-card-border)", color: "var(--psg-text)" }}>
+                  <button type="button" onClick={() => { setShowMeetingForm(false); setEditingMeeting(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "rgba(255,255,255,0.1)", color: "var(--psg-text)", border: "1px solid var(--psg-card-border)" }}>
                     Cancel
                   </button>
                 </div>

@@ -227,7 +227,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "", isPSGExpense: false, paymentMethod: "" };
 const BLANK_PSG_EXPENSE = { description: "", supplier: "", committed: "", spent: "", paymentDue: "", notes: "", paymentMethod: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour" | "notes";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -297,6 +297,37 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     if (Array.isArray(data)) setShowReports(data);
   }
   useEffect(() => { if (tab === "reports") reloadReports(); }, [tab, id]);
+
+  type ProdNote = { id: number; title: string; body: string; color: string | null; createdByUserId: number | null; createdByUser: { id: number; name: string; avatarUrl: string | null } | null; createdAt: string; updatedAt: string };
+  const [notes, setNotes] = useState<ProdNote[]>([]);
+  const [noteForm, setNoteForm] = useState({ title: "", body: "", color: "" });
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [editingNote, setEditingNote] = useState<ProdNote | null>(null);
+
+  async function reloadNotes() {
+    const data = await fetch(`/api/productions/${id}/notes`).then(r => r.json());
+    if (Array.isArray(data)) setNotes(data);
+  }
+  useEffect(() => { if (tab === "notes") reloadNotes(); }, [tab, id]);
+
+  async function saveNote(e: React.FormEvent) {
+    e.preventDefault();
+    if (editingNote) {
+      await fetch(`/api/production-notes/${editingNote.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(noteForm) });
+    } else {
+      await fetch(`/api/productions/${id}/notes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(noteForm) });
+    }
+    setNoteForm({ title: "", body: "", color: "" });
+    setShowNoteForm(false);
+    setEditingNote(null);
+    reloadNotes();
+  }
+
+  async function deleteNote(noteId: number) {
+    if (!confirm("Delete this note?")) return;
+    await fetch(`/api/production-notes/${noteId}`, { method: "DELETE" });
+    reloadNotes();
+  }
 
   async function saveReport(e: React.FormEvent) {
     e.preventDefault();
@@ -3599,6 +3630,73 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
       {tab === "tasks" && prod && (
         <TasksPanel productionId={prod.id} />
+      )}
+
+      {tab === "notes" && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 style={{ color: "var(--psg-text)", fontSize: 18, fontWeight: 600 }}>Notes</h2>
+            {canEdit && (
+              <button onClick={() => { setEditingNote(null); setNoteForm({ title: "", body: "", color: "" }); setShowNoteForm(true); }}
+                className="px-3 py-1.5 rounded text-sm font-medium"
+                style={{ background: "var(--psg-accent)", color: "#fff" }}>
+                + Add Note
+              </button>
+            )}
+          </div>
+
+          {showNoteForm && (
+            <form onSubmit={saveNote} style={{ background: "var(--psg-card)", border: "1px solid var(--psg-card-border)", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+              <div className="space-y-3">
+                <input required placeholder="Title" value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))}
+                  className={inp} style={inpStyle} />
+                <textarea required placeholder="Body" value={noteForm.body} onChange={e => setNoteForm(f => ({ ...f, body: e.target.value }))}
+                  rows={4} className={inp} style={{ ...inpStyle, resize: "vertical" }} />
+                <div className="flex items-center gap-2">
+                  <label style={{ color: "var(--psg-muted)", fontSize: 13 }}>Colour:</label>
+                  {["", "#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"].map(c => (
+                    <button key={c} type="button" onClick={() => setNoteForm(f => ({ ...f, color: c }))}
+                      style={{ width: 20, height: 20, borderRadius: "50%", background: c || "var(--psg-card-border)", border: noteForm.color === c ? "2px solid var(--psg-text)" : "2px solid transparent", cursor: "pointer" }} />
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "var(--psg-accent)", color: "#fff" }}>
+                    {editingNote ? "Save" : "Add"}
+                  </button>
+                  <button type="button" onClick={() => { setShowNoteForm(false); setEditingNote(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "var(--psg-card-border)", color: "var(--psg-text)" }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {notes.length === 0 && !showNoteForm ? (
+            <p style={{ color: "var(--psg-muted)", fontSize: 14 }}>No notes yet.</p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+              {notes.map(note => (
+                <div key={note.id} style={{ background: "var(--psg-card)", border: `1px solid ${note.color || "var(--psg-card-border)"}`, borderTopWidth: note.color ? 3 : 1, borderRadius: 8, padding: 16 }}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h3 style={{ color: "var(--psg-text)", fontWeight: 600, fontSize: 15 }}>{note.title}</h3>
+                    {canEdit && (
+                      <div className="flex gap-1">
+                        <button onClick={() => { setEditingNote(note); setNoteForm({ title: note.title, body: note.body, color: note.color || "" }); setShowNoteForm(true); }}
+                          style={{ color: "var(--psg-muted)", fontSize: 12, cursor: "pointer", background: "none", border: "none" }}>✏️</button>
+                        <button onClick={() => deleteNote(note.id)}
+                          style={{ color: "#ef4444", fontSize: 12, cursor: "pointer", background: "none", border: "none" }}>🗑</button>
+                      </div>
+                    )}
+                  </div>
+                  <p style={{ color: "var(--psg-muted)", fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{note.body}</p>
+                  <p style={{ color: "var(--psg-muted)", fontSize: 11, marginTop: 10 }}>
+                    {note.createdByUser?.name} · {new Date(note.updatedAt).toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Modal: Edit Production */}

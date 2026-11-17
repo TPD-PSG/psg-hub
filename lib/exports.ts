@@ -86,6 +86,19 @@ function basePDF(title: string, subtitle?: string, logo?: LogoAsset, prodLogo?: 
   return doc;
 }
 
+function addFooters(doc: jsPDF, landscape = true) {
+  const pageW = landscape ? 297 : 210;
+  const pageH = landscape ? 210 : 297;
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(160, 160, 180);
+    doc.text(`Page ${i} of ${pageCount}`, pageW - 10, pageH - 7, { align: "right" });
+    doc.text(`Exported ${fmtDate(new Date().toISOString())}`, 10, pageH - 7);
+  }
+}
+
 // ── Budget ───────────────────────────────────────────────────────────────────
 
 type Expense = { phase: string; description: string; estimated: number; committed: number; spent: number; supplier: string | null; poNumber: string | null; paymentDue: string | null; issuedForPayment: boolean; vatExempt: boolean; notes: string | null };
@@ -131,6 +144,7 @@ export async function exportBudgetPDF(productionName: string, lines: BudgetLine[
     y = (doc as any).lastAutoTable.finalY + 4;
   }
 
+  addFooters(doc);
   doc.save(`budget-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
@@ -192,6 +206,7 @@ export async function exportSchedulePDF(productionName: string, events: Schedule
     headStyles: { fillColor: [10, 25, 65] },
     margin: { left: 10, right: 10 },
   });
+  addFooters(doc);
   doc.save(`schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
@@ -231,6 +246,7 @@ export async function exportCrewPDF(title: string, crew: CrewRow[], productionLo
     headStyles: { fillColor: [10, 25, 65] },
     margin: { left: 10, right: 10 },
   });
+  addFooters(doc);
   doc.save(`crew-${title.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
@@ -276,6 +292,7 @@ export async function exportAccommodationPDF(productionName: string, bookings: B
     headStyles: { fillColor: [10, 25, 65] },
     margin: { left: 10, right: 10 },
   });
+  addFooters(doc);
   doc.save(`accommodation-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
@@ -321,6 +338,7 @@ export async function exportHaulagePDF(title: string, movements: MovementRow[], 
     headStyles: { fillColor: [10, 25, 65] },
     margin: { left: 10, right: 10 },
   });
+  addFooters(doc);
   doc.save(`haulage-${title.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
@@ -366,6 +384,7 @@ export async function exportTourSchedulePDF(productionName: string, stops: TourS
     columnStyles: { 0: { halign: "center", cellWidth: 12 }, 3: { halign: "right" } },
     margin: { left: 10, right: 10 },
   });
+  addFooters(doc);
   doc.save(`tour-schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
@@ -423,6 +442,7 @@ export async function exportVenueStopPDF(productionName: string, stop: TourStopR
     doc.text(lines, 10, finalY + 16);
   }
   const slug = `${productionName}-${venueName}`.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
+  addFooters(doc);
   doc.save(`venue-${slug}.pdf`);
 }
 
@@ -470,6 +490,7 @@ export async function exportToolboxSignoffPDF(productionName: string, sigs: Tool
 
   const slug = productionName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
   const venueSlug = venueName ? `-${venueName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase()}` : "";
+  addFooters(doc);
   doc.save(`cdm-signoffs-${slug}${venueSlug}.pdf`);
 }
 
@@ -509,6 +530,7 @@ export async function exportContactSheetPDF(productionName: string, contacts: Pr
     alternateRowStyles: { fillColor: [245, 245, 250] },
   });
 
+  addFooters(doc);
   const slug = productionName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
   doc.save(`contacts-${slug}.pdf`);
 }
@@ -625,16 +647,7 @@ export async function exportMeetingMinutesPDF(
   if (meeting.agenda) addSection("AGENDA", meeting.agenda);
   if (meeting.minutes) addSection("MINUTES", meeting.minutes);
 
-  // ── Footer ──────────────────────────────────────────────────────────────────
-  const pageCount = (doc as any).internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(160, 160, 180);
-    doc.text(`Page ${i} of ${pageCount}`, W - 14, 290, { align: "right" });
-    doc.text(`Exported ${fmtDate(new Date().toISOString())}`, 14, 290);
-  }
-
+  addFooters(doc, false);
   const slug = meeting.title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
   doc.save(`minutes-${slug}.pdf`);
 }

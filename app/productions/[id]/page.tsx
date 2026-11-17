@@ -227,7 +227,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "", isPSGExpense: false, paymentMethod: "" };
 const BLANK_PSG_EXPENSE = { description: "", supplier: "", committed: "", spent: "", paymentDue: "", notes: "", paymentMethod: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour" | "notes";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour" | "notes" | "meetings";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -342,6 +342,81 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     dragNote.current = null;
     dragOverNote.current = null;
     await fetch(`/api/productions/${id}/notes`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: reordered.map(n => n.id) }) });
+  }
+
+  type Meeting = { id: number; title: string; meetingDate: string; location: string | null; attendees: string | null; agenda: string | null; minutes: string | null; createdByUser: { id: number; name: string } | null };
+  type ProdContact = { id: number; name: string; role: string | null; company: string | null };
+  const BLANK_MEETING = { title: "", meetingDate: "", location: "", attendees: "", agenda: "", minutes: "" };
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetingContacts, setMeetingContacts] = useState<ProdContact[]>([]);
+  const [showMeetingForm, setShowMeetingForm] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [meetingForm, setMeetingForm] = useState(BLANK_MEETING);
+  const [meetingAttendeeIds, setMeetingAttendeeIds] = useState<number[]>([]);
+  const [meetingAttendeeExtra, setMeetingAttendeeExtra] = useState("");
+  const [expandedMeetings, setExpandedMeetings] = useState<Record<number, { agenda: boolean; minutes: boolean }>>({});
+
+  function serializeAttendees(ids: number[], extra: string, contacts: ProdContact[]) {
+    return JSON.stringify({ contactIds: ids, extra });
+  }
+  function parseAttendees(raw: string | null) {
+    if (!raw) return { contactIds: [] as number[], extra: "" };
+    try { return JSON.parse(raw) as { contactIds: number[]; extra: string }; } catch { return { contactIds: [], extra: raw }; }
+  }
+  function attendeeNames(raw: string | null, contacts: ProdContact[]) {
+    const { contactIds, extra } = parseAttendees(raw);
+    const names = contactIds.map(cid => contacts.find(c => c.id === cid)?.name).filter(Boolean) as string[];
+    if (extra.trim()) names.push(...extra.split(",").map(s => s.trim()).filter(Boolean));
+    return names;
+  }
+
+  async function reloadMeetings() {
+    const [mData, cData] = await Promise.all([
+      fetch(`/api/productions/${id}/meetings`).then(r => r.json()),
+      fetch(`/api/productions/${id}/contacts`).then(r => r.json()),
+    ]);
+    if (Array.isArray(mData)) setMeetings(mData);
+    if (Array.isArray(cData)) setMeetingContacts(cData);
+  }
+  useEffect(() => { if (tab === "meetings") reloadMeetings(); }, [tab, id]);
+
+  function openMeetingForm(m?: Meeting) {
+    if (m) {
+      const { contactIds, extra } = parseAttendees(m.attendees);
+      setEditingMeeting(m);
+      setMeetingForm({ title: m.title, meetingDate: m.meetingDate.slice(0, 16), location: m.location || "", attendees: m.attendees || "", agenda: m.agenda || "", minutes: m.minutes || "" });
+      setMeetingAttendeeIds(contactIds);
+      setMeetingAttendeeExtra(extra);
+    } else {
+      setEditingMeeting(null);
+      setMeetingForm(BLANK_MEETING);
+      setMeetingAttendeeIds([]);
+      setMeetingAttendeeExtra("");
+    }
+    setShowMeetingForm(true);
+  }
+
+  async function saveMeeting(e: React.FormEvent) {
+    e.preventDefault();
+    const payload = { ...meetingForm, attendees: serializeAttendees(meetingAttendeeIds, meetingAttendeeExtra, meetingContacts) };
+    if (editingMeeting) {
+      await fetch(`/api/meetings/${editingMeeting.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    } else {
+      await fetch(`/api/productions/${id}/meetings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    }
+    setShowMeetingForm(false);
+    setEditingMeeting(null);
+    reloadMeetings();
+  }
+
+  async function deleteMeeting(mid: number) {
+    if (!confirm("Delete this meeting?")) return;
+    await fetch(`/api/meetings/${mid}`, { method: "DELETE" });
+    reloadMeetings();
+  }
+
+  function toggleMeetingSection(mid: number, section: "agenda" | "minutes") {
+    setExpandedMeetings(prev => ({ ...prev, [mid]: { ...prev[mid], [section]: !prev[mid]?.[section] } }));
   }
 
   async function saveReport(e: React.FormEvent) {
@@ -3715,6 +3790,120 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "meetings" && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 style={{ color: "var(--psg-text)", fontSize: 18, fontWeight: 600 }}>Meetings</h2>
+            {(isAdmin || userRole === "member") && (
+              <button onClick={() => openMeetingForm()} className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "var(--psg-accent)", color: "#fff" }}>
+                + New Meeting
+              </button>
+            )}
+          </div>
+
+          {showMeetingForm && (
+            <form onSubmit={saveMeeting} style={{ background: "var(--psg-card)", border: "1px solid var(--psg-card-border)", borderRadius: 8, padding: 16, marginBottom: 20 }}>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <input required placeholder="Title *" value={meetingForm.title} onChange={e => setMeetingForm(f => ({ ...f, title: e.target.value }))} className={inp} style={inpStyle} />
+                  </div>
+                  <input required type="datetime-local" value={meetingForm.meetingDate} onChange={e => setMeetingForm(f => ({ ...f, meetingDate: e.target.value }))} className={inp} style={inpStyle} />
+                  <input placeholder="Location" value={meetingForm.location} onChange={e => setMeetingForm(f => ({ ...f, location: e.target.value }))} className={inp} style={inpStyle} />
+                </div>
+
+                <div>
+                  <p style={{ color: "var(--psg-muted)", fontSize: 12, marginBottom: 6 }}>Attendees</p>
+                  {meetingContacts.length > 0 && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 6, marginBottom: 8 }}>
+                      {meetingContacts.map(c => (
+                        <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: "var(--psg-text)" }}>
+                          <input type="checkbox" checked={meetingAttendeeIds.includes(c.id)}
+                            onChange={e => setMeetingAttendeeIds(prev => e.target.checked ? [...prev, c.id] : prev.filter(x => x !== c.id))} />
+                          <span>{c.name}{c.role ? ` (${c.role})` : ""}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <input placeholder="Additional attendees (comma-separated)" value={meetingAttendeeExtra} onChange={e => setMeetingAttendeeExtra(e.target.value)} className={inp} style={inpStyle} />
+                </div>
+
+                <textarea placeholder="Agenda" value={meetingForm.agenda} onChange={e => setMeetingForm(f => ({ ...f, agenda: e.target.value }))} rows={4} className={inp} style={{ ...inpStyle, resize: "vertical" }} />
+                <textarea placeholder="Minutes" value={meetingForm.minutes} onChange={e => setMeetingForm(f => ({ ...f, minutes: e.target.value }))} rows={4} className={inp} style={{ ...inpStyle, resize: "vertical" }} />
+
+                <div className="flex gap-2">
+                  <button type="submit" className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "#10b981", color: "#fff" }}>
+                    {editingMeeting ? "Save" : "Create"}
+                  </button>
+                  <button type="button" onClick={() => { setShowMeetingForm(false); setEditingMeeting(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "var(--psg-card-border)", color: "var(--psg-text)" }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {meetings.length === 0 && !showMeetingForm ? (
+            <p style={{ color: "var(--psg-muted)", fontSize: 14 }}>No meetings yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {meetings.map(m => {
+                const exp = expandedMeetings[m.id] ?? {};
+                const names = attendeeNames(m.attendees, meetingContacts);
+                const dt = new Date(m.meetingDate);
+                return (
+                  <div key={m.id} style={{ background: "var(--psg-card)", border: "1px solid var(--psg-card-border)", borderRadius: 8, overflow: "hidden" }}>
+                    <div className="flex items-start justify-between gap-3" style={{ padding: "12px 16px" }}>
+                      <div>
+                        <p style={{ color: "var(--psg-text)", fontWeight: 600, fontSize: 15 }}>{m.title}</p>
+                        <p style={{ color: "var(--psg-muted)", fontSize: 13, marginTop: 2 }}>
+                          {dt.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+                          {" · "}{dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          {m.location ? ` · ${m.location}` : ""}
+                        </p>
+                        {names.length > 0 && (
+                          <p style={{ color: "var(--psg-muted)", fontSize: 12, marginTop: 4 }}>👥 {names.join(", ")}</p>
+                        )}
+                      </div>
+                      {(isAdmin || userRole === "member") && (
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => openMeetingForm(m)} style={{ color: "var(--psg-muted)", fontSize: 12, background: "none", border: "none", cursor: "pointer" }}>✏️</button>
+                          <button onClick={() => deleteMeeting(m.id)} style={{ color: "#ef4444", fontSize: 12, background: "none", border: "none", cursor: "pointer" }}>🗑</button>
+                        </div>
+                      )}
+                    </div>
+
+                    {m.agenda && (
+                      <div style={{ borderTop: "1px solid var(--psg-card-border)" }}>
+                        <button onClick={() => toggleMeetingSection(m.id, "agenda")} className="w-full flex items-center justify-between" style={{ padding: "8px 16px", background: "none", border: "none", cursor: "pointer", color: "var(--psg-text)", fontSize: 13, fontWeight: 500 }}>
+                          <span>📋 Agenda</span>
+                          <span style={{ color: "var(--psg-muted)" }}>{exp.agenda ? "▲" : "▼"}</span>
+                        </button>
+                        {exp.agenda && (
+                          <div style={{ padding: "8px 16px 12px", color: "var(--psg-muted)", fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{m.agenda}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {m.minutes && (
+                      <div style={{ borderTop: "1px solid var(--psg-card-border)" }}>
+                        <button onClick={() => toggleMeetingSection(m.id, "minutes")} className="w-full flex items-center justify-between" style={{ padding: "8px 16px", background: "none", border: "none", cursor: "pointer", color: "var(--psg-text)", fontSize: 13, fontWeight: 500 }}>
+                          <span>📝 Minutes</span>
+                          <span style={{ color: "var(--psg-muted)" }}>{exp.minutes ? "▲" : "▼"}</span>
+                        </button>
+                        {exp.minutes && (
+                          <div style={{ padding: "8px 16px 12px", color: "var(--psg-muted)", fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{m.minutes}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

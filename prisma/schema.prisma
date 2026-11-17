@@ -36,6 +36,7 @@ model User {
   variationsRequested BudgetVariation[]  @relation("VariationRequester")
   variationsApproved  BudgetVariation[]  @relation("VariationApprover")
   productionNotes     ProductionNote[]
+  meetings            Meeting[]
 }
 
 model Production {
@@ -93,6 +94,7 @@ model Production {
   performanceSchedule PerformanceSchedule?
   performanceOverrides PerformanceDateOverride[]
   productionNotes     ProductionNote[]
+  meetings            Meeting[]
 }
 
 model PerformanceSchedule {
@@ -933,6 +935,24 @@ model ToolboxTalkSignature {
   agreedBriefing Boolean  @default(false)
   agreedSafety   Boolean  @default(false)
   createdAt    DateTime   @default(now())
+}
+
+model Meeting {
+  id              Int        @id @default(autoincrement())
+  productionId    Int
+  production      Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  title           String
+  meetingDate     DateTime
+  location        String?
+  attendees       String?
+  agenda          String?
+  minutes         String?
+  createdByUserId Int?
+  createdByUser   User?      @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([productionId])
 }
 
 model ProductionNote {

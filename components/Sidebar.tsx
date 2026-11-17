@@ -133,6 +133,7 @@ const PRODUCTION_SECTIONS_ALL: NavItem[] = [
   { label: "Show Reports", href: "", section: "reports" },
   { label: "Tasks", href: "", section: "tasks" },
   { label: "Notes", href: "", section: "notes" },
+  { label: "Meetings", href: "", section: "meetings" },
 ];
 
 const TOUR_ONLY_SECTIONS = new Set(["tour"]);

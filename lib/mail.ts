@@ -4,7 +4,7 @@ export async function sendEmail({ to, subject, html }: { to: string; subject: st
   const tenantId = process.env.AZURE_TENANT_ID;
   const clientId = process.env.AZURE_CLIENT_ID;
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
-  const fromEmail = process.env.INVITE_FROM_EMAIL ?? "noreply@production-solutions.group";
+  const fromEmail = process.env.INVITE_FROM_EMAIL ?? "hub-noreply@production-solutions.group";
 
   if (!tenantId || !clientId || !clientSecret) {
     throw new Error("Microsoft Graph email not configured — set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET");

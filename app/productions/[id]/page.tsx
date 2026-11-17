@@ -3782,14 +3782,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             {(isAdmin || userRole === "member") && (
               <button onClick={() => { setEditingNote(null); setNoteForm({ title: "", body: "", color: "" }); setShowNoteForm(true); }}
                 className="px-3 py-1.5 rounded text-sm font-medium"
-                style={{ background: "var(--psg-accent)", color: "#fff" }}>
+                style={{ background: "var(--psg-blue)", color: "#fff" }}>
                 + Add Note
               </button>
             )}
           </div>
 
           {showNoteForm && (
-            <form onSubmit={saveNote} style={{ background: "var(--psg-card)", border: "1px solid var(--psg-card-border)", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+            <form onSubmit={saveNote} style={{ background: "var(--psg-card-bg)", border: "1px solid var(--psg-card-border)", borderRadius: 8, padding: 16, marginBottom: 16 }}>
               <div className="space-y-3">
                 <input required placeholder="Title" value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))}
                   className={inp} style={inpStyle} />
@@ -3825,7 +3825,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   onDragEnter={() => { dragOverNote.current = note.id; }}
                   onDragEnd={handleNoteDrop}
                   onDragOver={e => e.preventDefault()}
-                  style={{ background: "var(--psg-card)", border: `1px solid ${note.color || "var(--psg-card-border)"}`, borderTopWidth: note.color ? 3 : 1, borderRadius: 8, padding: 16, cursor: "grab" }}>
+                  style={{ background: "var(--psg-card-bg)", border: `1px solid ${note.color || "var(--psg-card-border)"}`, borderTopWidth: note.color ? 3 : 1, borderRadius: 8, padding: 16, cursor: "grab" }}>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 style={{ color: "var(--psg-text)", fontWeight: 600, fontSize: 15 }}>{note.title}</h3>
                     {(isAdmin || userRole === "member") && (
@@ -3853,14 +3853,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           <div className="flex items-center justify-between mb-4">
             <h2 style={{ color: "var(--psg-text)", fontSize: 18, fontWeight: 600 }}>Meetings</h2>
             {(isAdmin || userRole === "member") && (
-              <button onClick={() => openMeetingForm()} className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "var(--psg-accent)", color: "#fff" }}>
+              <button onClick={() => openMeetingForm()} className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "var(--psg-blue)", color: "#fff" }}>
                 + New Meeting
               </button>
             )}
           </div>
 
           {showMeetingForm && (
-            <form onSubmit={saveMeeting} style={{ background: "var(--psg-card)", border: "1px solid var(--psg-card-border)", borderRadius: 8, padding: 16, marginBottom: 20 }}>
+            <form onSubmit={saveMeeting} style={{ background: "var(--psg-card-bg)", border: "1px solid var(--psg-card-border)", borderRadius: 8, padding: 16, marginBottom: 20 }}>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
@@ -3935,7 +3935,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 const names = attendeeNames(m.attendees, meetingContacts);
                 const dt = new Date(m.meetingDate);
                 return (
-                  <div key={m.id} style={{ background: "var(--psg-card)", border: "1px solid var(--psg-card-border)", borderRadius: 8, overflow: "hidden" }}>
+                  <div key={m.id} style={{ background: "var(--psg-card-bg)", border: "1px solid var(--psg-card-border)", borderRadius: 8, overflow: "hidden" }}>
                     <div className="flex items-start justify-between gap-3" style={{ padding: "12px 16px" }}>
                       <div>
                         <p style={{ color: "var(--psg-text)", fontWeight: 600, fontSize: 15 }}>{m.title}</p>

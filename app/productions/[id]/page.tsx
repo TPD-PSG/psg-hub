@@ -345,7 +345,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   type Meeting = { id: number; title: string; meetingDate: string; location: string | null; attendees: string | null; agenda: string | null; minutes: string | null; createdByUser: { id: number; name: string } | null };
-  type ProdContact = { id: number; name: string; role: string | null; company: string | null };
+  type ProdContact = { id: number; name: string; role: string | null; company: string | null; section: string };
   const BLANK_MEETING = { title: "", meetingDate: "", location: "", attendees: "", agenda: "", minutes: "" };
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [meetingContacts, setMeetingContacts] = useState<ProdContact[]>([]);
@@ -3872,32 +3872,42 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
                 <div>
                   <p style={{ color: "var(--psg-muted)", fontSize: 12, marginBottom: 6 }}>Attendees</p>
-                  {meetingContacts.length > 0 && (
-                    <div style={{ marginBottom: 8 }}>
-                      <select
-                        value=""
-                        onChange={e => { const id = Number(e.target.value); if (id && !meetingAttendeeIds.includes(id)) setMeetingAttendeeIds(prev => [...prev, id]); }}
-                        className={inp} style={{ ...inpStyle, color: meetingAttendeeIds.length === meetingContacts.length ? "var(--psg-muted)" : "var(--psg-text)" }}>
-                        <option value="">+ Add from contacts…</option>
-                        {meetingContacts.filter(c => !meetingAttendeeIds.includes(c.id)).map(c => (
-                          <option key={c.id} value={c.id}>{c.name}{c.role ? ` (${c.role})` : ""}</option>
-                        ))}
-                      </select>
-                      {meetingAttendeeIds.length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                          {meetingAttendeeIds.map(id => {
-                            const c = meetingContacts.find(x => x.id === id);
-                            return c ? (
-                              <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(61,68,212,0.2)", border: "1px solid var(--psg-blue)", borderRadius: 4, padding: "2px 8px", fontSize: 12, color: "var(--psg-text)" }}>
-                                {c.name}
-                                <button type="button" onClick={() => setMeetingAttendeeIds(prev => prev.filter(x => x !== id))} style={{ background: "none", border: "none", color: "var(--psg-muted)", cursor: "pointer", padding: 0, lineHeight: 1, fontSize: 14 }}>×</button>
-                              </span>
-                            ) : null;
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {meetingContacts.length > 0 && (() => {
+                    const sections = Array.from(new Set(meetingContacts.map(c => c.section)));
+                    return (
+                      <div style={{ border: "1px solid var(--psg-card-border)", borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
+                        {sections.map((sec, si) => {
+                          const secContacts = meetingContacts.filter(c => c.section === sec);
+                          const allChecked = secContacts.every(c => meetingAttendeeIds.includes(c.id));
+                          const anyChecked = secContacts.some(c => meetingAttendeeIds.includes(c.id));
+                          return (
+                            <details key={sec} style={{ borderTop: si > 0 ? "1px solid var(--psg-card-border)" : undefined }}>
+                              <summary style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "var(--psg-text)", listStyle: "none", userSelect: "none" }}>
+                                <span style={{ flex: 1 }}>{sec}</span>
+                                {anyChecked && <span style={{ fontSize: 11, color: "var(--psg-blue)" }}>{secContacts.filter(c => meetingAttendeeIds.includes(c.id)).length}/{secContacts.length}</span>}
+                                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--psg-muted)", cursor: "pointer" }} onClick={e => e.stopPropagation()}>
+                                  <input type="checkbox" checked={allChecked} onChange={e => {
+                                    if (e.target.checked) setMeetingAttendeeIds(prev => [...new Set([...prev, ...secContacts.map(c => c.id)])]);
+                                    else setMeetingAttendeeIds(prev => prev.filter(id => !secContacts.find(c => c.id === id)));
+                                  }} />
+                                  All
+                                </label>
+                              </summary>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 6, padding: "8px 12px 10px", backgroundColor: "rgba(0,0,0,0.15)" }}>
+                                {secContacts.map(c => (
+                                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: "var(--psg-text)" }}>
+                                    <input type="checkbox" checked={meetingAttendeeIds.includes(c.id)}
+                                      onChange={e => setMeetingAttendeeIds(prev => e.target.checked ? [...prev, c.id] : prev.filter(x => x !== c.id))} />
+                                    <span>{c.name}{c.role ? ` (${c.role})` : ""}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </details>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                   <input placeholder="Additional attendees (comma-separated)" value={meetingAttendeeExtra} onChange={e => setMeetingAttendeeExtra(e.target.value)} className={inp} style={inpStyle} />
                 </div>
 

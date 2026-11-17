@@ -507,7 +507,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [editingEntry, setEditingEntry] = useState<CSEntry | null>(null);
 
   const [eventForm, setEventForm] = useState({ title: "", type: "Rehearsal", startAt: "", endAt: "", location: "", notes: "" });
-  const [budgetForm, setBudgetForm] = useState({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" });
+  const [budgetForm, setBudgetForm] = useState({ department: "", description: "", nominalCode: "", budgeted: "", notes: "" });
   const [expenseForm, setExpenseForm] = useState<typeof BLANK_EXPENSE & { id?: number }>(BLANK_EXPENSE);
   const [prodForm, setProdForm] = useState({ name: "", type: "", venue: "", venueId: "", isTour: false, startDate: "", endDate: "", status: "", announcementStatus: "not_announced", internalStatus: "pencil", productionManager: "", color: "", notes: "", reportEmail: "", sharepointUrl: "", bdClientId: "" });
   const [allBdClients, setAllBdClients] = useState<{ id: number; name: string; type: string }[]>([]);
@@ -633,7 +633,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       await fetch(`/api/productions/${id}/budget`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(budgetForm) });
     }
     setShowBudgetForm(false);
-    setBudgetForm({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" });
+    setBudgetForm({ department: "", description: "", nominalCode: "", budgeted: "", notes: "" });
     reload();
   }
 
@@ -2219,7 +2219,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Modal: Add Department/Budget Line */}
       {showBudgetForm && (
-        <Modal title={editBudgetLine ? "Edit Budget Line" : "Add Budget Department"} onClose={() => { setShowBudgetForm(false); setEditBudgetLine(null); setBudgetForm({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" }); }}>
+        <Modal title={editBudgetLine ? "Edit Budget Line" : "Add Budget Department"} onClose={() => { setShowBudgetForm(false); setEditBudgetLine(null); setBudgetForm({ department: "", description: "", nominalCode: "", budgeted: "", notes: "" }); }}>
           <form onSubmit={saveBudgetLine} className="space-y-3">
             <F label="Department">
               <input list="budget-departments" required className={inp} style={inpStyle} value={budgetForm.department} onChange={(e) => setBudgetForm((f) => ({ ...f, department: e.target.value }))} placeholder="e.g. Scenery" />
@@ -2231,7 +2231,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <F label="Nominal Code"><input className={inp} style={inpStyle} value={budgetForm.nominalCode} onChange={(e) => setBudgetForm((f) => ({ ...f, nominalCode: e.target.value }))} placeholder="e.g. 4100" /></F>
             <F label="Overall Allocation (£)"><input type="number" step="0.01" className={inp} style={inpStyle} value={budgetForm.budgeted} onChange={(e) => setBudgetForm((f) => ({ ...f, budgeted: e.target.value }))} /></F>
             <F label="Notes"><textarea rows={2} className={inp} style={inpStyle} value={budgetForm.notes} onChange={(e) => setBudgetForm((f) => ({ ...f, notes: e.target.value }))} /></F>
-            <Btns onCancel={() => { setShowBudgetForm(false); setEditBudgetLine(null); setBudgetForm({ department: "Scenery", description: "", nominalCode: "", budgeted: "", notes: "" }); }} label={editBudgetLine ? "Save Changes" : "Add"} />
+            <Btns onCancel={() => { setShowBudgetForm(false); setEditBudgetLine(null); setBudgetForm({ department: "", description: "", nominalCode: "", budgeted: "", notes: "" }); }} label={editBudgetLine ? "Save Changes" : "Add"} />
           </form>
         </Modal>
       )}

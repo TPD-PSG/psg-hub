@@ -7,7 +7,7 @@ import Image from "next/image";
 import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
 import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
-import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF } from "@/lib/exports";
+import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF, exportMeetingMinutesPDF } from "@/lib/exports";
 import { parsePerms } from "@/lib/permissions";
 
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
@@ -474,31 +474,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   function exportMeetingPDF(m: Meeting) {
     const names = attendeeNames(m.attendees, meetingContacts);
-    const dt = new Date(m.meetingDate);
-    const dateStr = dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    const timeStr = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${m.title} — Minutes</title><style>
-      body{font-family:Georgia,serif;max-width:720px;margin:40px auto;padding:0 24px;color:#111;line-height:1.6}
-      h1{font-size:22px;margin:0 0 4px}
-      .meta{color:#555;font-size:14px;margin-bottom:24px;border-bottom:1px solid #ccc;padding-bottom:16px}
-      h2{font-size:15px;text-transform:uppercase;letter-spacing:.05em;color:#333;margin:24px 0 8px;border-bottom:1px solid #eee;padding-bottom:4px}
-      p{white-space:pre-wrap;margin:0;font-size:14px}
-      @media print{body{margin:0}}
-    </style></head><body>
-      <h1>${m.title}</h1>
-      <div class="meta">
-        <div>${dateStr} · ${timeStr}${m.location ? ` · ${m.location}` : ""}</div>
-        ${names.length > 0 ? `<div style="margin-top:4px">Attendees: ${names.join(", ")}</div>` : ""}
-      </div>
-      ${m.agenda ? `<h2>Agenda</h2><p>${m.agenda.replace(/</g,"&lt;")}</p>` : ""}
-      ${m.minutes ? `<h2>Minutes</h2><p>${m.minutes.replace(/</g,"&lt;")}</p>` : ""}
-    </body></html>`;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 400);
+    exportMeetingMinutesPDF(m, names, prod.name, prod.logoUrl);
   }
 
   async function saveReport(e: React.FormEvent) {

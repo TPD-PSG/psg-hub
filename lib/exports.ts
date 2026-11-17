@@ -512,3 +512,129 @@ export async function exportContactSheetPDF(productionName: string, contacts: Pr
   const slug = productionName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
   doc.save(`contacts-${slug}.pdf`);
 }
+
+// ── Meeting Minutes ───────────────────────────────────────────────────────────
+
+export async function exportMeetingMinutesPDF(
+  meeting: { title: string; meetingDate: string; location?: string | null; agenda?: string | null; minutes?: string | null },
+  attendees: string[],
+  productionName: string,
+  productionLogoUrl?: string | null,
+) {
+  const [logo, prodLogo] = await Promise.all([
+    fetchLogoAsset(),
+    productionLogoUrl ? fetchLogoAsset(productionLogoUrl) : Promise.resolve(null),
+  ]);
+
+  const dt = new Date(meeting.meetingDate);
+  const dateStr = dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const timeStr = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const W = 210;
+
+  // ── Header bar ──────────────────────────────────────────────────────────────
+  doc.setFillColor(10, 25, 65);
+  doc.rect(0, 0, W, 22, "F");
+
+  let textX = 10;
+  if (logo) {
+    const maxH = 17; const maxW = 40;
+    const aspect = logo.w / logo.h;
+    let lh = maxH; let lw = lh * aspect;
+    if (lw > maxW) { lw = maxW; lh = lw / aspect; }
+    doc.addImage(logo.dataUrl, "PNG", 4, 2 + (maxH - lh) / 2, lw, lh);
+    textX = 4 + lw + 3;
+  }
+
+  let titleX = W - 10;
+  if (prodLogo) {
+    const maxH = 15; const maxW = 30;
+    const aspect = prodLogo.w / prodLogo.h;
+    let lh = maxH; let lw = lh * aspect;
+    if (lw > maxW) { lw = maxW; lh = lw / aspect; }
+    const lx = W - 10 - lw;
+    doc.addImage(prodLogo.dataUrl, "PNG", lx, 3 + (maxH - lh) / 2, lw, lh);
+    titleX = lx - 3;
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Production Solutions Group", textX, 14);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(productionName, titleX, 14, { align: "right" });
+
+  // ── Meeting title ───────────────────────────────────────────────────────────
+  doc.setTextColor(10, 25, 65);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text(meeting.title, 14, 34);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80, 80, 100);
+  doc.text(`${dateStr}  ·  ${timeStr}${meeting.location ? `  ·  ${meeting.location}` : ""}`, 14, 40);
+
+  // ── Divider ─────────────────────────────────────────────────────────────────
+  doc.setDrawColor(30, 38, 128);
+  doc.setLineWidth(0.4);
+  doc.line(14, 43, W - 14, 43);
+
+  let y = 50;
+
+  // ── Attendees ───────────────────────────────────────────────────────────────
+  if (attendees.length > 0) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 38, 128);
+    doc.text("ATTENDEES", 14, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(50, 50, 70);
+    const lines = doc.splitTextToSize(attendees.join("  ·  "), W - 28);
+    doc.text(lines, 14, y);
+    y += lines.length * 5 + 4;
+    doc.setDrawColor(220, 220, 230);
+    doc.setLineWidth(0.2);
+    doc.line(14, y, W - 14, y);
+    y += 6;
+  }
+
+  // ── Section helper ──────────────────────────────────────────────────────────
+  function addSection(label: string, body: string) {
+    if (y > 265) { doc.addPage(); y = 20; }
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 38, 128);
+    doc.text(label, 14, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(30, 30, 50);
+    doc.setFontSize(10);
+    const lines = doc.splitTextToSize(body, W - 28);
+    for (const line of lines) {
+      if (y > 275) { doc.addPage(); y = 20; }
+      doc.text(line, 14, y);
+      y += 5.5;
+    }
+    y += 4;
+  }
+
+  if (meeting.agenda) addSection("AGENDA", meeting.agenda);
+  if (meeting.minutes) addSection("MINUTES", meeting.minutes);
+
+  // ── Footer ──────────────────────────────────────────────────────────────────
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(160, 160, 180);
+    doc.text(`Page ${i} of ${pageCount}`, W - 14, 290, { align: "right" });
+    doc.text(`Exported ${fmtDate(new Date().toISOString())}`, 14, 290);
+  }
+
+  const slug = meeting.title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
+  doc.save(`minutes-${slug}.pdf`);
+}

@@ -1048,21 +1048,21 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[prod.status] ?? "bg-white/10 text-white/50"}`}>{prod.status}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ANN_COLORS[prod.announcementStatus] ?? "bg-white/10 text-white/50"}`}>{ANN_LABELS[prod.announcementStatus] ?? prod.announcementStatus}</span>
             {prod.isTour && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-900/60 text-purple-300">Tour</span>}
+            {prod.bdClient && (
+              <div className="ml-2 flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-white">{prod.bdClient.name}</span>
+                {prod.bdClient.billingName && prod.bdClient.billingName !== prod.bdClient.name && (
+                  <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingName}</span>
+                )}
+                {prod.bdClient.billingAddress && (
+                  <span className="text-xs whitespace-pre-line" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingAddress}</span>
+                )}
+                {prod.bdClient.billingEmail && (
+                  <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingEmail}</span>
+                )}
+              </div>
+            )}
           </div>
-          {prod.bdClient && (
-            <div className="mt-1.5 flex flex-col gap-0.5">
-              <span className="text-sm font-medium text-white">{prod.bdClient.name}</span>
-              {prod.bdClient.billingName && prod.bdClient.billingName !== prod.bdClient.name && (
-                <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingName}</span>
-              )}
-              {prod.bdClient.billingAddress && (
-                <span className="text-xs whitespace-pre-line" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingAddress}</span>
-              )}
-              {prod.bdClient.billingEmail && (
-                <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{prod.bdClient.billingEmail}</span>
-              )}
-            </div>
-          )}
           {prod.venueRef && <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{prod.venueRef.name}{prod.venueRef.city ? ` · ${prod.venueRef.city}` : ""}</p>}
           {!prod.venueRef && prod.venue && <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>{prod.venue}</p>}
           {prod.isTour && tourStops.length > 0 && <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{tourStops.length} tour {tourStops.length === 1 ? "stop" : "stops"}</p>}

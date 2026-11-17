@@ -38,7 +38,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   pages: { signIn: "/login" },
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    jwt({ token, user, trigger, session }) {
       if (user) {
         token.role = (user as any).role;
         token.id = user.id;
@@ -48,19 +48,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (trigger === "update" && session) {
         if (session.avatarUrl !== undefined) token.avatarUrl = session.avatarUrl;
         if (session.permissions !== undefined) token.permissions = session.permissions;
-      }
-      // Re-fetch mutable fields from DB on every token refresh so admin changes
-      // to permissions/role take effect without requiring a re-login.
-      if (token.id) {
-        const fresh = await prisma.user.findUnique({
-          where: { id: Number(token.id) },
-          select: { role: true, permissions: true, avatarUrl: true },
-        });
-        if (fresh) {
-          token.role = fresh.role;
-          token.permissions = fresh.permissions ?? null;
-          token.avatarUrl = fresh.avatarUrl ?? null;
-        }
       }
       return token;
     },

@@ -3636,7 +3636,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 style={{ color: "var(--psg-text)", fontSize: 18, fontWeight: 600 }}>Notes</h2>
-            {canEdit && (
+            {(isAdmin || userRole === "member") && (
               <button onClick={() => { setEditingNote(null); setNoteForm({ title: "", body: "", color: "" }); setShowNoteForm(true); }}
                 className="px-3 py-1.5 rounded text-sm font-medium"
                 style={{ background: "var(--psg-accent)", color: "#fff" }}>
@@ -3679,7 +3679,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 <div key={note.id} style={{ background: "var(--psg-card)", border: `1px solid ${note.color || "var(--psg-card-border)"}`, borderTopWidth: note.color ? 3 : 1, borderRadius: 8, padding: 16 }}>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 style={{ color: "var(--psg-text)", fontWeight: 600, fontSize: 15 }}>{note.title}</h3>
-                    {canEdit && (
+                    {(isAdmin || userRole === "member") && (
                       <div className="flex gap-1">
                         <button onClick={() => { setEditingNote(note); setNoteForm({ title: note.title, body: note.body, color: note.color || "" }); setShowNoteForm(true); }}
                           style={{ color: "var(--psg-muted)", fontSize: 12, cursor: "pointer", background: "none", border: "none" }}>✏️</button>

@@ -8,6 +8,7 @@ import ExportMenu from "@/components/ExportMenu";
 import TasksPanel from "@/components/TasksPanel";
 import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF } from "@/lib/exports";
+import { parsePerms } from "@/lib/permissions";
 
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
 type ProdDoc = { id: number; name: string; mime: string; folder: string; createdAt: string };
@@ -234,6 +235,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { data: session } = useSession();
   const isAdmin = (session?.user as any)?.role === "admin";
   const userRole = (session?.user as any)?.role ?? "member";
+  const DEFAULT_HIDDEN: Record<string, string[]> = { client: ["budget", "crew", "advancing", "links"], freelancer: ["budget", "crew", "advancing", "links"] };
+  const userPermsHidden = parsePerms((session?.user as any)?.permissions ?? null);
+  const hiddenSections = new Set<string>(isAdmin ? [] : (userPermsHidden.hiddenSections ?? DEFAULT_HIDDEN[userRole] ?? []));
   const searchParams = useSearchParams();
   const [prod, setProd] = useState<Production | null>(null);
   const tab: TabKey = (searchParams.get("section") as TabKey) ?? "schedule";
@@ -1118,7 +1122,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       </div>
 
       {/* Budget summary cards — budget tab only */}
-      {tab === "budget" && (
+      {tab === "budget" && !hiddenSections.has("budget") && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: "Allocation", value: totalBudgeted, color: "text-white" },
@@ -1273,7 +1277,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ── BUDGET TAB ── */}
-      {tab === "budget" && (
+      {tab === "budget" && hiddenSections.has("budget") && (
+        <div className="py-20 text-center" style={{ color: "var(--psg-muted)" }}>You don't have access to this section.</div>
+      )}
+      {tab === "budget" && !hiddenSections.has("budget") && (
         <div className="space-y-5">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex gap-1 rounded-lg overflow-hidden border text-xs" style={{ borderColor: "var(--psg-card-border)" }}>
@@ -1710,7 +1717,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ── CREW TAB ── */}
-      {tab === "crew" && (
+      {tab === "crew" && hiddenSections.has("crew") && (
+        <div className="py-20 text-center" style={{ color: "var(--psg-muted)" }}>You don't have access to this section.</div>
+      )}
+      {tab === "crew" && !hiddenSections.has("crew") && (
         <div className="space-y-4">
           <div className="flex justify-end gap-2">
             <ExportMenu actions={[
@@ -2666,7 +2676,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ── ADVANCING TAB ── */}
-      {tab === "advancing" && (
+      {tab === "advancing" && hiddenSections.has("advancing") && (
+        <div className="py-20 text-center" style={{ color: "var(--psg-muted)" }}>You don't have access to this section.</div>
+      )}
+      {tab === "advancing" && !hiddenSections.has("advancing") && (
         <AdvancingBoard tourStops={tourStops}
           production={prod.isTour ? null : prod}
           onStatusChange={async (stopId, status) => {
@@ -3149,7 +3162,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       })()}
 
       {/* ── LINKS TAB ── */}
-      {tab === "links" && (() => {
+      {tab === "links" && hiddenSections.has("links") && (
+        <div className="py-20 text-center" style={{ color: "var(--psg-muted)" }}>You don't have access to this section.</div>
+      )}
+      {tab === "links" && !hiddenSections.has("links") && (() => {
         type SvcInfo = { label: string; bg: string; logo: React.ReactNode };
         const serviceInfo = (url: string): SvcInfo => {
           try {

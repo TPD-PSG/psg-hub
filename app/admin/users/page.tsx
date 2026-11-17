@@ -3,6 +3,27 @@
 import { useEffect, useState } from "react";
 import UserAvatar from "@/components/UserAvatar";
 
+const PROD_SECTIONS = [
+  { key: "schedule", label: "Schedule" },
+  { key: "budget", label: "Budget" },
+  { key: "crew", label: "Crew" },
+  { key: "accommodation", label: "Accommodation" },
+  { key: "haulage", label: "Haulage" },
+  { key: "callsheets", label: "Call Sheets" },
+  { key: "advancing", label: "Advancing" },
+  { key: "contacts", label: "Contacts" },
+  { key: "documents", label: "Documents" },
+  { key: "links", label: "Links" },
+  { key: "hs", label: "Health & Safety" },
+  { key: "reports", label: "Show Reports" },
+  { key: "tasks", label: "Tasks" },
+];
+
+const DEFAULT_HIDDEN_BY_ROLE: Record<string, string[]> = {
+  client: ["budget", "crew", "advancing", "links"],
+  freelancer: ["budget", "crew", "advancing", "links"],
+};
+
 const MODULES = [
   { key: "bd", label: "Business Dev" },
   { key: "productions", label: "Productions" },
@@ -14,7 +35,7 @@ const MODULES = [
   { key: "marketing", label: "Marketing" },
 ];
 
-type Permissions = { modules: string[]; allProductions: boolean };
+type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[] };
 type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
   color?: string | null; permissions: string | null; createdAt: string;
@@ -291,6 +312,30 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
+                  {perms.modules.includes("productions") && form.role !== "admin" && (
+                    <div className="border-t pt-4" style={{ borderColor: "var(--psg-card-border)" }}>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Visible Sections</div>
+                      <div className="text-xs mb-2" style={{ color: "var(--psg-muted)" }}>Untick to hide a section from this user</div>
+                      <div className="grid grid-cols-2 gap-1">
+                        {PROD_SECTIONS.map(s => {
+                          const defaultHidden = DEFAULT_HIDDEN_BY_ROLE[form.role] ?? [];
+                          const hidden = perms.hiddenSections ?? defaultHidden;
+                          const isHidden = hidden.includes(s.key);
+                          return (
+                            <label key={s.key} className="flex items-center gap-2 cursor-pointer py-1">
+                              <input type="checkbox" className="w-4 h-4 rounded" checked={!isHidden}
+                                onChange={() => {
+                                  const current = perms.hiddenSections ?? DEFAULT_HIDDEN_BY_ROLE[form.role] ?? [];
+                                  const next = isHidden ? current.filter(x => x !== s.key) : [...current, s.key];
+                                  setPerms(p => ({ ...p, hiddenSections: next }));
+                                }} />
+                              <span className="text-sm">{s.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   {perms.modules.includes("productions") && (
                     <div className="border-t pt-4" style={{ borderColor: "var(--psg-card-border)" }}>
                       <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Production Access</div>

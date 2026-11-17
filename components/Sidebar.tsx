@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, Suspense, createContext, useContext } from "react";
+import { useSession } from "next-auth/react";
+import { parsePerms } from "@/lib/permissions";
 
 // ── Mobile sidebar context ────────────────────────────────────────────────────
 
@@ -134,6 +136,12 @@ const PRODUCTION_SECTIONS_ALL: NavItem[] = [
 
 const TOUR_ONLY_SECTIONS = new Set(["tour"]);
 
+// Sections hidden by default for restricted roles (can be overridden per-user via permissions)
+const DEFAULT_HIDDEN_SECTIONS: Record<string, string[]> = {
+  client: ["budget", "crew", "advancing", "links"],
+  freelancer: ["budget", "crew", "advancing", "links"],
+};
+
 type CalProduction = { id: number; name: string; color: string };
 
 const CAL_COLORS = [
@@ -153,6 +161,12 @@ function SidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { data: session } = useSession();
+  const userRole: string = (session?.user as any)?.role ?? "member";
+  const userPerms = parsePerms((session?.user as any)?.permissions ?? null);
+  const hiddenSections = new Set<string>(
+    userPerms.hiddenSections ?? DEFAULT_HIDDEN_SECTIONS[userRole] ?? []
+  );
   const [collapsed, setCollapsed] = useState<boolean | null>(null);
   const [prodName, setProdName] = useState<string | null>(null);
   const [prodIsTour, setProdIsTour] = useState<boolean | null>(null);
@@ -241,7 +255,8 @@ function SidebarInner() {
 
   if (prodId) {
     const visibleSections = PRODUCTION_SECTIONS_ALL.filter(s =>
-      prodIsTour === null || prodIsTour || !TOUR_ONLY_SECTIONS.has(s.section!)
+      (prodIsTour === null || prodIsTour || !TOUR_ONLY_SECTIONS.has(s.section!)) &&
+      (userRole === "admin" || !hiddenSections.has(s.section!))
     );
     section = {
       title: prodName ?? "Production",

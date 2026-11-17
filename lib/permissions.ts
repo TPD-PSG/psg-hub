@@ -1,4 +1,4 @@
-export type UserPerms = { modules: string[]; allProductions: boolean };
+export type UserPerms = { modules: string[]; allProductions: boolean; hiddenSections?: string[] };
 
 // Modules a client can access regardless of stored permissions
 const CLIENT_MODULES = new Set(["productions", "venues"]);

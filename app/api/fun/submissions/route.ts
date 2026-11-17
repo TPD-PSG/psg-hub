@@ -60,6 +60,17 @@ export async function POST(req: NextRequest) {
   const story = formData.get("story") as string;
   const files = formData.getAll("media") as File[];
 
+  const MAX_FILE_MB = 150;
+  const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
+  for (const file of files) {
+    if (file.size > MAX_FILE_BYTES) {
+      return NextResponse.json(
+        { error: `"${file.name}" is too large (${Math.round(file.size / 1024 / 1024)}MB). Maximum file size is ${MAX_FILE_MB}MB.` },
+        { status: 413 }
+      );
+    }
+  }
+
   const now = new Date();
   const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 

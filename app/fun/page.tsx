@@ -112,12 +112,15 @@ export default function FunPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
+    const tooBig = files.find(f => f.size > 150 * 1024 * 1024);
+    if (tooBig) { alert(`"${tooBig.name}" is too large (${Math.round(tooBig.size / 1024 / 1024)}MB). Maximum file size is 150MB.`); return; }
     setSubmitting(true);
     const fd = new FormData();
     fd.append("title", title.trim());
     fd.append("story", story.trim());
     files.forEach(f => fd.append("media", f));
-    await fetch("/api/fun/submissions", { method: "POST", body: fd });
+    const res = await fetch("/api/fun/submissions", { method: "POST", body: fd });
+    if (!res.ok) { const data = await res.json().catch(() => ({})); alert(data.error ?? "Something went wrong"); setSubmitting(false); return; }
     setTitle(""); setStory(""); setFiles([]); setShowForm(false);
     setSubmitting(false);
     await load();

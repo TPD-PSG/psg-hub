@@ -3660,7 +3660,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <button type="submit" className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "var(--psg-accent)", color: "#fff" }}>
+                  <button type="submit" className="px-3 py-1.5 rounded text-sm font-medium" style={{ background: "#10b981", color: "#fff" }}>
                     {editingNote ? "Save" : "Add"}
                   </button>
                   <button type="button" onClick={() => { setShowNoteForm(false); setEditingNote(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "var(--psg-card-border)", color: "var(--psg-text)" }}>

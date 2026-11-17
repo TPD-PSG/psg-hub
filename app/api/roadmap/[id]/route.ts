@@ -8,6 +8,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const userId = Number((session.user as any).id);
+  const role = (session.user as any).role;
+  const existing = await prisma.roadmapItem.findUnique({ where: { id: Number(id) } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (existing.createdByUserId !== userId && role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const body = await req.json();
   const item = await prisma.roadmapItem.update({
     where: { id: Number(id) },

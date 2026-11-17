@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,9 +11,13 @@ export const maxDuration = 60;
 // Protected by the same NOTIFY_SECRET used by the daily notify route.
 export async function POST(req: NextRequest) {
   const secret = process.env.NOTIFY_SECRET;
+  const secretHeader = req.headers.get("x-notify-secret");
   if (secret) {
-    const auth = req.headers.get("x-notify-secret");
-    if (auth !== secret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (secretHeader !== secret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } else {
+    // No NOTIFY_SECRET set — fall back to requiring an admin session
+    const session = await auth();
+    if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;

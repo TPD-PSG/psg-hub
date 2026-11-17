@@ -7,6 +7,8 @@ const prisma = new PrismaClient();
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const settings = await prisma.setting.findMany();
   const map: Record<string, string> = {};
   for (const s of settings) map[s.key] = s.value;

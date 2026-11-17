@@ -1004,7 +1004,7 @@ function FinancePageInner() {
             </div>
             {selectedHaulage.notes && <div><div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: "var(--psg-muted)" }}>Notes</div><p className="text-sm" style={{ color: "var(--psg-muted)" }}>{selectedHaulage.notes}</p></div>}
             <div className="pt-2">
-              <a href={`/productions/${selectedHaulage.production.id}?tab=logistics`}
+              <a href={`/productions/${selectedHaulage.production.id}?tab=haulage`}
                 className="text-sm text-blue-400 hover:text-blue-300">→ View in production logistics</a>
             </div>
           </div>

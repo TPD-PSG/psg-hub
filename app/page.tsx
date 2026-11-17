@@ -96,8 +96,8 @@ function SectionHeading({ title }: { title: string }) {
 // ── Today strip ───────────────────────────────────────────────────────────────
 
 const KD_ACTIVITY: Record<string, string> = {
-  load_in: "Fit Up", fit_up: "Fit Up", technical_rehearsal: "Tech Week",
-  tech_week: "Tech Week", dress_rehearsal: "Dress Rehearsal",
+  load_in: "Fit Up", fit_up: "Fit Up", technical_rehearsal: "Technical Rehearsals",
+  tech_week: "Technical Rehearsals", dress_rehearsal: "Dress Rehearsal",
   preview: "Previews", press_night: "Press Night",
   performance: "Performances", opening_night: "Opening Night",
   closing_night: "Closing Night", get_out: "Get Out",

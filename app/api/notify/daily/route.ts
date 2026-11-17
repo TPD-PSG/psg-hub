@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
   const KEY_DATE_LABELS: Record<string, string> = {
     first_rehearsal: "First Rehearsal", press_night: "Press Night", opening_night: "Opening Night",
     closing_night: "Closing Night", load_in: "Load In", get_out: "Get Out",
-    tech_week: "Tech Week", dress_rehearsal: "Dress Rehearsal", touring_start: "Touring Start",
+    tech_week: "Technical Rehearsals", dress_rehearsal: "Dress Rehearsal", touring_start: "Touring Start",
     touring_end: "Touring End",
   };
 

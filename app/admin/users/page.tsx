@@ -33,6 +33,7 @@ const MODULES = [
   { key: "finance", label: "Finance" },
   { key: "sales", label: "Sales" },
   { key: "marketing", label: "Marketing" },
+  { key: "roadmap", label: "Roadmap" },
 ];
 
 type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[] };

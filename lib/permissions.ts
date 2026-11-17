@@ -6,7 +6,7 @@ const CLIENT_MODULES = new Set(["productions", "venues"]);
 const FREELANCER_MODULES = new Set(["productions", "venues", "tasks", "suppliers", "fun", "ask"]);
 
 export function parsePerms(raw: string | null | undefined): UserPerms {
-  if (!raw) return { modules: ["bd", "productions", "venues", "tasks", "property", "finance", "sales", "marketing", "suppliers", "fun", "ask"], allProductions: true };
+  if (!raw) return { modules: ["bd", "productions", "venues", "tasks", "property", "finance", "sales", "marketing", "roadmap", "suppliers", "fun", "ask"], allProductions: true };
   try { return JSON.parse(raw); } catch { return { modules: [], allProductions: false }; }
 }
 

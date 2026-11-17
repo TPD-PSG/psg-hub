@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, email, role } = await req.json();
+  const { name, email, role, permissions, productionIds } = await req.json();
   if (!name || !email) return NextResponse.json({ error: "Name and email required" }, { status: 400 });
 
   // Check no existing user with that email
@@ -30,7 +30,11 @@ export async function POST(req: NextRequest) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
   await prisma.userInvite.create({
-    data: { token, email, name, role: role ?? "member", expiresAt },
+    data: {
+      token, email, name, role: role ?? "member", expiresAt,
+      permissions: permissions ? JSON.stringify(permissions) : null,
+      productionIds: productionIds?.length ? JSON.stringify(productionIds) : null,
+    },
   });
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "https://hub.production-solutions.group";

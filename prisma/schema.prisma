@@ -934,12 +934,14 @@ model ToolboxTalkSignature {
 }
 
 model UserInvite {
-  id        Int       @id @default(autoincrement())
-  token     String    @unique
-  email     String
-  name      String
-  role      String    @default("member")
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  id            Int       @id @default(autoincrement())
+  token         String    @unique
+  email         String
+  name          String
+  role          String    @default("member")
+  permissions   String?
+  productionIds String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
 }

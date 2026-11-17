@@ -36,20 +36,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  await prisma.$transaction([
-    prisma.user.create({
-      data: {
-        name: invite.name,
-        email: invite.email,
-        role: invite.role,
-        passwordHash,
-      },
-    }),
-    prisma.userInvite.update({
-      where: { token },
-      data: { usedAt: new Date() },
-    }),
-  ]);
+  const user = await prisma.user.create({
+    data: {
+      name: invite.name,
+      email: invite.email,
+      role: invite.role,
+      passwordHash,
+      permissions: invite.permissions ?? null,
+    },
+  });
+
+  await prisma.userInvite.update({ where: { token }, data: { usedAt: new Date() } });
+
+  // Add to specified productions
+  if (invite.productionIds) {
+    try {
+      const ids: number[] = JSON.parse(invite.productionIds);
+      if (ids.length) {
+        await prisma.productionTeam.createMany({
+          data: ids.map(pid => ({ productionId: pid, userId: user.id })),
+          skipDuplicates: true,
+        });
+      }
+    } catch {}
+  }
 
   return NextResponse.json({ ok: true });
 }

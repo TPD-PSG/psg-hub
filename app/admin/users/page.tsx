@@ -71,6 +71,8 @@ export default function AdminUsersPage() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteSending, setInviteSending] = useState(false);
+  const [invitePerms, setInvitePerms] = useState<Permissions>(defaultPerms());
+  const [inviteSelectedProductions, setInviteSelectedProductions] = useState<number[]>();
   const [allProductions, setAllProductions] = useState<Production[]>([]);
   const [selectedProductions, setSelectedProductions] = useState<number[]>([]);
 
@@ -145,7 +147,11 @@ export default function AdminUsersPage() {
     const res = await fetch("/api/invites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(inviteForm),
+      body: JSON.stringify({
+        ...inviteForm,
+        permissions: inviteForm.role !== "admin" ? invitePerms : null,
+        productionIds: inviteForm.role !== "admin" && invitePerms.modules.includes("productions") && !invitePerms.allProductions ? inviteSelectedProductions : [],
+      }),
     });
     setInviteSending(false);
     if (!res.ok) {
@@ -178,7 +184,7 @@ export default function AdminUsersPage() {
           <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>Manage Hub access and permissions</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { setInviteForm(INVITE_BLANK); setInviteError(""); setInviteSent(false); setShowInvite(true); }} className="px-4 py-2 rounded font-medium text-sm border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+          <button onClick={() => { setInviteForm(INVITE_BLANK); setInviteError(""); setInviteSent(false); setInvitePerms(defaultPerms()); setInviteSelectedProductions([]); setShowInvite(true); }} className="px-4 py-2 rounded font-medium text-sm border hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
             ✉ Invite User
           </button>
           <button onClick={openCreate} className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
@@ -387,7 +393,7 @@ export default function AdminUsersPage() {
       {/* Invite modal */}
       {showInvite && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="rounded-xl shadow-2xl w-full max-w-md border" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+          <div className="rounded-xl shadow-2xl w-full max-w-md border overflow-y-auto max-h-[90vh]" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
             <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
               <h2 className="font-semibold text-white">Invite User</h2>
               <button onClick={() => setShowInvite(false)} className="text-xl leading-none hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>×</button>
@@ -412,13 +418,87 @@ export default function AdminUsersPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Role</label>
-                    <select className={inp} style={inpStyle} value={inviteForm.role} onChange={e => setInviteForm(f => ({ ...f, role: e.target.value }))}>
+                    <select className={inp} style={inpStyle} value={inviteForm.role} onChange={e => {
+                      setInviteForm(f => ({ ...f, role: e.target.value }));
+                      setInvitePerms(defaultPerms());
+                      setInviteSelectedProductions([]);
+                    }}>
                       <option value="member">Member</option>
                       <option value="admin">Admin (full access)</option>
                       <option value="client">Client</option>
                       <option value="freelancer">Freelancer</option>
                     </select>
                   </div>
+
+                  {inviteForm.role !== "admin" && (
+                    <>
+                      <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
+                        <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Module Access</div>
+                        <div className="grid grid-cols-2 gap-1">
+                          {MODULES.map((m) => (
+                            <label key={m.key} className="flex items-center gap-2 cursor-pointer py-1">
+                              <input type="checkbox" className="w-4 h-4 rounded" checked={invitePerms.modules.includes(m.key)}
+                                onChange={() => setInvitePerms(p => ({ ...p, modules: p.modules.includes(m.key) ? p.modules.filter(x => x !== m.key) : [...p.modules, m.key] }))} />
+                              <span className="text-sm">{m.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {invitePerms.modules.includes("productions") && (
+                        <>
+                          <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
+                            <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Visible Sections</div>
+                            <div className="grid grid-cols-2 gap-1">
+                              {PROD_SECTIONS.map(s => {
+                                const defaultHidden = DEFAULT_HIDDEN_BY_ROLE[inviteForm.role] ?? [];
+                                const hidden = invitePerms.hiddenSections ?? defaultHidden;
+                                const isHidden = hidden.includes(s.key);
+                                return (
+                                  <label key={s.key} className="flex items-center gap-2 cursor-pointer py-1">
+                                    <input type="checkbox" className="w-4 h-4 rounded" checked={!isHidden}
+                                      onChange={() => {
+                                        const current = invitePerms.hiddenSections ?? DEFAULT_HIDDEN_BY_ROLE[inviteForm.role] ?? [];
+                                        const next = isHidden ? current.filter(x => x !== s.key) : [...current, s.key];
+                                        setInvitePerms(p => ({ ...p, hiddenSections: next }));
+                                      }} />
+                                    <span className="text-sm">{s.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
+                            <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Production Access</div>
+                            <div className="space-y-2 mb-2">
+                              <label className="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="inviteProdAccess" checked={invitePerms.allProductions} onChange={() => setInvitePerms(p => ({ ...p, allProductions: true }))} className="w-4 h-4" />
+                                <div><div className="text-sm font-medium">All productions</div></div>
+                              </label>
+                              <label className="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="inviteProdAccess" checked={!invitePerms.allProductions} onChange={() => setInvitePerms(p => ({ ...p, allProductions: false }))} className="w-4 h-4" />
+                                <div><div className="text-sm font-medium">Team only</div></div>
+                              </label>
+                            </div>
+                            {!invitePerms.allProductions && allProductions.length > 0 && (
+                              <div className="rounded-lg border max-h-40 overflow-y-auto" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-dark-bg)" }}>
+                                {allProductions.map(p => (
+                                  <label key={p.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-white/5 border-b last:border-b-0" style={{ borderColor: "var(--psg-card-border)" }}>
+                                    <input type="checkbox" className="w-4 h-4 rounded shrink-0"
+                                      checked={(inviteSelectedProductions ?? []).includes(p.id)}
+                                      onChange={() => setInviteSelectedProductions(s => (s ?? []).includes(p.id) ? (s ?? []).filter(x => x !== p.id) : [...(s ?? []), p.id])} />
+                                    <span className="text-sm truncate">{p.name}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+
                   {inviteError && <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded px-3 py-2">{inviteError}</p>}
                   <div className="flex gap-3 pt-2">
                     <button type="submit" disabled={inviteSending} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50" style={{ backgroundColor: "var(--psg-blue)" }}>

@@ -3650,7 +3650,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               <div className="space-y-3">
                 <input required placeholder="Title" value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))}
                   className={inp} style={inpStyle} />
-                <textarea required placeholder="Body" value={noteForm.body} onChange={e => setNoteForm(f => ({ ...f, body: e.target.value }))}
+                <textarea placeholder="Body (optional)" value={noteForm.body} onChange={e => setNoteForm(f => ({ ...f, body: e.target.value }))}
                   rows={4} className={inp} style={{ ...inpStyle, resize: "vertical" }} />
                 <div className="flex items-center gap-2">
                   <label style={{ color: "var(--psg-muted)", fontSize: 13 }}>Colour:</label>

@@ -355,6 +355,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [meetingAttendeeIds, setMeetingAttendeeIds] = useState<number[]>([]);
   const [meetingAttendeeExtra, setMeetingAttendeeExtra] = useState("");
   const [expandedMeetings, setExpandedMeetings] = useState<Record<number, { agenda: boolean; minutes: boolean }>>({});
+  const [meetingRecording, setMeetingRecording] = useState(false);
+  const [meetingTranscript, setMeetingTranscript] = useState("");
+  const [generatingMinutes, setGeneratingMinutes] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   function serializeAttendees(ids: number[], extra: string, contacts: ProdContact[]) {
     return JSON.stringify({ contactIds: ids, extra });
@@ -406,6 +411,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     }
     setShowMeetingForm(false);
     setEditingMeeting(null);
+    setMeetingTranscript("");
+    stopRecording();
     reloadMeetings();
   }
 
@@ -413,6 +420,52 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     if (!confirm("Delete this meeting?")) return;
     await fetch(`/api/meetings/${mid}`, { method: "DELETE" });
     reloadMeetings();
+  }
+
+  function startRecording() {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { alert("Your browser doesn't support live transcription. Please use Chrome."); return; }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = "en-GB";
+    recognition.onresult = (e: any) => {
+      const text = Array.from(e.results).slice(e.resultIndex).map((r: any) => r[0].transcript).join(" ");
+      setMeetingTranscript(prev => prev + (prev ? " " : "") + text);
+    };
+    recognition.start();
+    recognitionRef.current = recognition;
+    setMeetingRecording(true);
+  }
+
+  function stopRecording() {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setMeetingRecording(false);
+  }
+
+  async function generateMinutes(meetingId?: number) {
+    const transcript = meetingTranscript.trim();
+    if (!transcript) { alert("No transcript to generate minutes from."); return; }
+    setGeneratingMinutes(true);
+    try {
+      const mid = meetingId ?? editingMeeting?.id ?? 0;
+      const res = await fetch(`/api/meetings/${mid || "_"}/generate-minutes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          agenda: meetingForm.agenda,
+          title: meetingForm.title,
+          attendees: attendeeNames(serializeAttendees(meetingAttendeeIds, meetingAttendeeExtra, meetingContacts), meetingContacts).join(", "),
+          meetingDate: meetingForm.meetingDate,
+        }),
+      });
+      const data = await res.json();
+      if (data.minutes) setMeetingForm(f => ({ ...f, minutes: data.minutes }));
+    } finally {
+      setGeneratingMinutes(false);
+    }
   }
 
   function toggleMeetingSection(mid: number, section: "agenda" | "minutes") {
@@ -3834,6 +3887,31 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 </div>
 
                 <textarea placeholder="Agenda" value={meetingForm.agenda} onChange={e => setMeetingForm(f => ({ ...f, agenda: e.target.value }))} rows={4} className={inp} style={{ ...inpStyle, resize: "vertical" }} />
+                <div style={{ border: "1px solid var(--psg-card-border)", borderRadius: 6, padding: 10 }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span style={{ color: "var(--psg-muted)", fontSize: 12, fontWeight: 500 }}>GENERATE MINUTES FROM TRANSCRIPT</span>
+                    <div className="flex gap-2 ml-auto">
+                      {!meetingRecording ? (
+                        <button type="button" onClick={startRecording} className="px-3 py-1 rounded text-xs font-medium" style={{ background: "#ef4444", color: "#fff" }}>
+                          🎙 Record
+                        </button>
+                      ) : (
+                        <button type="button" onClick={stopRecording} className="px-3 py-1 rounded text-xs font-medium" style={{ background: "#6b7280", color: "#fff" }}>
+                          ⏹ Stop
+                        </button>
+                      )}
+                      <button type="button" onClick={() => generateMinutes()} disabled={generatingMinutes || !meetingTranscript.trim()}
+                        className="px-3 py-1 rounded text-xs font-medium"
+                        style={{ background: generatingMinutes || !meetingTranscript.trim() ? "var(--psg-card-border)" : "#8b5cf6", color: generatingMinutes || !meetingTranscript.trim() ? "var(--psg-muted)" : "#fff" }}>
+                        {generatingMinutes ? "Generating…" : "✨ Generate"}
+                      </button>
+                      {meetingTranscript && <button type="button" onClick={() => setMeetingTranscript("")} className="px-2 py-1 rounded text-xs" style={{ color: "var(--psg-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
+                    </div>
+                  </div>
+                  {meetingRecording && <p style={{ color: "#ef4444", fontSize: 11, marginBottom: 4 }}>● Recording… speak clearly</p>}
+                  <textarea placeholder="Transcript will appear here as you record — or paste a Zoom/Teams transcript" value={meetingTranscript} onChange={e => setMeetingTranscript(e.target.value)}
+                    rows={3} className={inp} style={{ ...inpStyle, fontSize: 12, resize: "vertical" }} />
+                </div>
                 <textarea placeholder="Minutes" value={meetingForm.minutes} onChange={e => setMeetingForm(f => ({ ...f, minutes: e.target.value }))} rows={4} className={inp} style={{ ...inpStyle, resize: "vertical" }} />
 
                 <div className="flex gap-2">

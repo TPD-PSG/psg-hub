@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { writeFile, mkdir } from "fs/promises";
+import { join } from "path";
+import { randomUUID } from "crypto";
+
+const MEDIA_DIR = process.env.NODE_ENV === "production"
+  ? "/data/fun-media"
+  : join(process.cwd(), "public", "fun-media");
+
+export const maxDuration = 60;
+// Allow large video uploads (up to 200MB)
+export const dynamic = "force-dynamic";
 
 
 export async function GET() {
@@ -52,11 +63,14 @@ export async function POST(req: NextRequest) {
   const now = new Date();
   const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+  await mkdir(MEDIA_DIR, { recursive: true });
   const mediaData = await Promise.all(
     files.map(async (file) => {
       const buf = await file.arrayBuffer();
-      const b64 = Buffer.from(buf).toString("base64");
-      return { name: file.name, mime: file.type, data: b64 };
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
+      const filename = `${randomUUID()}.${ext}`;
+      await writeFile(join(MEDIA_DIR, filename), Buffer.from(buf));
+      return { name: file.name, mime: file.type, filePath: filename, data: null };
     })
   );
 

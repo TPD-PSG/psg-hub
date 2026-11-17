@@ -544,7 +544,8 @@ model FunMedia {
   submission   FunSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   name         String
   mime         String
-  data         String        // base64
+  data         String?       // base64 (legacy — null for file-system-stored media)
+  filePath     String?       // path on disk relative to MEDIA_DIR
   createdAt    DateTime      @default(now())
 }
 

@@ -227,7 +227,7 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 const BLANK_EXPENSE = { phase: "Capitalisation", description: "", estimated: "", committed: "", spent: "", poNumber: "", paymentDue: "", issuedForPayment: false, vatExempt: false, supplier: "", notes: "", approvedBy: "", approvedDate: "", approvalMethod: "", isPSGExpense: false, paymentMethod: "" };
 const BLANK_PSG_EXPENSE = { description: "", supplier: "", committed: "", spent: "", paymentDue: "", notes: "", paymentMethod: "" };
 
-type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour";
+type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour" | "notes";
 
 function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -297,6 +297,37 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     if (Array.isArray(data)) setShowReports(data);
   }
   useEffect(() => { if (tab === "reports") reloadReports(); }, [tab, id]);
+
+  type ProdNote = { id: number; title: string; body: string; color: string | null; createdAt: string; updatedAt: string; createdByUser: { id: number; name: string; avatarUrl: string | null } | null };
+  const [notes, setNotes] = useState<ProdNote[]>([]);
+  const [noteForm, setNoteForm] = useState({ title: "", body: "", color: "" });
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [editingNote, setEditingNote] = useState<ProdNote | null>(null);
+
+  async function reloadNotes() {
+    const data = await fetch(`/api/productions/${id}/notes`).then(r => r.json());
+    if (Array.isArray(data)) setNotes(data);
+  }
+  useEffect(() => { if (tab === "notes") reloadNotes(); }, [tab, id]);
+
+  async function saveNote(e: React.FormEvent) {
+    e.preventDefault();
+    if (editingNote) {
+      await fetch(`/api/production-notes/${editingNote.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(noteForm) });
+    } else {
+      await fetch(`/api/productions/${id}/notes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(noteForm) });
+    }
+    setShowNoteForm(false);
+    setEditingNote(null);
+    setNoteForm({ title: "", body: "", color: "" });
+    reloadNotes();
+  }
+
+  async function deleteNote(nid: number) {
+    if (!confirm("Delete this note?")) return;
+    await fetch(`/api/production-notes/${nid}`, { method: "DELETE" });
+    reloadNotes();
+  }
 
   async function saveReport(e: React.FormEvent) {
     e.preventDefault();
@@ -3599,6 +3630,78 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
       {tab === "tasks" && prod && (
         <TasksPanel productionId={prod.id} />
+      )}
+
+      {/* ── NOTES TAB ── */}
+      {tab === "notes" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Notes</h2>
+            <button
+              onClick={() => { setEditingNote(null); setNoteForm({ title: "", body: "", color: "" }); setShowNoteForm(true); }}
+              className="text-sm px-4 py-1.5 rounded text-white font-medium hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: "var(--psg-blue)" }}
+            >
+              + Add Note
+            </button>
+          </div>
+
+          {showNoteForm && (
+            <form onSubmit={saveNote} className="rounded-xl border p-5 space-y-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+              <h3 className="text-sm font-semibold text-white">{editingNote ? "Edit Note" : "New Note"}</h3>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Title *</label>
+                <input required className={inp} style={inpStyle} value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))} placeholder="Note title" />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Content *</label>
+                <textarea required rows={5} className={inp} style={inpStyle} value={noteForm.body} onChange={e => setNoteForm(f => ({ ...f, body: e.target.value }))} placeholder="Write your note here…" />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Colour (optional)</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {["", "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#f97316"].map(c => (
+                    <button key={c} type="button" onClick={() => setNoteForm(f => ({ ...f, color: c }))}
+                      className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                      style={{ backgroundColor: c || "transparent", borderColor: noteForm.color === c ? "white" : c ? "transparent" : "var(--psg-card-border)" }}
+                      title={c ? c : "No colour"} />
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="px-4 py-2 rounded text-sm text-white font-medium hover:opacity-90" style={{ backgroundColor: "var(--psg-blue)" }}>
+                  {editingNote ? "Save" : "Add Note"}
+                </button>
+                <button type="button" onClick={() => { setShowNoteForm(false); setEditingNote(null); setNoteForm({ title: "", body: "", color: "" }); }} className="px-4 py-2 rounded text-sm border hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Cancel</button>
+              </div>
+            </form>
+          )}
+
+          {notes.length === 0 && !showNoteForm ? (
+            <div className="text-sm py-10 text-center" style={{ color: "var(--psg-muted)" }}>No notes yet — add one above.</div>
+          ) : (
+            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+              {notes.map(note => (
+                <div key={note.id} className="rounded-xl border p-4 space-y-2 flex flex-col"
+                  style={{ backgroundColor: "var(--psg-card-bg)", borderColor: note.color ? note.color + "55" : "var(--psg-card-border)", borderLeftWidth: note.color ? 3 : 1, borderLeftColor: note.color || "var(--psg-card-border)" }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-white leading-snug">{note.title}</p>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => { setEditingNote(note); setNoteForm({ title: note.title, body: note.body, color: note.color ?? "" }); setShowNoteForm(true); }}
+                        className="text-xs hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>Edit</button>
+                      <button onClick={() => deleteNote(note.id)} className="text-xs text-red-400 hover:text-red-300 transition-colors">Delete</button>
+                    </div>
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap flex-1" style={{ color: "var(--psg-muted)" }}>{note.body}</p>
+                  <div className="flex items-center gap-2 text-xs pt-1" style={{ color: "var(--psg-muted)", borderTop: "1px solid var(--psg-card-border)" }}>
+                    {note.createdByUser && <span>{note.createdByUser.name}</span>}
+                    <span className="ml-auto">{new Date(note.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Modal: Edit Production */}

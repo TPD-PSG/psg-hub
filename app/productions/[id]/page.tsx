@@ -1018,7 +1018,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               href={prod.sharepointUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center border transition-opacity hover:opacity-80"
+              className="relative shrink-0 w-24 h-24 rounded-lg overflow-hidden flex items-center justify-center border transition-opacity hover:opacity-80"
               style={{ borderColor: prod.logoUrl ? "transparent" : "var(--psg-card-border)", backgroundColor: prod.logoUrl ? "transparent" : "var(--psg-card-bg)" }}
               title="Open SharePoint folder"
             >
@@ -1030,7 +1030,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             </a>
           ) : (
             <div
-              className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center border"
+              className="relative shrink-0 w-24 h-24 rounded-lg overflow-hidden flex items-center justify-center border"
               style={{ borderColor: prod.logoUrl ? "transparent" : "var(--psg-card-border)", backgroundColor: prod.logoUrl ? "transparent" : "var(--psg-card-bg)" }}
             >
               {prod.logoUrl ? (

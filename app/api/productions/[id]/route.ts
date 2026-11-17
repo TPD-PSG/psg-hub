@@ -57,7 +57,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
         orderBy: { createdAt: "asc" },
       },
       venueRef: { select: { id: true, name: true, city: true, capacity: true } },
-      bdClient: { select: { id: true, name: true, type: true, address: true, website: true, contacts: { select: { id: true, name: true, role: true, email: true, phone: true }, take: 5 } } },
+      bdClient: { select: { id: true, name: true, type: true, address: true, website: true, billingName: true, billingAddress: true, billingEmail: true } },
     },
   });
   if (!production) return NextResponse.json({ error: "Not found" }, { status: 404 });

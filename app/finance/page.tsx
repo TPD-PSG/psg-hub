@@ -692,6 +692,7 @@ function FinancePageInner() {
                         <th className="px-4 py-3 text-left font-medium text-white">Production</th>
                         <th className="px-4 py-3 text-left font-medium text-white">Haulage Company</th>
                         <th className="px-4 py-3 text-left font-medium text-white">Route</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Cargo</th>
                         <th className="px-4 py-3 text-left font-medium text-white">Departure</th>
                         <th className="px-4 py-3 text-right font-medium text-white">Est. Cost</th>
                         <th className="px-4 py-3 text-right font-medium text-white">Actual Cost</th>
@@ -703,13 +704,14 @@ function FinancePageInner() {
                           <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{m.production.name}</td>
                           <td className="px-4 py-3 font-medium text-white">{m.haulageCompany}</td>
                           <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{m.fromLocation} → {m.toLocation}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{m.cargo || "—"}</td>
                           <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{fmtDate(m.departureAt)}</td>
                           <td className="px-4 py-3 text-right text-xs" style={{ color: "var(--psg-muted)" }}>{m.estimatedCost != null ? fmt(m.estimatedCost) : "—"}</td>
                           <td className="px-4 py-3 text-right font-medium text-white">{m.actualCost != null ? fmt(m.actualCost) : "—"}</td>
                         </tr>
                       ))}
                       {filteredMovements.length === 0 && (
-                        <tr><td colSpan={6} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No rechargeable haulage movements found</td></tr>
+                        <tr><td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No rechargeable haulage movements found</td></tr>
                       )}
                     </tbody>
                   </table>

@@ -1869,6 +1869,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   <tr style={{ borderBottom: "1px solid var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.02)" }}>
                     <th className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: "var(--psg-muted)" }}>Company</th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: "var(--psg-muted)" }}>Route</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: "var(--psg-muted)" }}>Cargo</th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: "var(--psg-muted)" }}>Date</th>
                     <th className="px-4 py-2.5 text-right text-xs font-medium" style={{ color: "var(--psg-muted)" }}>Actual Cost</th>
                   </tr>
@@ -1878,6 +1879,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <tr key={m.id} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
                       <td className="px-4 py-2.5 text-white">{m.haulageCompany}</td>
                       <td className="px-4 py-2.5" style={{ color: "var(--psg-muted)" }}>{m.fromLocation} → {m.toLocation}</td>
+                      <td className="px-4 py-2.5 text-xs" style={{ color: "var(--psg-muted)" }}>{m.cargo || "—"}</td>
                       <td className="px-4 py-2.5 text-xs" style={{ color: "var(--psg-muted)" }}>{fmtDate(m.departureAt)}</td>
                       <td className="px-4 py-2.5 text-right font-medium text-orange-400">{m.actualCost != null ? fmt(m.actualCost) : <span style={{ color: "var(--psg-muted)" }}>TBC</span>}</td>
                     </tr>
@@ -1885,7 +1887,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: "2px solid rgba(251,146,60,0.3)", backgroundColor: "rgba(251,146,60,0.06)" }}>
-                    <td colSpan={3} className="px-4 py-2.5 text-xs font-semibold text-orange-400">Total to invoice</td>
+                    <td colSpan={4} className="px-4 py-2.5 text-xs font-semibold text-orange-400">Total to invoice</td>
                     <td className="px-4 py-2.5 text-right font-bold text-orange-400">{fmt(prod.haulageMovements.filter((m) => m.rechargeable).reduce((s, m) => s + (m.actualCost ?? 0), 0))}</td>
                   </tr>
                 </tfoot>

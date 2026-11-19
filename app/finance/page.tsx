@@ -151,6 +151,7 @@ function FinancePageInner() {
     estimatedCost: number | null;
     actualCost: number | null;
     rechargeable: boolean;
+    invoicedToClient: boolean;
     notes: string | null;
     production: { id: number; name: string };
   };
@@ -723,6 +724,7 @@ function FinancePageInner() {
                         <th className="px-4 py-3 text-left font-medium text-white">Departure</th>
                         <th className="px-4 py-3 text-right font-medium text-white">Est. Cost</th>
                         <th className="px-4 py-3 text-right font-medium text-white">Actual Cost</th>
+                        <th className="px-4 py-3 text-center font-medium text-white">Invoiced</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -735,10 +737,23 @@ function FinancePageInner() {
                           <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{fmtDate(m.departureAt)}</td>
                           <td className="px-4 py-3 text-right text-xs" style={{ color: "var(--psg-muted)" }}>{m.estimatedCost != null ? fmt(m.estimatedCost) : "—"}</td>
                           <td className="px-4 py-3 text-right font-medium text-white">{m.actualCost != null ? fmt(m.actualCost) : "—"}</td>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={m.invoicedToClient}
+                              onChange={async (ev) => {
+                                const val = ev.target.checked;
+                                await fetch(`/api/haulage/${m.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoicedToClient: val }) });
+                                setRechargeableMovements(prev => prev.map(x => x.id === m.id ? { ...x, invoicedToClient: val } : x));
+                              }}
+                              className="w-4 h-4 cursor-pointer accent-blue-500"
+                              title={m.invoicedToClient ? "Invoiced to client" : "Not yet invoiced"}
+                            />
+                          </td>
                         </tr>
                       ))}
                       {filteredMovements.length === 0 && (
-                        <tr><td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No rechargeable haulage movements found</td></tr>
+                        <tr><td colSpan={8} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No rechargeable haulage movements found</td></tr>
                       )}
                     </tbody>
                   </table>

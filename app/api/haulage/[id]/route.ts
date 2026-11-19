@@ -25,6 +25,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(movement);
 }
 
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const body = await req.json();
+  const movement = await prisma.haulageMovement.update({
+    where: { id: Number(id) },
+    data: {
+      ...(body.invoicedToClient !== undefined && { invoicedToClient: Boolean(body.invoicedToClient) }),
+    },
+  });
+  return NextResponse.json(movement);
+}
+
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   await prisma.haulageMovement.delete({ where: { id: Number(id) } });

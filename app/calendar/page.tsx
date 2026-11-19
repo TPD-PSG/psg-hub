@@ -302,7 +302,7 @@ function CalendarInner() {
         )}
 
         {/* Selected day panel — month view only */}
-        {view !== "team" && view !== "schedule" && selected && selectedEvents.length > 0 && (
+        {view !== "schedule" && selected && selectedEvents.length > 0 && (
           <div className="rounded-xl border p-5" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-white">

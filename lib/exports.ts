@@ -1,6 +1,28 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+
+async function saveXlsx(wb: ExcelJS.Workbook, filename: string) {
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function addSheet(wb: ExcelJS.Workbook, name: string, rows: (string | number | boolean | null | undefined)[][]) {
+  const ws = wb.addWorksheet(name);
+  for (const row of rows) ws.addRow(row);
+  if (rows.length > 0) {
+    const header = ws.getRow(1);
+    header.font = { bold: true };
+    header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0A1941" } };
+    header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -148,11 +170,10 @@ export async function exportBudgetPDF(productionName: string, lines: BudgetLine[
   doc.save(`budget-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
-export function exportBudgetXLSX(productionName: string, lines: BudgetLine[]) {
-  const wb = XLSX.utils.book_new();
+export async function exportBudgetXLSX(productionName: string, lines: BudgetLine[]) {
+  const wb = new ExcelJS.Workbook();
 
-  // Summary sheet
-  const summaryRows = [
+  addSheet(wb, "Summary", [
     ["Department", "Description", "Allocation", "Estimated", "Committed", "Spent"],
     ...lines.map((l) => [
       l.department, l.description, l.budgeted,
@@ -166,11 +187,9 @@ export function exportBudgetXLSX(productionName: string, lines: BudgetLine[]) {
       lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0),
       lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.spent, 0), 0),
     ],
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), "Summary");
+  ]);
 
-  // Detail sheet
-  const detailRows = [
+  addSheet(wb, "Detail", [
     ["Department", "Line", "Phase", "Description", "Supplier", "PO Number", "Payment Due", "Estimated", "Committed", "Spent", "Issued", "VAT Exempt", "Notes"],
     ...lines.flatMap((l) =>
       l.expenses.map((x) => [
@@ -180,10 +199,9 @@ export function exportBudgetXLSX(productionName: string, lines: BudgetLine[]) {
         x.issuedForPayment ? "Yes" : "No", x.vatExempt ? "Yes" : "No", x.notes ?? "",
       ])
     ),
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailRows), "Detail");
+  ]);
 
-  XLSX.writeFile(wb, `budget-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
+  await saveXlsx(wb, `budget-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
 }
 
 // ── Schedule ─────────────────────────────────────────────────────────────────
@@ -210,8 +228,9 @@ export async function exportSchedulePDF(productionName: string, events: Schedule
   doc.save(`schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
-export function exportScheduleXLSX(productionName: string, events: ScheduleEvent[]) {
-  const rows = [
+export async function exportScheduleXLSX(productionName: string, events: ScheduleEvent[]) {
+  const wb = new ExcelJS.Workbook();
+  addSheet(wb, "Schedule", [
     ["Date", "Start", "End", "Title", "Type", "Location", "Notes"],
     ...events.map((e) => [
       fmtDate(e.startAt),
@@ -219,10 +238,8 @@ export function exportScheduleXLSX(productionName: string, events: ScheduleEvent
       new Date(e.endAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
       e.title, e.type, e.location ?? "", e.notes ?? "",
     ]),
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Schedule");
-  XLSX.writeFile(wb, `schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
+  ]);
+  await saveXlsx(wb, `schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
 }
 
 // ── Crew ─────────────────────────────────────────────────────────────────────
@@ -250,8 +267,9 @@ export async function exportCrewPDF(title: string, crew: CrewRow[], productionLo
   doc.save(`crew-${title.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
-export function exportCrewXLSX(title: string, crew: CrewRow[]) {
-  const rows = [
+export async function exportCrewXLSX(title: string, crew: CrewRow[]) {
+  const wb = new ExcelJS.Workbook();
+  addSheet(wb, "Crew", [
     ["Name", "Discipline", "Freelance", "Phone", "Email", "Company", "Insurance Provider", "Policy No.", "Insurance Expiry", "Cover Type"],
     ...crew.map((c) => [
       c.name, c.discipline, c.isFreelance ? "Yes" : "No",
@@ -260,10 +278,8 @@ export function exportCrewXLSX(title: string, crew: CrewRow[]) {
       c.insuranceExpiry ? fmtDate(c.insuranceExpiry) : "",
       c.insuranceCoverType ?? "",
     ]),
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Crew");
-  XLSX.writeFile(wb, `crew-${title.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
+  ]);
+  await saveXlsx(wb, `crew-${title.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
 }
 
 // ── Accommodation ────────────────────────────────────────────────────────────
@@ -296,8 +312,9 @@ export async function exportAccommodationPDF(productionName: string, bookings: B
   doc.save(`accommodation-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
-export function exportAccommodationXLSX(productionName: string, bookings: BookingRow[]) {
-  const rows = [
+export async function exportAccommodationXLSX(productionName: string, bookings: BookingRow[]) {
+  const wb = new ExcelJS.Workbook();
+  addSheet(wb, "Accommodation", [
     ["Guest", "Hotel", "City", "Room Type", "Room No.", "Check In", "Check Out", "Nights", "Rate/Night", "Total Cost", "Confirmation Ref", "Paid", "Notes"],
     ...bookings.map((b) => {
       const nights = Math.round((new Date(b.checkOut).getTime() - new Date(b.checkIn).getTime()) / 86400000);
@@ -310,10 +327,8 @@ export function exportAccommodationXLSX(productionName: string, bookings: Bookin
         b.confirmationNo ?? "", b.isPaid ? "Yes" : "No", b.notes ?? "",
       ];
     }),
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Accommodation");
-  XLSX.writeFile(wb, `accommodation-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
+  ]);
+  await saveXlsx(wb, `accommodation-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
 }
 
 // ── Haulage ──────────────────────────────────────────────────────────────────
@@ -342,20 +357,19 @@ export async function exportHaulagePDF(title: string, movements: MovementRow[], 
   doc.save(`haulage-${title.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
-export function exportHaulageXLSX(title: string, movements: MovementRow[], includeProduction = false) {
+export async function exportHaulageXLSX(title: string, movements: MovementRow[], includeProduction = false) {
   const headers = includeProduction
     ? ["Production", "Company", "From", "To", "Departure", "Arrival", "Driver", "Vehicle", "Cargo", "Notes"]
     : ["Company", "From", "To", "Departure", "Arrival", "Driver", "Vehicle", "Cargo", "Notes"];
-  const rows = [
+  const wb = new ExcelJS.Workbook();
+  addSheet(wb, "Haulage", [
     headers,
     ...movements.map((m) => {
       const row = [m.haulageCompany, m.fromLocation, m.toLocation, fmtDateTime(m.departureAt), m.arrivalAt ? fmtDateTime(m.arrivalAt) : "", m.driverName ?? "", m.vehicleInfo ?? "", m.cargo ?? "", m.notes ?? ""];
       return includeProduction ? [m.production?.name ?? "", ...row] : row;
     }),
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Haulage");
-  XLSX.writeFile(wb, `haulage-${title.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
+  ]);
+  await saveXlsx(wb, `haulage-${title.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
 }
 
 // ── Tour Schedule ─────────────────────────────────────────────────────────────
@@ -388,8 +402,9 @@ export async function exportTourSchedulePDF(productionName: string, stops: TourS
   doc.save(`tour-schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
 
-export function exportTourScheduleXLSX(productionName: string, stops: TourStopRow[]) {
-  const rows = [
+export async function exportTourScheduleXLSX(productionName: string, stops: TourStopRow[]) {
+  const wb = new ExcelJS.Workbook();
+  addSheet(wb, "Tour Schedule", [
     ["Stop", "Venue", "City", "Capacity", "Load In", "First Performance", "Last Performance", "Get Out", "Notes"],
     ...stops.map((s) => [
       s.stopNumber,
@@ -402,10 +417,8 @@ export function exportTourScheduleXLSX(productionName: string, stops: TourStopRo
       s.endDate ? fmtDate(s.endDate) : "",
       s.notes ?? "",
     ]),
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Tour Schedule");
-  XLSX.writeFile(wb, `tour-schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
+  ]);
+  await saveXlsx(wb, `tour-schedule-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
 }
 
 export async function exportVenueStopPDF(productionName: string, stop: TourStopRow, productionLogoUrl?: string | null) {

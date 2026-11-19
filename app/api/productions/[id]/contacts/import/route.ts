@@ -75,14 +75,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   } else if (isXlsx) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const XLSX = require("xlsx") as typeof import("xlsx");
-      const wb = XLSX.read(Buffer.from(buffer), { type: "buffer" });
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await wb.xlsx.load(Buffer.from(buffer) as any);
       const rows: string[] = [];
-      for (const sheetName of wb.SheetNames) {
-        rows.push(`Sheet: ${sheetName}`);
-        rows.push(XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]));
-      }
+      wb.eachSheet((ws) => {
+        rows.push(`Sheet: ${ws.name}`);
+        ws.eachRow((row) => {
+          rows.push(row.values ? (row.values as unknown[]).slice(1).map(v => v == null ? "" : String(v)).join(",") : "");
+        });
+      });
       docContent = { type: "text", text: `Contact sheet data:\n\n${rows.join("\n")}` };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

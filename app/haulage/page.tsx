@@ -46,7 +46,7 @@ export default function HaulagePage() {
         <h1 className="text-2xl font-bold text-white">Haulage</h1>
         <ExportMenu actions={[
           { label: "Export PDF", onClick: () => exportHaulagePDF("All Productions", filtered, true) },
-          { label: "Export Excel", onClick: () => exportHaulageXLSX("All Productions", filtered, true) },
+          { label: "Export Excel", onClick: () => void exportHaulageXLSX("All Productions", filtered, true) },
         ]} />
       </div>
 

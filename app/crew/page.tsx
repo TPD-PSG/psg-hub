@@ -128,7 +128,7 @@ export default function CrewPage() {
         <div className="flex gap-2">
           <ExportMenu actions={[
             { label: "Export PDF", onClick: () => exportCrewPDF("All Crew", filtered) },
-            { label: "Export Excel", onClick: () => exportCrewXLSX("All Crew", filtered) },
+            { label: "Export Excel", onClick: () => void exportCrewXLSX("All Crew", filtered) },
           ]} />
           <button
             onClick={() => { setForm(BLANK); setEditMember(null); setShowForm(true); }}

@@ -473,7 +473,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   function exportMeetingPDF(m: Meeting) {
     const names = attendeeNames(m.attendees, meetingContacts);
-    exportMeetingMinutesPDF(m, names, prod.name, prod.logoUrl);
+    exportMeetingMinutesPDF(m, names, prod?.name ?? "", prod?.logoUrl);
   }
 
   async function saveReport(e: React.FormEvent) {
@@ -773,8 +773,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
       if (saved) {
         const parsed: string[] = JSON.parse(saved);
         const existing = new Set(data.budgetLines.map((l: { department: string }) => l.department));
-        const filtered = parsed.filter((d: string) => existing.has(d));
-        const missing = [...existing].filter(d => !parsed.includes(d));
+        const filtered = (parsed as string[]).filter((d: string) => existing.has(d));
+        const missing = [...existing].filter(d => !(parsed as string[]).includes(d));
         setBudgetDeptOrder([...filtered, ...missing]);
       }
     } catch {}
@@ -1423,7 +1423,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
               <div className="flex gap-2">
                 <ExportMenu actions={[
                   { label: "Export PDF", onClick: () => exportSchedulePDF(prod.name, prod.events, prod.logoUrl) },
-                  { label: "Export Excel", onClick: () => exportScheduleXLSX(prod.name, prod.events) },
+                  { label: "Export Excel", onClick: () => void exportScheduleXLSX(prod.name, prod.events) },
                 ]} />
                 <button onClick={() => setShowEventForm(true)} className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
                   style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
@@ -1478,7 +1478,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="flex gap-2">
               <ExportMenu actions={[
                 { label: "Export PDF", onClick: () => exportBudgetPDF(prod.name, prod.budgetLines, prod.logoUrl) },
-                { label: "Export Excel", onClick: () => exportBudgetXLSX(prod.name, prod.budgetLines) },
+                { label: "Export Excel", onClick: () => void exportBudgetXLSX(prod.name, prod.budgetLines) },
               ]} />
               <button onClick={() => setShowBudgetForm(true)} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
                 + Add Department
@@ -1905,7 +1905,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           <div className="flex justify-end gap-2">
             <ExportMenu actions={[
               { label: "Export PDF", onClick: () => exportCrewPDF(prod.name, prod.crew.map((pc) => pc.crew), prod.logoUrl) },
-              { label: "Export Excel", onClick: () => exportCrewXLSX(prod.name, prod.crew.map((pc) => pc.crew)) },
+              { label: "Export Excel", onClick: () => void exportCrewXLSX(prod.name, prod.crew.map((pc) => pc.crew)) },
             ]} />
             <button onClick={() => setShowCrewForm(true)} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
               + Add Crew Member
@@ -1981,7 +1981,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="flex gap-2 ml-auto">
               <ExportMenu actions={[
                 { label: "Export PDF", onClick: () => exportAccommodationPDF(prod.name, prod.hotelBookings, prod.logoUrl) },
-                { label: "Export Excel", onClick: () => exportAccommodationXLSX(prod.name, prod.hotelBookings) },
+                { label: "Export Excel", onClick: () => void exportAccommodationXLSX(prod.name, prod.hotelBookings) },
               ]} />
               <button onClick={() => { setBookingForm(BLANK_BOOKING); setEditBooking(null); setShowBookingForm(true); }} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
                 + Add Booking
@@ -2061,7 +2061,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           <div className="flex justify-end gap-2">
             <ExportMenu actions={[
               { label: "Export PDF", onClick: () => exportHaulagePDF(prod.name, prod.haulageMovements, false, prod.logoUrl) },
-              { label: "Export Excel", onClick: () => exportHaulageXLSX(prod.name, prod.haulageMovements) },
+              { label: "Export Excel", onClick: () => void exportHaulageXLSX(prod.name, prod.haulageMovements) },
             ]} />
             <button onClick={() => { setMovementForm(BLANK_MOVEMENT); setEditMovement(null); setShowMovementForm(true); }} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
               + Add Movement
@@ -2684,7 +2684,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
                   >↓ PDF</button>
                   <button
-                    onClick={() => exportTourScheduleXLSX(prod.name, tourStops)}
+                    onClick={() => void exportTourScheduleXLSX(prod.name, tourStops)}
                     className="text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
                     style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
                   >↓ XLSX</button>

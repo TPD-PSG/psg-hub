@@ -18,6 +18,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/qrcode": "^1.5.6",
     "bcryptjs": "^3.0.3",
+    "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "mammoth": "^1.13.0",
@@ -27,8 +28,7 @@
     "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "tailwindcss": "^4",
-    "xlsx": "^0.18.5"
+    "tailwindcss": "^4"
   },
   "devDependencies": {
     "@types/node": "^20",

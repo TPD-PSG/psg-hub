@@ -187,11 +187,6 @@ function FinancePageInner() {
 
   useEffect(() => { if (tab === "prod-spend") reloadProdSpend(); }, [tab]);
 
-  useEffect(() => {
-    if (!selectedExp) { setExpDocs([]); return; }
-    fetch(`/api/expenses/${selectedExp.id}/documents`).then(r => r.json()).then(d => { if (Array.isArray(d)) setExpDocs(d); });
-  }, [selectedExp?.id]);
-
   // Invoice To-Do list
   type InvoiceTodo = { id: number; client: string; description: string; amount: number | null; dueDate: string | null; notes: string | null; done: boolean; production: { id: number; name: string } | null };
   const [todos, setTodos] = useState<InvoiceTodo[]>([]);
@@ -235,6 +230,11 @@ function FinancePageInner() {
   type ExpDoc = { id: number; type: string; name: string; mime: string; createdAt: string };
   const [expDocs, setExpDocs] = useState<ExpDoc[]>([]);
   const [expDocUploading, setExpDocUploading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedExp) { setExpDocs([]); return; }
+    fetch(`/api/expenses/${selectedExp.id}/documents`).then(r => r.json()).then(d => { if (Array.isArray(d)) setExpDocs(d); });
+  }, [selectedExp?.id]);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   useEffect(() => {

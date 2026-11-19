@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       if (ids.length) {
         await prisma.productionTeam.createMany({
           data: ids.map(pid => ({ productionId: pid, userId: user.id })),
-          skipDuplicates: true,
+
         });
       }
     } catch {}

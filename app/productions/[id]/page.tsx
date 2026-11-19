@@ -774,7 +774,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         const parsed: string[] = JSON.parse(saved);
         const existing = new Set(data.budgetLines.map((l: { department: string }) => l.department));
         const filtered = (parsed as string[]).filter((d: string) => existing.has(d));
-        const missing = [...existing].filter(d => !(parsed as string[]).includes(d));
+        const missing = ([...existing] as string[]).filter(d => !(parsed as string[]).includes(d));
         setBudgetDeptOrder([...filtered, ...missing]);
       }
     } catch {}

@@ -131,6 +131,7 @@ function FinancePageInner() {
     paymentDue: string | null;
     issuedForPayment: boolean;
     isPSGExpense: boolean;
+    invoicedToClient: boolean;
     notes: string | null;
     budgetLine: {
       id: number;
@@ -685,6 +686,7 @@ function FinancePageInner() {
                         <th className="px-4 py-3 text-right font-medium text-white">Spent</th>
                         <th className="px-4 py-3 text-left font-medium text-white">Payment Due</th>
                         <th className="px-4 py-3 text-center font-medium text-white">Issued</th>
+                        <th className="px-4 py-3 text-center font-medium text-white">Invoiced</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -704,10 +706,23 @@ function FinancePageInner() {
                               ? <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#10b98122", color: "#10b981" }}>Yes</span>
                               : <span className="text-xs" style={{ color: "var(--psg-muted)" }}>No</span>}
                           </td>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={e.invoicedToClient}
+                              onChange={async (ev) => {
+                                const val = ev.target.checked;
+                                await fetch(`/api/budget-expenses/${e.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoicedToClient: val }) });
+                                setPsgExpenses(prev => prev.map(x => x.id === e.id ? { ...x, invoicedToClient: val } : x));
+                              }}
+                              className="w-4 h-4 cursor-pointer accent-blue-500"
+                              title={e.invoicedToClient ? "Invoiced to client" : "Not yet invoiced"}
+                            />
+                          </td>
                         </tr>
                       ))}
                       {filteredExpenses.length === 0 && (
-                        <tr><td colSpan={8} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No PSG expenses found</td></tr>
+                        <tr><td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No PSG expenses found</td></tr>
                       )}
                     </tbody>
                   </table>

@@ -741,6 +741,7 @@ model ProductionExpense {
   status            String     @default("pending") // pending | approved | paid | rejected
   reference         String?
   notes             String?
+  invoicedToClient  Boolean    @default(false)
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 }

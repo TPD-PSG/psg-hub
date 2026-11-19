@@ -166,6 +166,7 @@ function FinancePageInner() {
     status: string;
     reference: string | null;
     notes: string | null;
+    invoicedToClient: boolean;
     productionLink: { id: number; name: string } | null;
     submittedByUser: { id: number; name: string } | null;
   };
@@ -764,6 +765,7 @@ function FinancePageInner() {
                         <th className="px-4 py-3 text-right font-medium text-white">Net</th>
                         <th className="px-4 py-3 text-right font-medium text-white">Total (inc. VAT)</th>
                         <th className="px-4 py-3 text-left font-medium text-white">Status</th>
+                        <th className="px-4 py-3 text-center font-medium text-white">Invoiced</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -786,10 +788,23 @@ function FinancePageInner() {
                               {e.status}
                             </span>
                           </td>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={e.invoicedToClient}
+                              onChange={async (ev) => {
+                                const val = ev.target.checked;
+                                await fetch(`/api/expenses/${e.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoicedToClient: val }) });
+                                setProductionExpenses(prev => prev.map(x => x.id === e.id ? { ...x, invoicedToClient: val } : x));
+                              }}
+                              className="w-4 h-4 cursor-pointer accent-blue-500"
+                              title={e.invoicedToClient ? "Invoiced to client" : "Not yet invoiced"}
+                            />
+                          </td>
                         </tr>
                       ))}
                       {filteredProdExp.length === 0 && (
-                        <tr><td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No production expenses with a linked production found</td></tr>
+                        <tr><td colSpan={10} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No production expenses with a linked production found</td></tr>
                       )}
                     </tbody>
                   </table>

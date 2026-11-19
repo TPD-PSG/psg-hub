@@ -35,6 +35,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       status: body.status ?? undefined,
       reference: body.reference ?? undefined,
       notes: body.notes ?? undefined,
+      invoicedToClient: body.invoicedToClient !== undefined ? Boolean(body.invoicedToClient) : undefined,
     },
     include: {
       productionLink: { select: { id: true, name: true } },

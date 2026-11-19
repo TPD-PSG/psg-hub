@@ -345,7 +345,6 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   type Meeting = { id: number; title: string; meetingDate: string; location: string | null; attendees: string | null; agenda: string | null; minutes: string | null; createdByUser: { id: number; name: string } | null };
-  type ProdContact = { id: number; name: string; role: string | null; company: string | null; section: string };
   const BLANK_MEETING = { title: "", meetingDate: "", location: "", attendees: "", agenda: "", minutes: "" };
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [meetingContacts, setMeetingContacts] = useState<ProdContact[]>([]);

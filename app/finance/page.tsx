@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 import UserAvatar from "@/components/UserAvatar";
+import { exportProductionSpendPDF } from "@/lib/exports";
 
 type Invoice = {
   id: number;
@@ -175,7 +176,7 @@ function FinancePageInner() {
   const [psgExpenses, setPsgExpenses] = useState<PSGExpense[]>([]);
   const [rechargeableMovements, setRechargeableMovements] = useState<RechargeableMovement[]>([]);
   const [productionExpenses, setProductionExpenses] = useState<ProdExpense[]>([]);
-  const [prodSpendFilter, setProdSpendFilter] = useState({ productionId: "all", type: "all", search: "" });
+  const [prodSpendFilter, setProdSpendFilter] = useState({ productionId: "all", type: "all", search: "", uninvoicedOnly: false });
   const [selectedPsgExpense, setSelectedPsgExpense] = useState<PSGExpense | null>(null);
   const [selectedHaulage, setSelectedHaulage] = useState<RechargeableMovement | null>(null);
 
@@ -627,16 +628,19 @@ function FinancePageInner() {
         const filteredExpenses = psgExpenses.filter(e =>
           (prodSpendFilter.productionId === "all" || String(e.budgetLine.production.id) === prodSpendFilter.productionId) &&
           (prodSpendFilter.type === "all" || prodSpendFilter.type === "psg") &&
+          (!prodSpendFilter.uninvoicedOnly || !e.invoicedToClient) &&
           (!prodSpendFilter.search || e.description.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || (e.supplier ?? "").toLowerCase().includes(prodSpendFilter.search.toLowerCase()))
         );
         const filteredMovements = rechargeableMovements.filter(m =>
           (prodSpendFilter.productionId === "all" || String(m.production.id) === prodSpendFilter.productionId) &&
           (prodSpendFilter.type === "all" || prodSpendFilter.type === "haulage") &&
+          (!prodSpendFilter.uninvoicedOnly || !m.invoicedToClient) &&
           (!prodSpendFilter.search || m.haulageCompany.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || m.fromLocation.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || m.toLocation.toLowerCase().includes(prodSpendFilter.search.toLowerCase()))
         );
         const filteredProdExp = productionExpenses.filter(e =>
           (prodSpendFilter.productionId === "all" || String(e.productionLink?.id) === prodSpendFilter.productionId) &&
           (prodSpendFilter.type === "all" || prodSpendFilter.type === "prod-exp") &&
+          (!prodSpendFilter.uninvoicedOnly || !e.invoicedToClient) &&
           (!prodSpendFilter.search || e.description.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || (e.supplier ?? "").toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || e.category.toLowerCase().includes(prodSpendFilter.search.toLowerCase()))
         );
 
@@ -663,9 +667,31 @@ function FinancePageInner() {
               <input className="rounded px-3 py-1.5 text-sm border focus:outline-none flex-1 min-w-[180px]"
                 style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)", color: "white" }}
                 placeholder="Search…" value={prodSpendFilter.search} onChange={e => setProdSpendFilter(f => ({ ...f, search: e.target.value }))} />
-              <div className="text-sm ml-auto" style={{ color: "var(--psg-muted)" }}>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none text-sm shrink-0" style={{ color: "var(--psg-muted)" }}>
+                <input type="checkbox" checked={prodSpendFilter.uninvoicedOnly} onChange={e => setProdSpendFilter(f => ({ ...f, uninvoicedOnly: e.target.checked }))} className="w-4 h-4 cursor-pointer accent-blue-500" />
+                Not yet invoiced
+              </label>
+              <div className="text-sm" style={{ color: "var(--psg-muted)" }}>
                 Total: <span className="text-white font-medium">{fmt(totalPSG + totalHaulage + totalProdExp)}</span>
               </div>
+              <button
+                onClick={async () => {
+                  const filterLabel = [
+                    prodSpendFilter.productionId !== "all" ? allProductions.find(p => String(p.id) === prodSpendFilter.productionId)?.name : "All Productions",
+                    prodSpendFilter.uninvoicedOnly ? "Not yet invoiced" : null,
+                  ].filter(Boolean).join(" · ");
+                  await exportProductionSpendPDF(
+                    filteredExpenses.map(e => ({ production: e.budgetLine.production.name, department: e.budgetLine.department, description: e.description, supplier: e.supplier, spent: e.spent, paymentDue: e.paymentDue, invoicedToClient: e.invoicedToClient })),
+                    filteredMovements.map(m => ({ production: m.production.name, haulageCompany: m.haulageCompany, route: `${m.fromLocation} → ${m.toLocation}`, cargo: m.cargo, departureAt: m.departureAt, actualCost: m.actualCost, estimatedCost: m.estimatedCost, invoicedToClient: m.invoicedToClient })),
+                    filteredProdExp.map(e => ({ production: e.productionLink?.name ?? "—", category: e.category, description: e.description, supplier: e.supplier, submittedBy: e.submittedByUser?.name ?? null, date: e.date, netAmount: e.netAmount, vatAmount: e.vatAmount, status: e.status, invoicedToClient: e.invoicedToClient })),
+                    filterLabel ?? "All",
+                  );
+                }}
+                className="shrink-0 text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
+                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+              >
+                Export PDF
+              </button>
             </div>
 
             {/* PSG Expenses table */}

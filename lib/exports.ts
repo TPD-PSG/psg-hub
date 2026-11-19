@@ -651,3 +651,105 @@ export async function exportMeetingMinutesPDF(
   const slug = meeting.title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
   doc.save(`minutes-${slug}.pdf`);
 }
+
+// ── Production Spend ─────────────────────────────────────────────────────────
+
+type PSGExpenseRow = { production: string; department: string; description: string; supplier: string | null; spent: number; paymentDue: string | null; invoicedToClient: boolean };
+type HaulageRow = { production: string; haulageCompany: string; route: string; cargo: string | null; departureAt: string; actualCost: number | null; estimatedCost: number | null; invoicedToClient: boolean };
+type ProdExpRow = { production: string; category: string; description: string; supplier: string | null; submittedBy: string | null; date: string | null; netAmount: number; vatAmount: number; status: string; invoicedToClient: boolean };
+
+export async function exportProductionSpendPDF(
+  psgExpenses: PSGExpenseRow[],
+  haulageMovements: HaulageRow[],
+  prodExpenses: ProdExpRow[],
+  filterLabel: string,
+) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF("Production Expenses", `${filterLabel} · Exported ${fmtDate(new Date().toISOString())}`, logo);
+
+  const navy = [10, 25, 65] as [number, number, number];
+  const fmtGBPLocal = (n: number | null) => n != null ? fmtGBP(n) : "—";
+
+  let y = 32;
+
+  // ── PSG Expenses ──────────────────────────────────────────────────────────
+  if (psgExpenses.length > 0) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...navy);
+    doc.text(`PSG EXPENSES  ·  Total spent: ${fmtGBP(psgExpenses.reduce((s, e) => s + e.spent, 0))}`, 10, y);
+    y += 3;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["Production", "Department", "Description", "Supplier", "Spent", "Payment Due", "Invoiced"]],
+      body: psgExpenses.map(e => [
+        e.production, e.department, e.description, e.supplier ?? "—",
+        fmtGBP(e.spent), e.paymentDue ? fmtDate(e.paymentDue) : "—",
+        e.invoicedToClient ? "✓" : "—",
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: navy, textColor: [255, 255, 255] },
+      columnStyles: { 4: { halign: "right" }, 6: { halign: "center" } },
+      margin: { left: 10, right: 10 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  // ── Rechargeable Haulage ─────────────────────────────────────────────────
+  if (haulageMovements.length > 0) {
+    if (y > 170) { doc.addPage(); y = 15; }
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...navy);
+    const totalHaulage = haulageMovements.reduce((s, m) => s + (m.actualCost ?? m.estimatedCost ?? 0), 0);
+    doc.text(`RECHARGEABLE HAULAGE  ·  Total: ${fmtGBP(totalHaulage)}`, 10, y);
+    y += 3;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["Production", "Haulage Company", "Route", "Cargo", "Departure", "Est. Cost", "Actual Cost", "Invoiced"]],
+      body: haulageMovements.map(m => [
+        m.production, m.haulageCompany,
+        `${m.route}`, m.cargo ?? "—",
+        fmtDate(m.departureAt),
+        fmtGBPLocal(m.estimatedCost), fmtGBPLocal(m.actualCost),
+        m.invoicedToClient ? "✓" : "—",
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: navy, textColor: [255, 255, 255] },
+      columnStyles: { 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "center" } },
+      margin: { left: 10, right: 10 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  // ── Production Expenses ───────────────────────────────────────────────────
+  if (prodExpenses.length > 0) {
+    if (y > 170) { doc.addPage(); y = 15; }
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...navy);
+    const totalProdExp = prodExpenses.reduce((s, e) => s + e.netAmount + e.vatAmount, 0);
+    doc.text(`PRODUCTION EXPENSES  ·  Total (inc. VAT): ${fmtGBP(totalProdExp)}`, 10, y);
+    y += 3;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["Production", "Category", "Description", "Supplier", "Submitted By", "Date", "Net", "Total (inc VAT)", "Status", "Invoiced"]],
+      body: prodExpenses.map(e => [
+        e.production, e.category, e.description, e.supplier ?? "—",
+        e.submittedBy ?? "—", e.date ? fmtDate(e.date) : "—",
+        fmtGBP(e.netAmount), fmtGBP(e.netAmount + e.vatAmount),
+        e.status, e.invoicedToClient ? "✓" : "—",
+      ]),
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: navy, textColor: [255, 255, 255] },
+      columnStyles: { 6: { halign: "right" }, 7: { halign: "right" }, 9: { halign: "center" } },
+      margin: { left: 10, right: 10 },
+    });
+  }
+
+  addFooters(doc);
+  doc.save(`production-spend-${new Date().toISOString().slice(0, 10)}.pdf`);
+}

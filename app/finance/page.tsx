@@ -187,6 +187,11 @@ function FinancePageInner() {
 
   useEffect(() => { if (tab === "prod-spend") reloadProdSpend(); }, [tab]);
 
+  useEffect(() => {
+    if (!selectedExp) { setExpDocs([]); return; }
+    fetch(`/api/expenses/${selectedExp.id}/documents`).then(r => r.json()).then(d => { if (Array.isArray(d)) setExpDocs(d); });
+  }, [selectedExp?.id]);
+
   // Invoice To-Do list
   type InvoiceTodo = { id: number; client: string; description: string; amount: number | null; dueDate: string | null; notes: string | null; done: boolean; production: { id: number; name: string } | null };
   const [todos, setTodos] = useState<InvoiceTodo[]>([]);
@@ -227,6 +232,9 @@ function FinancePageInner() {
   const [expForm, setExpForm] = useState<typeof BLANK_EXP & { id?: number }>(BLANK_EXP);
   const [selectedInv, setSelectedInv] = useState<Invoice | null>(null);
   const [selectedExp, setSelectedExp] = useState<Expense | null>(null);
+  type ExpDoc = { id: number; type: string; name: string; mime: string; createdAt: string };
+  const [expDocs, setExpDocs] = useState<ExpDoc[]>([]);
+  const [expDocUploading, setExpDocUploading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   useEffect(() => {
@@ -926,6 +934,48 @@ function FinancePageInner() {
               {selectedExp.reference && <div><div className="text-xs" style={{ color: "var(--psg-muted)" }}>Reference</div><div className="text-sm font-mono text-white">{selectedExp.reference}</div></div>}
             </div>
             {selectedExp.notes && <div><div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: "var(--psg-muted)" }}>Notes</div><p className="text-sm" style={{ color: "var(--psg-muted)" }}>{selectedExp.notes}</p></div>}
+
+            {/* Documents */}
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: "var(--psg-muted)" }}>Invoices & Receipts</div>
+              <div className="space-y-1 mb-3">
+                {expDocs.length === 0 && <p className="text-xs" style={{ color: "var(--psg-muted)" }}>No documents uploaded yet.</p>}
+                {expDocs.map(doc => (
+                  <div key={doc.id} className="flex items-center gap-2 rounded px-3 py-2 border" style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" }}>
+                    <span className="text-xs px-1.5 py-0.5 rounded font-medium capitalize shrink-0" style={{ backgroundColor: doc.type === "invoice" ? "rgba(59,130,246,0.15)" : "rgba(16,185,129,0.15)", color: doc.type === "invoice" ? "#60a5fa" : "#10b981" }}>{doc.type}</span>
+                    <a href={`/api/expenses/${selectedExp.id}/documents/${doc.id}`} target="_blank" rel="noreferrer" className="text-sm text-white hover:underline flex-1 truncate" title={doc.name}>{doc.name}</a>
+                    <button onClick={async () => { await fetch(`/api/expenses/${selectedExp.id}/documents/${doc.id}`, { method: "DELETE" }); setExpDocs(prev => prev.filter(d => d.id !== doc.id)); }} className="text-xs hover:text-red-400 shrink-0" style={{ color: "var(--psg-muted)" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <select
+                  id={`doctype-${selectedExp.id}`}
+                  defaultValue="receipt"
+                  className="rounded px-2 py-1 text-xs border focus:outline-none shrink-0"
+                  style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <option value="invoice">Invoice</option>
+                  <option value="receipt">Receipt</option>
+                  <option value="other">Other</option>
+                </select>
+                <span className="flex-1 text-center border rounded px-3 py-1.5 text-xs cursor-pointer hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: expDocUploading ? "var(--psg-muted)" : "var(--psg-blue)" }}>
+                  {expDocUploading ? "Uploading…" : "+ Upload document"}
+                </span>
+                <input type="file" accept="image/*,application/pdf" className="hidden" disabled={expDocUploading}
+                  onChange={async (ev) => {
+                    const file = ev.target.files?.[0]; if (!file) return;
+                    setExpDocUploading(true);
+                    const sel = document.getElementById(`doctype-${selectedExp.id}`) as HTMLSelectElement;
+                    const fd = new FormData(); fd.append("file", file); fd.append("type", sel?.value ?? "receipt");
+                    const res = await fetch(`/api/expenses/${selectedExp.id}/documents`, { method: "POST", body: fd });
+                    if (res.ok) { const doc = await res.json(); setExpDocs(prev => [...prev, doc]); }
+                    setExpDocUploading(false); ev.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
           </div>
           <div className="px-5 py-4 border-t flex gap-2" style={{ borderColor: "var(--psg-card-border)" }}>
             {(role === "admin" || selectedExp.status === "pending") && (

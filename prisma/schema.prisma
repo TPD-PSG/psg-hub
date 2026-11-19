@@ -745,6 +745,18 @@ model ProductionExpense {
   invoicedToClient  Boolean    @default(false)
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+  documents         ProductionExpenseDocument[]
+}
+
+model ProductionExpenseDocument {
+  id         Int              @id @default(autoincrement())
+  expenseId  Int
+  expense    ProductionExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  type       String           // invoice | receipt | other
+  name       String
+  mime       String
+  file       String           // base64
+  createdAt  DateTime         @default(now())
 }
 
 model Setting {

@@ -146,6 +146,7 @@ function FinancePageInner() {
     haulageCompany: string;
     fromLocation: string;
     toLocation: string;
+    cargo: string | null;
     departureAt: string;
     estimatedCost: number | null;
     actualCost: number | null;
@@ -153,8 +154,24 @@ function FinancePageInner() {
     notes: string | null;
     production: { id: number; name: string };
   };
+  type ProdExpense = {
+    id: number;
+    category: string;
+    description: string;
+    supplier: string | null;
+    netAmount: number;
+    vatAmount: number;
+    date: string | null;
+    paymentMethod: string | null;
+    status: string;
+    reference: string | null;
+    notes: string | null;
+    productionLink: { id: number; name: string } | null;
+    submittedByUser: { id: number; name: string } | null;
+  };
   const [psgExpenses, setPsgExpenses] = useState<PSGExpense[]>([]);
   const [rechargeableMovements, setRechargeableMovements] = useState<RechargeableMovement[]>([]);
+  const [productionExpenses, setProductionExpenses] = useState<ProdExpense[]>([]);
   const [prodSpendFilter, setProdSpendFilter] = useState({ productionId: "all", type: "all", search: "" });
   const [selectedPsgExpense, setSelectedPsgExpense] = useState<PSGExpense | null>(null);
   const [selectedHaulage, setSelectedHaulage] = useState<RechargeableMovement | null>(null);
@@ -163,6 +180,7 @@ function FinancePageInner() {
     const d = await fetch("/api/finance/production-spend").then(r => r.json());
     if (d.psgExpenses) setPsgExpenses(d.psgExpenses);
     if (d.rechargeableMovements) setRechargeableMovements(d.rechargeableMovements);
+    if (d.productionExpenses) setProductionExpenses(d.productionExpenses);
   }
 
   useEffect(() => { if (tab === "prod-spend") reloadProdSpend(); }, [tab]);
@@ -592,6 +610,7 @@ function FinancePageInner() {
         const allProductions = Array.from(new Map<number, string>([
           ...psgExpenses.map(e => [e.budgetLine.production.id, e.budgetLine.production.name] as [number, string]),
           ...rechargeableMovements.map(m => [m.production.id, m.production.name] as [number, string]),
+          ...productionExpenses.filter(e => e.productionLink).map(e => [e.productionLink!.id, e.productionLink!.name] as [number, string]),
         ]).entries()).map(([id, name]) => ({ id, name }));
 
         const filteredExpenses = psgExpenses.filter(e =>
@@ -604,9 +623,15 @@ function FinancePageInner() {
           (prodSpendFilter.type === "all" || prodSpendFilter.type === "haulage") &&
           (!prodSpendFilter.search || m.haulageCompany.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || m.fromLocation.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || m.toLocation.toLowerCase().includes(prodSpendFilter.search.toLowerCase()))
         );
+        const filteredProdExp = productionExpenses.filter(e =>
+          (prodSpendFilter.productionId === "all" || String(e.productionLink?.id) === prodSpendFilter.productionId) &&
+          (prodSpendFilter.type === "all" || prodSpendFilter.type === "prod-exp") &&
+          (!prodSpendFilter.search || e.description.toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || (e.supplier ?? "").toLowerCase().includes(prodSpendFilter.search.toLowerCase()) || e.category.toLowerCase().includes(prodSpendFilter.search.toLowerCase()))
+        );
 
         const totalPSG = filteredExpenses.reduce((s, e) => s + e.spent, 0);
         const totalHaulage = filteredMovements.reduce((s, m) => s + (m.actualCost ?? m.estimatedCost ?? 0), 0);
+        const totalProdExp = filteredProdExp.reduce((s, e) => s + e.netAmount + e.vatAmount, 0);
 
         return (
           <div className="space-y-4">
@@ -622,12 +647,13 @@ function FinancePageInner() {
                 <option value="all">All Types</option>
                 <option value="psg">PSG Expenses</option>
                 <option value="haulage">Rechargeable Haulage</option>
+                <option value="prod-exp">Production Expenses</option>
               </select>
               <input className="rounded px-3 py-1.5 text-sm border focus:outline-none flex-1 min-w-[180px]"
                 style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)", color: "white" }}
                 placeholder="Search…" value={prodSpendFilter.search} onChange={e => setProdSpendFilter(f => ({ ...f, search: e.target.value }))} />
               <div className="text-sm ml-auto" style={{ color: "var(--psg-muted)" }}>
-                Total: <span className="text-white font-medium">{fmt(totalPSG + totalHaulage)}</span>
+                Total: <span className="text-white font-medium">{fmt(totalPSG + totalHaulage + totalProdExp)}</span>
               </div>
             </div>
 
@@ -712,6 +738,58 @@ function FinancePageInner() {
                       ))}
                       {filteredMovements.length === 0 && (
                         <tr><td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No rechargeable haulage movements found</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Production Expenses table */}
+            {(prodSpendFilter.type === "all" || prodSpendFilter.type === "prod-exp") && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--psg-muted)" }}>
+                  Production Expenses · {fmt(totalProdExp)}
+                </h3>
+                <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <th className="px-4 py-3 text-left font-medium text-white">Production</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Category</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Description</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Supplier</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Submitted By</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Date</th>
+                        <th className="px-4 py-3 text-right font-medium text-white">Net</th>
+                        <th className="px-4 py-3 text-right font-medium text-white">Total (inc. VAT)</th>
+                        <th className="px-4 py-3 text-left font-medium text-white">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProdExp.map(e => (
+                        <tr key={e.id} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{e.productionLink?.name ?? "—"}</td>
+                          <td className="px-4 py-3 text-xs capitalize" style={{ color: "var(--psg-muted)" }}>{e.category}</td>
+                          <td className="px-4 py-3 font-medium text-white">{e.description}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{e.supplier ?? "—"}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{e.submittedByUser?.name ?? "—"}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{e.date ? fmtDate(e.date) : "—"}</td>
+                          <td className="px-4 py-3 text-right text-xs" style={{ color: "var(--psg-muted)" }}>{fmt(e.netAmount)}</td>
+                          <td className="px-4 py-3 text-right font-medium text-white">{fmt(e.netAmount + e.vatAmount)}</td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                              style={{
+                                backgroundColor: e.status === "approved" ? "#10b98122" : e.status === "paid" ? "#3b82f622" : e.status === "rejected" ? "#ef444422" : "rgba(255,255,255,0.08)",
+                                color: e.status === "approved" ? "#10b981" : e.status === "paid" ? "#60a5fa" : e.status === "rejected" ? "#ef4444" : "var(--psg-muted)",
+                              }}>
+                              {e.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredProdExp.length === 0 && (
+                        <tr><td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No production expenses with a linked production found</td></tr>
                       )}
                     </tbody>
                   </table>

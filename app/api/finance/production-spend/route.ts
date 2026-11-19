@@ -8,7 +8,7 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [psgExpenses, rechargeableMovements] = await Promise.all([
+  const [psgExpenses, rechargeableMovements, productionExpenses] = await Promise.all([
     prisma.expense.findMany({
       where: { isPSGExpense: true },
       orderBy: { createdAt: "desc" },
@@ -34,7 +34,15 @@ export async function GET() {
         production: { select: { id: true, name: true } },
       },
     }),
+    prisma.productionExpense.findMany({
+      where: { productionId: { not: null } },
+      orderBy: { createdAt: "desc" },
+      include: {
+        productionLink: { select: { id: true, name: true } },
+        submittedByUser: { select: { id: true, name: true } },
+      },
+    }),
   ]);
 
-  return NextResponse.json({ psgExpenses, rechargeableMovements });
+  return NextResponse.json({ psgExpenses, rechargeableMovements, productionExpenses });
 }

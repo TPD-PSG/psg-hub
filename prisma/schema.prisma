@@ -184,6 +184,7 @@ model BudgetLine {
 
   expenses          Expense[]
   variationItems    BudgetVariationItem[]
+  haulageMovements  HaulageMovement[]
 }
 
 model BudgetVariation {
@@ -237,6 +238,7 @@ model HaulageMovement {
   rechargeable     Boolean    @default(false)
   invoicedToClient Boolean    @default(false)
   budgetLineId     Int?
+  budgetLine       BudgetLine? @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 }

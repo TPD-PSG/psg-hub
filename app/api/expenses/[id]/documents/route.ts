@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
+const ALLOWED_MIME = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+];
+const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
+
 export const dynamic = "force-dynamic";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,6 +35,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const file = formData.get("file") as File | null;
   const type = (formData.get("type") as string) ?? "receipt";
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
+  if (!ALLOWED_MIME.includes(file.type)) return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
+  if (file.size > MAX_BYTES) return NextResponse.json({ error: "File too large (max 20 MB)" }, { status: 400 });
 
   const buf = await file.arrayBuffer();
   const base64 = Buffer.from(buf).toString("base64");

@@ -7,9 +7,8 @@ export const dynamic = "force-dynamic";
 // Protected by a shared secret set in NOTIFY_SECRET env var.
 export async function POST(req: NextRequest) {
   const secret = process.env.NOTIFY_SECRET;
-  if (secret) {
-    const auth = req.headers.get("x-notify-secret");
-    if (auth !== secret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!secret || req.headers.get("x-notify-secret") !== secret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const now = new Date();

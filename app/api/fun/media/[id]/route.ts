@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readFile } from "fs/promises";
 import { join } from "path";
+import { auth } from "@/auth";
 
 const MEDIA_DIR = process.env.NODE_ENV === "production"
   ? "/data/fun-media"
   : join(process.cwd(), "public", "fun-media");
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_: NextRequest, {
+ params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const media = await prisma.funMedia.findUnique({ where: { id: Number(id) } });
   if (!media) return NextResponse.json({ error: "Not found" }, { status: 404 });

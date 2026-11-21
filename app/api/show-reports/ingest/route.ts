@@ -57,7 +57,7 @@ async function parsePdfWithClaude(base64: string, subject: string): Promise<{
 These reports are produced by stage managers after each performance. They follow a consistent structure including:
 - Date, venue, performance number, show time (e.g. "Evening", "Matinee", "7:30pm Evening")
 - House number (attendance), house capacity, house percentage
-- Act timings: up/down times, playing time, running time
+- Act timings: house open, FOH clearance, act up/down times with durations, interval times, playing time, running time
 - Staff on duty
 - Categorised notes: General, Sound, Lighting/LX, Video, Costume, Movement, SM Notes, Health & Safety, Audience Reactions, Maintenance, Injury/Illness, Cast/staff absent with covers
 
@@ -69,15 +69,22 @@ Extract the following fields and return ONLY valid JSON (no markdown, no explana
   "performanceNumber": number (the show/performance number e.g. 81, 56, 68) or null,
   "attendance": number (house number / audience count) or null,
   "houseCapacity": number (total capacity of the venue) or null,
-  "runningTime": "total running time e.g. '2:24' or '1h 46m' or null",
-  "playingTime": "total playing time (excluding interval) e.g. '2:03' or '1h 39m' or null",
+  "runningTime": "total running time including interval e.g. '2:24' or null",
+  "playingTime": "total playing time excluding interval e.g. '2:03' or null",
   "notes": "structured summary — see format below"
 }
 
-For the notes field, produce a well-structured markdown summary preserving all important details. Use these sections (omit sections with no content):
+For the notes field, produce a well-structured markdown summary. Use these sections in this order (omit sections with no content):
+
+**Timings**
+House open: HH:MM  FOH clearance: HH:MM
+Act 1: HH:MM – HH:MM (duration)
+Interval: HH:MM – HH:MM (duration)
+Act 2: HH:MM – HH:MM (duration)
+[include all acts/parts as labelled in the report]
 
 **General**
-[cast changes, covers, any general production notes]
+[cast changes, covers, any general production notes — do NOT include timings here]
 
 **Technical – Sound**
 [sound cue issues, operator errors, equipment problems]
@@ -89,7 +96,7 @@ For the notes field, produce a well-structured markdown summary preserving all i
 [video de-sync, automation issues]
 
 **Audience & House**
-[house number, audience reactions, standing ovation, any audience incidents]
+[audience reactions, standing ovation, any audience incidents — not house numbers, those are in the structured fields]
 
 **Health & Safety / Incidents**
 [injuries, illnesses, audience medical incidents, show stops]

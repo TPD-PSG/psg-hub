@@ -135,7 +135,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       emailSubject: file.name,
       rawPdf: base64,
       productionMatched: true,
-      createdByUserId: (session.user as any)?.id ?? null,
+      createdByUserId: (session.user as any)?.id ? parseInt((session.user as any).id) : null,
     },
   });
 

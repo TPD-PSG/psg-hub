@@ -501,7 +501,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   function renderReportNotes(notes: string) {
-    const sections = notes.split(/(?=\*\*[^*]+\*\*)/).filter(Boolean);
+    // Prepend \n so the first heading is caught by the same \n+ lookahead as the rest
+    const sections = ('\n' + notes).split(/\n+(?=\*\*[^*]+\*\*)/).filter(Boolean);
     return (
       <div className="mt-2 space-y-2">
         {sections.map((section, i) => {

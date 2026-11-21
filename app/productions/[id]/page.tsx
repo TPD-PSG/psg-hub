@@ -290,7 +290,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [showReportForm, setShowReportForm] = useState(false);
   const [editReport, setEditReport] = useState<ShowReport | null>(null);
   const [importingReports, setImportingReports] = useState(false);
+  const [uploadingPdfs, setUploadingPdfs] = useState(false);
+  const [pdfDragOver, setPdfDragOver] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [pdfUploadStatus, setPdfUploadStatus] = useState<string | null>(null);
   const BLANK_REPORT = { reportDate: "", venue: "", performance: "", attendance: "", notes: "" };
   const [reportForm, setReportForm] = useState(BLANK_REPORT);
 
@@ -495,6 +498,29 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     if (!confirm("Delete this show report?")) return;
     await fetch(`/api/show-reports/${rid}`, { method: "DELETE" });
     reloadReports();
+  }
+
+  async function uploadReportPdfs(files: File[]) {
+    const pdfs = files.filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+    if (!pdfs.length) { setPdfUploadStatus("No PDF files found."); setTimeout(() => setPdfUploadStatus(null), 4000); return; }
+    setUploadingPdfs(true);
+    setPdfUploadStatus(`Uploading ${pdfs.length} PDF${pdfs.length > 1 ? "s" : ""} — parsing with AI…`);
+    try {
+      const fd = new FormData();
+      pdfs.forEach(f => fd.append("pdf", f));
+      const res = await fetch(`/api/productions/${prod.id}/show-reports/upload-pdf`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      const refreshed = await fetch(`/api/productions/${prod.id}/show-reports`);
+      if (refreshed.ok) setShowReports(await refreshed.json());
+      setPdfUploadStatus(`✓ ${data.imported} report${data.imported !== 1 ? "s" : ""} imported`);
+      setTimeout(() => setPdfUploadStatus(null), 5000);
+    } catch (e: any) {
+      setPdfUploadStatus(`Error: ${e.message}`);
+      setTimeout(() => setPdfUploadStatus(null), 8000);
+    } finally {
+      setUploadingPdfs(false);
+    }
   }
 
   async function uploadLogo(file: File) {
@@ -3769,6 +3795,32 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="flex items-center gap-2 px-3 py-2 rounded text-sm" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)", border: "1px solid rgba(59,130,246,0.2)" }}>
               {importingReports && <span className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />}
               {importStatus}
+            </div>
+          )}
+
+          {/* PDF drag-and-drop upload zone */}
+          <div
+            className="rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 py-5 cursor-pointer transition-colors"
+            style={{
+              borderColor: pdfDragOver ? "var(--psg-blue)" : "var(--psg-card-border)",
+              backgroundColor: pdfDragOver ? "rgba(59,130,246,0.07)" : "transparent",
+              opacity: uploadingPdfs ? 0.6 : 1,
+              pointerEvents: uploadingPdfs ? "none" : undefined,
+            }}
+            onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".pdf,application/pdf"; inp.multiple = true; inp.onchange = (e) => { const files = Array.from((e.target as HTMLInputElement).files ?? []); if (files.length) uploadReportPdfs(files); }; inp.click(); }}
+            onDragOver={(e) => { e.preventDefault(); setPdfDragOver(true); }}
+            onDragLeave={() => setPdfDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setPdfDragOver(false); const files = Array.from(e.dataTransfer.files); if (files.length) uploadReportPdfs(files); }}
+          >
+            {uploadingPdfs
+              ? <><span className="inline-block w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" style={{ color: "var(--psg-blue)" }} /><p className="text-xs" style={{ color: "var(--psg-blue)" }}>{pdfUploadStatus}</p></>
+              : <><p className="text-xs font-medium" style={{ color: "var(--psg-muted)" }}>Drop PDF show reports here, or click to select</p><p className="text-xs" style={{ color: "var(--psg-muted)", opacity: 0.6 }}>Multiple files supported — each will be parsed by AI</p></>
+            }
+          </div>
+
+          {pdfUploadStatus && !uploadingPdfs && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded text-sm" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)", border: "1px solid rgba(59,130,246,0.2)" }}>
+              {pdfUploadStatus}
             </div>
           )}
 

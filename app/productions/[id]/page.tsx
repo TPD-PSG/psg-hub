@@ -3932,7 +3932,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         {r.venue && <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>{r.venue}</span>}
                         {r.attendance != null && (
                           <span className="text-xs" style={{ color: "var(--psg-muted)" }}>
-                            {r.attendance.toLocaleString()}{r.houseCapacity ? ` / ${r.houseCapacity.toLocaleString()} (${Math.round(r.attendance / r.houseCapacity * 100)}%)` : ""} capacity
+                            {r.attendance.toLocaleString()}{r.houseCapacity ? ` / ${r.houseCapacity.toLocaleString()} (${Math.round(r.attendance / r.houseCapacity * 100)}%)` : ""} sold
                           </span>
                         )}
                         {r.runningTime && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Run: {r.runningTime}</span>}

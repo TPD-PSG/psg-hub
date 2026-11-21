@@ -304,7 +304,7 @@ export async function POST(req: NextRequest) {
 
   const processedFolderId = await getOrCreateProcessedFolder(token);
   const results: { subject: string; status: string; reportId?: number; production?: string }[] = [];
-  const MAX_PER_RUN = 10; // keep well within Railway's 60s timeout
+  const MAX_PER_RUN = 4; // keep well within Railway's 60s timeout (~10-15s per PDF)
   let pdfProcessed = 0;
 
   for (const msg of messages) {

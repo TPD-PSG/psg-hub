@@ -6,10 +6,6 @@ import Anthropic from "@anthropic-ai/sdk";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export const config = {
-  api: { bodyParser: { sizeLimit: "20mb" } },
-};
-
 async function parsePdfWithClaude(base64: string, filename: string): Promise<{
   reportDate: string | null;
   venue: string | null;

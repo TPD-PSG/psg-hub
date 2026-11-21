@@ -514,7 +514,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
         const res = await fetch(`/api/productions/${prod.id}/show-reports/upload-pdf`, { method: "POST", body: fd });
         const text = await res.text();
         let data: any;
-        try { data = JSON.parse(text); } catch { throw new Error(`Server error on "${f.name}"`); }
+        try { data = JSON.parse(text); } catch { throw new Error(`Server error on "${f.name}": ${text.slice(0, 200)}`); }
         if (!res.ok) throw new Error(data.error ?? "Upload failed");
         imported++;
       }

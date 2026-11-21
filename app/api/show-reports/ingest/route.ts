@@ -390,7 +390,9 @@ export async function POST(req: NextRequest) {
     let claudeRaw: any;
     try {
       claudeRaw = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
+      console.log(`[ingest] Claude raw for "${msg.subject}":`, JSON.stringify(claudeRaw));
       parsedReports = applySubjectFallbacks(claudeRaw, msg.subject);
+      console.log(`[ingest] After fallbacks for "${msg.subject}":`, JSON.stringify(parsedReports));
     } catch {
       results.push({ subject: msg.subject, status: "parse_error" });
       continue;

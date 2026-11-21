@@ -141,7 +141,9 @@ function parsePerformanceNumbers(subject: string): number[] {
   // "Reports 55 and 56" or "Reports 55 & 56"
   const multi = subject.match(/reports?\s+(\d+)\s+(?:and|&)\s+(\d+)/i);
   if (multi) return [parseInt(multi[1]), parseInt(multi[2])];
-  // "Report #81" or "Report 81"
+  // "Report Performance 6" or "Report #81" or "Report 81"
+  const withPerf = subject.match(/report\s+performance\s+(\d+)/i);
+  if (withPerf) return [parseInt(withPerf[1])];
   const single = subject.match(/report\s+#?(\d+)/i);
   if (single) nums.push(parseInt(single[1]));
   return nums;

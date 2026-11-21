@@ -138,13 +138,11 @@ Omit sections with no content. Include specific cue numbers and scene references
 // Extract performance numbers from subjects like "Show Reports 55 and 56" or "Show Report #81"
 function parsePerformanceNumbers(subject: string): number[] {
   const nums: number[] = [];
-  // "Reports 55 and 56" or "Reports 55 & 56"
-  const multi = subject.match(/reports?\s+(\d+)\s+(?:and|&)\s+(\d+)/i);
+  // "Reports/Performances/Previews N and M" or "N & M"
+  const multi = subject.match(/(?:reports?|performances?|previews?)\s+(?:\w+\s+)?(\d+)\s+(?:and|&)\s+(\d+)/i);
   if (multi) return [parseInt(multi[1]), parseInt(multi[2])];
-  // "Report Performance 6" or "Report #81" or "Report 81"
-  const withPerf = subject.match(/report\s+performance\s+(\d+)/i);
-  if (withPerf) return [parseInt(withPerf[1])];
-  const single = subject.match(/report\s+#?(\d+)/i);
+  // "Report Performance 6" or "Report Preview 7" or "Report #81" or "Report 81"
+  const single = subject.match(/(?:reports?|performances?|previews?)\s+(?:performance\s+|preview\s+)?#?(\d+)/i);
   if (single) nums.push(parseInt(single[1]));
   return nums;
 }

@@ -129,17 +129,20 @@ function matchProduction(subject: string, productions: { id: number; name: strin
   return null;
 }
 
-async function fetchAllMessages(token: string, url: string): Promise<any[]> {
+async function fetchAllMessages(token: string, url: string): Promise<{ messages: any[]; error?: string }> {
   const all: any[] = [];
   let next: string | null = url;
   while (next && all.length < 500) {
     const res: Response = await fetch(next, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) break;
+    if (!res.ok) {
+      const errText = await res.text();
+      return { messages: all, error: `Graph ${res.status}: ${errText}` };
+    }
     const data: any = await res.json();
     all.push(...(data.value ?? []));
     next = data["@odata.nextLink"] ?? null;
   }
-  return all;
+  return { messages: all };
 }
 
 async function getOrCreateProcessedFolder(token: string): Promise<string | null> {
@@ -192,30 +195,36 @@ export async function POST(req: NextRequest) {
   let messages: any[] = [];
   const fields = "$select=id,subject,from,receivedDateTime,hasAttachments";
 
+  const graphErrors: string[] = [];
+
   if (backfill) {
-    // Search inbox + Processed folder for all messages with attachments
-    const [inboxMsgs, processedFolderRes] = await Promise.all([
+    const [inboxResult, processedFolderRes] = await Promise.all([
       fetchAllMessages(token, `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders/inbox/messages?${fields}&$top=50`),
       fetch(`https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders?$filter=displayName eq 'Processed'`, { headers: { Authorization: `Bearer ${token}` } }),
     ]);
-    messages.push(...inboxMsgs);
+    if (inboxResult.error) graphErrors.push(`inbox: ${inboxResult.error}`);
+    messages.push(...inboxResult.messages);
+
     if (processedFolderRes.ok) {
       const { value: folders } = await processedFolderRes.json();
       if (folders?.[0]?.id) {
-        const processedMsgs = await fetchAllMessages(token,
+        const processedResult = await fetchAllMessages(token,
           `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders/${folders[0].id}/messages?${fields}&$top=50`
         );
-        messages.push(...processedMsgs);
+        if (processedResult.error) graphErrors.push(`processed folder: ${processedResult.error}`);
+        messages.push(...processedResult.messages);
       }
+    } else {
+      graphErrors.push(`folders list: Graph ${processedFolderRes.status}`);
     }
   } else {
-    // Normal mode: only unread inbox messages
     const msgsRes = await fetch(
       `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders/inbox/messages?$filter=isRead eq false&$top=20&${fields}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!msgsRes.ok) {
-      return NextResponse.json({ error: `Graph messages error: ${await msgsRes.text()}` }, { status: 502 });
+      const errText = await msgsRes.text();
+      return NextResponse.json({ error: `Graph messages error: ${errText}` }, { status: 502 });
     }
     messages = (await msgsRes.json()).value ?? [];
   }
@@ -311,5 +320,5 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ processed: results.length, results });
+  return NextResponse.json({ processed: results.length, results, graphErrors: graphErrors.length ? graphErrors : undefined });
 }

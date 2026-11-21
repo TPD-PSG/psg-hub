@@ -285,7 +285,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [logoUploading, setLogoUploading] = useState(false);
 
   // Show Reports
-  type ShowReport = { id: number; reportDate: string; venue: string | null; performance: string | null; performanceNumber: number | null; attendance: number | null; houseCapacity: number | null; runningTime: string | null; playingTime: string | null; notes: string | null; flags: string | null; emailSubject: string | null; productionMatched: boolean; createdByUser: { id: number; name: string } | null };
+  type ShowReport = { id: number; reportDate: string; venue: string | null; performance: string | null; performanceNumber: number | null; attendance: number | null; houseCapacity: number | null; runningTime: string | null; playingTime: string | null; notes: string | null; flags: string | null; emailSubject: string | null; productionMatched: boolean; rawPdf: boolean | null; createdByUser: { id: number; name: string } | null };
   const [showReports, setShowReports] = useState<ShowReport[]>([]);
   const [showReportForm, setShowReportForm] = useState(false);
   const [editReport, setEditReport] = useState<ShowReport | null>(null);
@@ -3945,6 +3945,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         {!r.productionMatched && <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>Unmatched</span>}
                       </div>
                       <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                        {r.rawPdf && (
+                          <a href={`/api/show-reports/${r.id}/pdf`} download
+                            className="text-xs px-2 py-1 rounded" style={{ color: "rgba(255,255,255,0.5)", backgroundColor: "rgba(255,255,255,0.06)" }}
+                            title="Download original PDF">PDF</a>
+                        )}
                         <button onClick={() => { setEditReport(r); setReportForm({ reportDate: r.reportDate.slice(0, 10), venue: r.venue ?? "", performance: r.performance ?? "", attendance: r.attendance != null ? String(r.attendance) : "", notes: r.notes ?? "" }); setShowReportForm(true); }}
                           className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
                         <button onClick={() => deleteReport(r.id)}

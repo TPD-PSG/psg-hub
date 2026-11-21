@@ -6,10 +6,20 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const reports = await prisma.showReport.findMany({
     where: { productionId: Number(id) },
-    include: { createdByUser: { select: { id: true, name: true } } },
+    select: {
+      id: true, productionId: true, reportDate: true, venue: true, performance: true,
+      performanceNumber: true, attendance: true, houseCapacity: true,
+      runningTime: true, playingTime: true, notes: true, flags: true,
+      emailSubject: true, emailFrom: true, productionMatched: true,
+      rawPdf: true,
+      createdByUser: { select: { id: true, name: true } },
+      createdAt: true, updatedAt: true,
+    },
     orderBy: { reportDate: "desc" },
   });
-  return NextResponse.json(reports);
+  // Strip rawPdf content but keep a hasPdf boolean to avoid sending MBs of base64
+  const sanitised = reports.map(r => ({ ...r, rawPdf: r.rawPdf ? true : false }));
+  return NextResponse.json(sanitised);
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

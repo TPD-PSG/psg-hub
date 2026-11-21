@@ -290,6 +290,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [showReportForm, setShowReportForm] = useState(false);
   const [editReport, setEditReport] = useState<ShowReport | null>(null);
   const [importingReports, setImportingReports] = useState(false);
+  const [expandedReports, setExpandedReports] = useState<Set<number>>(new Set());
   const [uploadingPdfs, setUploadingPdfs] = useState(false);
   const [pdfDragOver, setPdfDragOver] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -498,6 +499,23 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     if (!confirm("Delete this show report?")) return;
     await fetch(`/api/show-reports/${rid}`, { method: "DELETE" });
     reloadReports();
+  }
+
+  function getNotesFlags(notes: string): string[] {
+    const flagSections = ["Health & Safety / Incidents", "Maintenance", "Covers & Absences"];
+    const flags: string[] = [];
+    const sections = ('\n' + notes).split(/\n+(?=\*\*[^*]+\*\*)/).filter(Boolean);
+    for (const s of sections) {
+      const m = s.match(/^\*\*([^*]+)\*\*/);
+      if (!m) continue;
+      const heading = m[1].trim();
+      if (!flagSections.includes(heading)) continue;
+      const body = s.replace(/^\*\*[^*]+\*\*\n?/, '').trim();
+      if (body && body.toLowerCase() !== "no notes." && body.toLowerCase() !== "none.") {
+        flags.push(heading);
+      }
+    }
+    return flags;
   }
 
   function renderReportNotes(notes: string) {
@@ -3879,11 +3897,22 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             </div>
           ) : (
             <div className="rounded-lg border divide-y overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
-              {showReports.map(r => (
-                <div key={r.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
+              {showReports.map(r => {
+                const isExpanded = expandedReports.has(r.id);
+                const flags = r.notes ? getNotesFlags(r.notes) : [];
+                return (
+                  <div key={r.id}>
+                    {/* Collapsed header — always visible */}
+                    <button
+                      className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-white/5 transition-colors"
+                      onClick={() => setExpandedReports(prev => {
+                        const next = new Set(prev);
+                        isExpanded ? next.delete(r.id) : next.add(r.id);
+                        return next;
+                      })}
+                    >
+                      <span className="text-sm shrink-0" style={{ color: "var(--psg-muted)", marginTop: 1 }}>{isExpanded ? "▾" : "▸"}</span>
+                      <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-white text-sm">{fmtDate(r.reportDate)}</span>
                         {r.performanceNumber != null && <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(59,130,246,0.15)", color: "var(--psg-blue)" }}>#{r.performanceNumber}</span>}
                         {r.performance && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{r.performance}</span>}
@@ -3893,23 +3922,34 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                             {r.attendance.toLocaleString()}{r.houseCapacity ? ` / ${r.houseCapacity.toLocaleString()} (${Math.round(r.attendance / r.houseCapacity * 100)}%)` : ""} capacity
                           </span>
                         )}
-                        {r.runningTime && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Running: {r.runningTime}</span>}
-                        {r.playingTime && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Playing: {r.playingTime}</span>}
+                        {r.runningTime && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Run: {r.runningTime}</span>}
+                        {r.playingTime && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Play: {r.playingTime}</span>}
+                        {flags.map(f => (
+                          <span key={f} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>
+                            {f === "Health & Safety / Incidents" ? "H&S" : f === "Covers & Absences" ? "Covers" : f}
+                          </span>
+                        ))}
                         {!r.productionMatched && <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>Unmatched</span>}
                       </div>
-                      {r.notes && renderReportNotes(r.notes)}
-                      {r.emailSubject && <p className="text-xs mt-1 italic" style={{ color: "var(--psg-muted)", opacity: 0.5 }}>via email: {r.emailSubject}</p>}
-                      {r.createdByUser && <p className="text-xs mt-1" style={{ color: "var(--psg-muted)", opacity: 0.6 }}>by {r.createdByUser.name}</p>}
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      <button onClick={() => { setEditReport(r); setReportForm({ reportDate: r.reportDate.slice(0, 10), venue: r.venue ?? "", performance: r.performance ?? "", attendance: r.attendance != null ? String(r.attendance) : "", notes: r.notes ?? "" }); setShowReportForm(true); }}
-                        className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
-                      <button onClick={() => deleteReport(r.id)}
-                        className="text-xs px-2 py-1 rounded" style={{ color: "#f87171", backgroundColor: "rgba(239,68,68,0.1)" }}>Delete</button>
-                    </div>
+                      <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => { setEditReport(r); setReportForm({ reportDate: r.reportDate.slice(0, 10), venue: r.venue ?? "", performance: r.performance ?? "", attendance: r.attendance != null ? String(r.attendance) : "", notes: r.notes ?? "" }); setShowReportForm(true); }}
+                          className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
+                        <button onClick={() => deleteReport(r.id)}
+                          className="text-xs px-2 py-1 rounded" style={{ color: "#f87171", backgroundColor: "rgba(239,68,68,0.1)" }}>Delete</button>
+                      </div>
+                    </button>
+
+                    {/* Expanded notes */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 pt-1 border-t" style={{ borderColor: "var(--psg-card-border)" }}>
+                        {r.notes && renderReportNotes(r.notes)}
+                        {r.emailSubject && <p className="text-xs mt-2 italic" style={{ color: "var(--psg-muted)", opacity: 0.5 }}>via email: {r.emailSubject}</p>}
+                        {r.createdByUser && <p className="text-xs mt-1" style={{ color: "var(--psg-muted)", opacity: 0.6 }}>by {r.createdByUser.name}</p>}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

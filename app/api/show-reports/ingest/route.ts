@@ -252,21 +252,40 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // Fetch attachment list (without contentBytes — avoid inline size limit)
     const attRes = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}/attachments?$select=id,name,contentType,contentBytes`,
+      `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}/attachments?$select=id,name,contentType,size`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    if (!attRes.ok) { results.push({ subject: msg.subject, status: "attachment_error" }); continue; }
+    if (!attRes.ok) {
+      results.push({ subject: msg.subject, status: `attachment_error_${attRes.status}` });
+      continue;
+    }
     const { value: attachments } = await attRes.json();
 
-    const pdf = attachments?.find((a: any) =>
+    const pdfMeta = attachments?.find((a: any) =>
       a.contentType === "application/pdf" ||
-      a.contentType === "application/octet-stream" && (a.name as string)?.toLowerCase().endsWith(".pdf")
+      (a.contentType === "application/octet-stream" && (a.name as string)?.toLowerCase().endsWith(".pdf"))
     );
-    if (!pdf) {
+    if (!pdfMeta) {
       results.push({ subject: msg.subject, status: "skipped_no_pdf" });
       continue;
     }
+
+    // Download the attachment content separately (handles any size)
+    const pdfBytesRes = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}/attachments/${pdfMeta.id}/$value`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!pdfBytesRes.ok) {
+      results.push({ subject: msg.subject, status: `attachment_download_error_${pdfBytesRes.status}` });
+      continue;
+    }
+    const pdfBuffer = await pdfBytesRes.arrayBuffer();
+    const pdf = {
+      contentBytes: Buffer.from(pdfBuffer).toString("base64"),
+      name: pdfMeta.name,
+    };
 
     const productionId = matchProduction(msg.subject, productions);
     const production = productions.find(p => p.id === productionId);

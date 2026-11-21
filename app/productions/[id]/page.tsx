@@ -504,16 +504,23 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     const pdfs = files.filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
     if (!pdfs.length) { setPdfUploadStatus("No PDF files found."); setTimeout(() => setPdfUploadStatus(null), 4000); return; }
     setUploadingPdfs(true);
-    setPdfUploadStatus(`Uploading ${pdfs.length} PDF${pdfs.length > 1 ? "s" : ""} — parsing with AI…`);
+    let imported = 0;
     try {
-      const fd = new FormData();
-      pdfs.forEach(f => fd.append("pdf", f));
-      const res = await fetch(`/api/productions/${prod.id}/show-reports/upload-pdf`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      for (let i = 0; i < pdfs.length; i++) {
+        const f = pdfs[i];
+        setPdfUploadStatus(`Parsing ${i + 1} of ${pdfs.length}: ${f.name}…`);
+        const fd = new FormData();
+        fd.append("pdf", f);
+        const res = await fetch(`/api/productions/${prod.id}/show-reports/upload-pdf`, { method: "POST", body: fd });
+        const text = await res.text();
+        let data: any;
+        try { data = JSON.parse(text); } catch { throw new Error(`Server error on "${f.name}"`); }
+        if (!res.ok) throw new Error(data.error ?? "Upload failed");
+        imported++;
+      }
       const refreshed = await fetch(`/api/productions/${prod.id}/show-reports`);
       if (refreshed.ok) setShowReports(await refreshed.json());
-      setPdfUploadStatus(`✓ ${data.imported} report${data.imported !== 1 ? "s" : ""} imported`);
+      setPdfUploadStatus(`✓ ${imported} report${imported !== 1 ? "s" : ""} imported`);
       setTimeout(() => setPdfUploadStatus(null), 5000);
     } catch (e: any) {
       setPdfUploadStatus(`Error: ${e.message}`);

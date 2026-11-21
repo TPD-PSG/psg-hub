@@ -6,6 +6,10 @@ import Anthropic from "@anthropic-ai/sdk";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+export const config = {
+  api: { bodyParser: { sizeLimit: "20mb" } },
+};
+
 async function parsePdfWithClaude(base64: string, filename: string): Promise<{
   reportDate: string | null;
   venue: string | null;
@@ -110,40 +114,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!production) return NextResponse.json({ error: "Production not found" }, { status: 404 });
 
   const formData = await req.formData();
-  const files = formData.getAll("pdf") as File[];
-  if (!files.length) return NextResponse.json({ error: "No PDF files provided" }, { status: 400 });
-
-  const pdfs = files.filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
-  if (!pdfs.length) return NextResponse.json({ error: "No valid PDF files found" }, { status: 400 });
-
-  const results: { filename: string; reportId: number; parsed: any }[] = [];
-
-  for (const file of pdfs) {
-    const buffer = await file.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
-    const parsed = await parsePdfWithClaude(base64, file.name);
-
-    const report = await prisma.showReport.create({
-      data: {
-        productionId,
-        reportDate: parsed.reportDate ? new Date(parsed.reportDate) : new Date(),
-        venue: parsed.venue,
-        performance: parsed.performance,
-        performanceNumber: parsed.performanceNumber,
-        attendance: parsed.attendance,
-        houseCapacity: parsed.houseCapacity,
-        runningTime: parsed.runningTime,
-        playingTime: parsed.playingTime,
-        notes: parsed.notes,
-        emailSubject: file.name,
-        rawPdf: base64,
-        productionMatched: true,
-        createdByUserId: (session.user as any)?.id ?? null,
-      },
-    });
-
-    results.push({ filename: file.name, reportId: report.id, parsed });
+  const file = formData.get("pdf") as File | null;
+  if (!file) return NextResponse.json({ error: "No PDF file provided" }, { status: 400 });
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    return NextResponse.json({ error: "File must be a PDF" }, { status: 400 });
   }
 
-  return NextResponse.json({ imported: results.length, results });
+  const buffer = await file.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString("base64");
+  const parsed = await parsePdfWithClaude(base64, file.name);
+
+  const report = await prisma.showReport.create({
+    data: {
+      productionId,
+      reportDate: parsed.reportDate ? new Date(parsed.reportDate) : new Date(),
+      venue: parsed.venue,
+      performance: parsed.performance,
+      performanceNumber: parsed.performanceNumber,
+      attendance: parsed.attendance,
+      houseCapacity: parsed.houseCapacity,
+      runningTime: parsed.runningTime,
+      playingTime: parsed.playingTime,
+      notes: parsed.notes,
+      emailSubject: file.name,
+      rawPdf: base64,
+      productionMatched: true,
+      createdByUserId: (session.user as any)?.id ?? null,
+    },
+  });
+
+  return NextResponse.json({ reportId: report.id, parsed });
 }

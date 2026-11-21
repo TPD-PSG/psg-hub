@@ -123,8 +123,16 @@ function matchProduction(subject: string, productions: { id: number; name: strin
   const s = subject.toLowerCase();
   // Sort longest name first to prefer more specific matches
   const sorted = [...productions].sort((a, b) => b.name.length - a.name.length);
+  // First pass: exact full name match
   for (const p of sorted) {
     if (s.includes(p.name.toLowerCase())) return p.id;
+  }
+  // Second pass: try each part split on " - " or " – " (e.g. "Curious Incident - UK Tour" → try "Curious Incident")
+  for (const p of sorted) {
+    const parts = p.name.split(/\s[–-]\s/);
+    for (const part of parts) {
+      if (part.length >= 5 && s.includes(part.toLowerCase())) return p.id;
+    }
   }
   return null;
 }

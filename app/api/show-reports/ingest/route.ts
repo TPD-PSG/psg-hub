@@ -250,7 +250,10 @@ export async function POST(req: NextRequest) {
     if (!attRes.ok) { results.push({ subject: msg.subject, status: "attachment_error" }); continue; }
     const { value: attachments } = await attRes.json();
 
-    const pdf = attachments?.find((a: any) => a.contentType === "application/pdf");
+    const pdf = attachments?.find((a: any) =>
+      a.contentType === "application/pdf" ||
+      a.contentType === "application/octet-stream" && (a.name as string)?.toLowerCase().endsWith(".pdf")
+    );
     if (!pdf) {
       results.push({ subject: msg.subject, status: "skipped_no_pdf" });
       continue;

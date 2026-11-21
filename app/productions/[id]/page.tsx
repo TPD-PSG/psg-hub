@@ -3731,7 +3731,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   if (!res.ok) throw new Error(data.error ?? "Failed");
                   const imported = data.results?.filter((r: any) => r.status.startsWith("imported")).length ?? 0;
                   const skipped = data.results?.filter((r: any) => r.status === "already_imported").length ?? 0;
-                  alert(`Done. ${imported} imported, ${skipped} already in system.`);
+                  const noPdf = data.results?.filter((r: any) => r.status === "skipped_no_pdf" || r.status === "skipped_no_attachment").length ?? 0;
+                  const errors = data.results?.filter((r: any) => r.status.includes("error")).length ?? 0;
+                  const lines = [`Done. ${data.processed} email(s) checked.`, `✓ ${imported} imported`, skipped ? `· ${skipped} already in system` : "", noPdf ? `· ${noPdf} had no PDF` : "", errors ? `· ${errors} errors` : ""].filter(Boolean);
+                  alert(lines.join("\n"));
                   const refreshed = await fetch(`/api/productions/${prod.id}/show-reports`);
                   if (refreshed.ok) setShowReports(await refreshed.json());
                 } catch (e: any) { alert("Import error: " + e.message); }

@@ -3723,12 +3723,15 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             </div>
             <div className="flex gap-2">
               <button onClick={async () => {
+                const backfill = confirm("Import all historical emails (including already-read ones)?\n\nOK = backfill all\nCancel = new unread only");
                 try {
-                  const res = await fetch("/api/show-reports/ingest", { method: "POST" });
+                  const url = `/api/show-reports/ingest${backfill ? "?backfill=true" : ""}`;
+                  const res = await fetch(url, { method: "POST" });
                   const data = await res.json();
                   if (!res.ok) throw new Error(data.error ?? "Failed");
                   const imported = data.results?.filter((r: any) => r.status.startsWith("imported")).length ?? 0;
-                  alert(`Done. ${imported} report(s) imported from inbox.`);
+                  const skipped = data.results?.filter((r: any) => r.status === "already_imported").length ?? 0;
+                  alert(`Done. ${imported} imported, ${skipped} already in system.`);
                   const refreshed = await fetch(`/api/productions/${prod.id}/show-reports`);
                   if (refreshed.ok) setShowReports(await refreshed.json());
                 } catch (e: any) { alert("Import error: " + e.message); }

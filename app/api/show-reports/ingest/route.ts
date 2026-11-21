@@ -129,8 +129,40 @@ function matchProduction(subject: string, productions: { id: number; name: strin
   return null;
 }
 
+async function fetchAllMessages(token: string, url: string): Promise<any[]> {
+  const all: any[] = [];
+  let next: string | null = url;
+  while (next && all.length < 500) {
+    const res: Response = await fetch(next, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) break;
+    const data: any = await res.json();
+    all.push(...(data.value ?? []));
+    next = data["@odata.nextLink"] ?? null;
+  }
+  return all;
+}
+
+async function getOrCreateProcessedFolder(token: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders?$filter=displayName eq 'Processed'`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const { value: folders } = await res.json();
+    if (folders?.[0]?.id) return folders[0].id;
+    const createRes = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: "Processed" }),
+      }
+    );
+    return (await createRes.json()).id ?? null;
+  } catch { return null; }
+}
+
 export async function POST(req: NextRequest) {
-  // Allow both authenticated users (manual trigger) and internal cron calls
   const session = await auth();
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("x-cron-secret");
@@ -143,35 +175,74 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Microsoft Graph not configured" }, { status: 503 });
   }
 
+  const url = new URL(req.url);
+  const backfill = url.searchParams.get("backfill") === "true";
+
   const token = await getGraphToken();
   const productions = await prisma.production.findMany({ select: { id: true, name: true }, where: { archived: false } });
 
-  // Fetch unread emails in inbox
-  const msgsRes = await fetch(
-    `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders/inbox/messages?$filter=isRead eq false&$top=20&$select=id,subject,from,receivedDateTime,hasAttachments`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  if (!msgsRes.ok) {
-    const err = await msgsRes.text();
-    return NextResponse.json({ error: `Graph messages error: ${err}` }, { status: 502 });
-  }
-  const { value: messages } = await msgsRes.json();
+  // Build already-imported set to avoid duplicates (by emailSubject + emailFrom)
+  const existing = await prisma.showReport.findMany({
+    where: { emailSubject: { not: null } },
+    select: { emailSubject: true, emailFrom: true },
+  });
+  const importedKeys = new Set(existing.map(r => `${r.emailSubject}||${r.emailFrom}`));
 
+  // Collect messages to process
+  let messages: any[] = [];
+  const fields = "$select=id,subject,from,receivedDateTime,hasAttachments";
+
+  if (backfill) {
+    // Search inbox + Processed folder for all messages with attachments
+    const [inboxMsgs, processedFolderRes] = await Promise.all([
+      fetchAllMessages(token, `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders/inbox/messages?${fields}&$top=50`),
+      fetch(`https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders?$filter=displayName eq 'Processed'`, { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    messages.push(...inboxMsgs);
+    if (processedFolderRes.ok) {
+      const { value: folders } = await processedFolderRes.json();
+      if (folders?.[0]?.id) {
+        const processedMsgs = await fetchAllMessages(token,
+          `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders/${folders[0].id}/messages?${fields}&$top=50`
+        );
+        messages.push(...processedMsgs);
+      }
+    }
+  } else {
+    // Normal mode: only unread inbox messages
+    const msgsRes = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders/inbox/messages?$filter=isRead eq false&$top=20&${fields}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!msgsRes.ok) {
+      return NextResponse.json({ error: `Graph messages error: ${await msgsRes.text()}` }, { status: 502 });
+    }
+    messages = (await msgsRes.json()).value ?? [];
+  }
+
+  const processedFolderId = await getOrCreateProcessedFolder(token);
   const results: { subject: string; status: string; reportId?: number; production?: string }[] = [];
 
-  for (const msg of messages ?? []) {
+  for (const msg of messages) {
+    const dedupKey = `${msg.subject}||${msg.from?.emailAddress?.address ?? ""}`;
+
+    if (importedKeys.has(dedupKey)) {
+      results.push({ subject: msg.subject, status: "already_imported" });
+      continue;
+    }
+
     if (!msg.hasAttachments) {
-      // Mark as read and move on — no PDF to process
-      await fetch(`https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ isRead: true }),
-      });
+      if (!backfill) {
+        await fetch(`https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ isRead: true }),
+        });
+      }
       results.push({ subject: msg.subject, status: "skipped_no_attachment" });
       continue;
     }
 
-    // Fetch attachments
     const attRes = await fetch(
       `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}/attachments?$select=id,name,contentType,contentBytes`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -182,31 +253,23 @@ export async function POST(req: NextRequest) {
     const pdf = attachments?.find((a: any) => a.contentType === "application/pdf");
     if (!pdf) {
       results.push({ subject: msg.subject, status: "skipped_no_pdf" });
-      await fetch(`https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ isRead: true }),
-      });
       continue;
     }
 
-    // Match to a production
     const productionId = matchProduction(msg.subject, productions);
     const production = productions.find(p => p.id === productionId);
 
-    // Parse PDF with Claude
     let parsed;
     try {
       parsed = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
-    } catch (e) {
+    } catch {
       results.push({ subject: msg.subject, status: "parse_error" });
       continue;
     }
 
-    // Create show report (productionId 0 for unmatched — FK constraint: use null-safe approach)
     const report = await prisma.showReport.create({
       data: {
-        productionId: productionId ?? 1, // fallback to first production if unmatched; flag via productionMatched
+        productionId: productionId ?? 1,
         reportDate: parsed.reportDate ? new Date(parsed.reportDate) : new Date(msg.receivedDateTime),
         venue: parsed.venue,
         performance: parsed.performance,
@@ -223,35 +286,19 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Move email to Processed folder (create if needed)
-    try {
-      // Find or create "Processed" folder
-      const foldersRes = await fetch(
-        `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders?$filter=displayName eq 'Processed'`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const { value: folders } = await foldersRes.json();
-      let folderId = folders?.[0]?.id;
-      if (!folderId) {
-        const createRes = await fetch(
-          `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/mailFolders`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ displayName: "Processed" }),
-          }
-        );
-        folderId = (await createRes.json()).id;
-      }
-      await fetch(
-        `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}/move`,
-        {
+    // Add to dedup set so we don't re-import within the same run
+    importedKeys.add(dedupKey);
+
+    // Move to Processed folder (non-fatal)
+    if (processedFolderId) {
+      try {
+        await fetch(`https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}/move`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ destinationId: folderId }),
-        }
-      );
-    } catch { /* non-fatal */ }
+          body: JSON.stringify({ destinationId: processedFolderId }),
+        });
+      } catch { /* non-fatal */ }
+    }
 
     results.push({
       subject: msg.subject,

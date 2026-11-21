@@ -285,7 +285,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [logoUploading, setLogoUploading] = useState(false);
 
   // Show Reports
-  type ShowReport = { id: number; reportDate: string; venue: string | null; performance: string | null; attendance: number | null; notes: string | null; createdByUser: { id: number; name: string } | null };
+  type ShowReport = { id: number; reportDate: string; venue: string | null; performance: string | null; performanceNumber: number | null; attendance: number | null; houseCapacity: number | null; runningTime: string | null; playingTime: string | null; notes: string | null; emailSubject: string | null; productionMatched: boolean; createdByUser: { id: number; name: string } | null };
   const [showReports, setShowReports] = useState<ShowReport[]>([]);
   const [showReportForm, setShowReportForm] = useState(false);
   const [editReport, setEditReport] = useState<ShowReport | null>(null);
@@ -3721,9 +3721,25 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Reports sent to: {prod.reportEmail}</p>
               )}
             </div>
-            <button onClick={() => { setEditReport(null); setReportForm(BLANK_REPORT); setShowReportForm(true); }}
-              className="text-sm px-3 py-1.5 rounded font-medium text-white hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Report</button>
+            <div className="flex gap-2">
+              <button onClick={async () => {
+                try {
+                  const res = await fetch("/api/show-reports/ingest", { method: "POST" });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error ?? "Failed");
+                  const imported = data.results?.filter((r: any) => r.status.startsWith("imported")).length ?? 0;
+                  alert(`Done. ${imported} report(s) imported from inbox.`);
+                  const refreshed = await fetch(`/api/productions/${prod.id}/show-reports`);
+                  if (refreshed.ok) setShowReports(await refreshed.json());
+                } catch (e: any) { alert("Import error: " + e.message); }
+              }} className="text-sm px-3 py-1.5 rounded font-medium hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: "rgba(59,130,246,0.15)", color: "var(--psg-blue)", border: "1px solid rgba(59,130,246,0.3)" }}>
+                Import from Email
+              </button>
+              <button onClick={() => { setEditReport(null); setReportForm(BLANK_REPORT); setShowReportForm(true); }}
+                className="text-sm px-3 py-1.5 rounded font-medium text-white hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Report</button>
+            </div>
           </div>
 
           {showReportForm && (
@@ -3756,11 +3772,19 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-white text-sm">{fmtDate(r.reportDate)}</span>
+                        {r.performanceNumber != null && <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(59,130,246,0.15)", color: "var(--psg-blue)" }}>#{r.performanceNumber}</span>}
                         {r.performance && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{r.performance}</span>}
                         {r.venue && <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>{r.venue}</span>}
-                        {r.attendance != null && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Attendance: {r.attendance.toLocaleString()}</span>}
+                        {r.attendance != null && (
+                          <span className="text-xs" style={{ color: "var(--psg-muted)" }}>
+                            {r.attendance.toLocaleString()}{r.houseCapacity ? ` / ${r.houseCapacity.toLocaleString()} (${Math.round(r.attendance / r.houseCapacity * 100)}%)` : ""} capacity
+                          </span>
+                        )}
+                        {r.runningTime && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Running: {r.runningTime}</span>}
+                        {!r.productionMatched && <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>Unmatched</span>}
                       </div>
                       {r.notes && <p className="text-sm mt-1 whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{r.notes}</p>}
+                      {r.emailSubject && <p className="text-xs mt-1 italic" style={{ color: "var(--psg-muted)", opacity: 0.5 }}>via email: {r.emailSubject}</p>}
                       {r.createdByUser && <p className="text-xs mt-1" style={{ color: "var(--psg-muted)", opacity: 0.6 }}>by {r.createdByUser.name}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">

@@ -141,18 +141,26 @@ model ProductionDocument {
 }
 
 model ShowReport {
-  id           Int        @id @default(autoincrement())
-  productionId Int
-  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  reportDate   DateTime
-  venue        String?
-  performance  String?    // e.g. "Evening - 7:30pm"
-  attendance   Int?
-  notes        String?
-  createdByUserId Int?
-  createdByUser   User?   @relation("ShowReportCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id               Int        @id @default(autoincrement())
+  productionId     Int
+  production       Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  reportDate       DateTime
+  venue            String?
+  performance      String?    // e.g. "Evening – 7:30pm"
+  performanceNumber Int?      // show number e.g. 81
+  attendance       Int?
+  houseCapacity    Int?
+  runningTime      String?    // e.g. "2:24"
+  playingTime      String?    // e.g. "2:03"
+  notes            String?    // structured summary from Claude
+  emailSubject     String?
+  emailFrom        String?
+  productionMatched Boolean   @default(true)
+  rawPdf           String?    // base64 of original PDF
+  createdByUserId  Int?
+  createdByUser    User?      @relation("ShowReportCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 }
 
 

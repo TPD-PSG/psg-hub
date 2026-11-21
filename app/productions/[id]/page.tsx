@@ -3847,6 +3847,34 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 style={{ backgroundColor: "rgba(59,130,246,0.15)", color: "var(--psg-blue)", border: "1px solid rgba(59,130,246,0.3)" }}>
                 {importingReports ? "Importing…" : "Import from Email"}
               </button>
+              <button onClick={async () => {
+                setImportingReports(true);
+                setImportStatus("Re-parsing incomplete records…");
+                let total = 0;
+                try {
+                  while (true) {
+                    const res = await fetch("/api/show-reports/reparse", { method: "POST" });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error ?? "Failed");
+                    total += data.reparsed ?? 0;
+                    setImportStatus(`Re-parsed ${total} so far… (${data.remaining} remaining)`);
+                    if (!data.remaining || data.remaining === 0) break;
+                  }
+                  const refreshed = await fetch(`/api/productions/${prod.id}/show-reports`);
+                  if (refreshed.ok) setShowReports(await refreshed.json());
+                  setImportStatus(`✓ Done — ${total} record(s) updated`);
+                  setTimeout(() => setImportStatus(null), 5000);
+                } catch (e: any) {
+                  setImportStatus(`Error: ${e.message}`);
+                  setTimeout(() => setImportStatus(null), 8000);
+                } finally {
+                  setImportingReports(false);
+                }
+              }} disabled={importingReports}
+                className="text-sm px-3 py-1.5 rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: "rgba(234,179,8,0.15)", color: "#b45309", border: "1px solid rgba(234,179,8,0.3)" }}>
+                Re-parse Empty
+              </button>
               <button onClick={() => { setEditReport(null); setReportForm(BLANK_REPORT); setShowReportForm(true); }}
                 className="text-sm px-3 py-1.5 rounded font-medium text-white hover:opacity-90 transition-opacity"
                 style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Report</button>

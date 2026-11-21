@@ -153,6 +153,7 @@ model ShowReport {
   runningTime      String?    // e.g. "2:24"
   playingTime      String?    // e.g. "2:03"
   notes            String?    // structured summary from Claude
+  flags            String?    // JSON array of flagged section headings e.g. ["Technical – Sound","H&S"]
   emailSubject     String?
   emailFrom        String?
   productionMatched Boolean   @default(true)

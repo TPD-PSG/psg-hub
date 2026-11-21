@@ -285,7 +285,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [logoUploading, setLogoUploading] = useState(false);
 
   // Show Reports
-  type ShowReport = { id: number; reportDate: string; venue: string | null; performance: string | null; performanceNumber: number | null; attendance: number | null; houseCapacity: number | null; runningTime: string | null; playingTime: string | null; notes: string | null; emailSubject: string | null; productionMatched: boolean; createdByUser: { id: number; name: string } | null };
+  type ShowReport = { id: number; reportDate: string; venue: string | null; performance: string | null; performanceNumber: number | null; attendance: number | null; houseCapacity: number | null; runningTime: string | null; playingTime: string | null; notes: string | null; flags: string | null; emailSubject: string | null; productionMatched: boolean; createdByUser: { id: number; name: string } | null };
   const [showReports, setShowReports] = useState<ShowReport[]>([]);
   const [showReportForm, setShowReportForm] = useState(false);
   const [editReport, setEditReport] = useState<ShowReport | null>(null);
@@ -501,39 +501,52 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     reloadReports();
   }
 
-  function getNotesFlags(notes: string): string[] {
-    const flagSections = ["Health & Safety / Incidents", "Maintenance", "Covers & Absences"];
-    const flags: string[] = [];
-    const sections = ('\n' + notes).split(/\n+(?=\*\*[^*]+\*\*)/).filter(Boolean);
-    for (const s of sections) {
-      const m = s.match(/^\*\*([^*]+)\*\*/);
-      if (!m) continue;
-      const heading = m[1].trim();
-      if (!flagSections.includes(heading)) continue;
-      const body = s.replace(/^\*\*[^*]+\*\*\n?/, '').trim();
-      if (body && body.toLowerCase() !== "no notes." && body.toLowerCase() !== "none.") {
-        flags.push(heading);
-      }
-    }
-    return flags;
+  function parseFlags(r: ShowReport): string[] {
+    try { return r.flags ? JSON.parse(r.flags) : []; } catch { return []; }
   }
 
-  function renderReportNotes(notes: string) {
+  async function toggleFlag(r: ShowReport, heading: string) {
+    const current = parseFlags(r);
+    const next = current.includes(heading) ? current.filter(f => f !== heading) : [...current, heading];
+    const res = await fetch(`/api/show-reports/${r.id}/flags`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flags: next }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setShowReports(prev => prev.map(x => x.id === r.id ? { ...x, flags: JSON.stringify(updated.flags) } : x));
+    }
+  }
+
+  function renderReportNotes(report: ShowReport) {
+    if (!report.notes) return null;
+    const flagged = parseFlags(report);
     // Prepend \n so the first heading is caught by the same \n+ lookahead as the rest
-    const sections = ('\n' + notes).split(/\n+(?=\*\*[^*]+\*\*)/).filter(Boolean);
+    const sections = ('\n' + report.notes).split(/\n+(?=\*\*[^*]+\*\*)/).filter(Boolean);
     return (
       <div className="mt-2 space-y-2">
         {sections.map((section, i) => {
           const m = section.match(/^\*\*([^*]+)\*\*\n?([\s\S]*)/);
           if (!m) return <p key={i} className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{section.trim()}</p>;
           const [, heading, body] = m;
-          const isTimings = heading.trim() === "Timings";
-          // Claude sometimes emits a standalone ** separator line after the heading — strip it
+          const h = heading.trim();
+          const isTimings = h === "Timings";
+          const isFlagged = flagged.includes(h);
           const cleanBody = body.replace(/^\*\*\s*\n+/, '').trim();
           if (!cleanBody) return null;
           return (
-            <div key={i} className="rounded p-2.5" style={{ backgroundColor: isTimings ? "rgba(59,130,246,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${isTimings ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)"}` }}>
-              <p className="text-xs font-semibold mb-1" style={{ color: isTimings ? "var(--psg-blue)" : "rgba(255,255,255,0.5)" }}>{heading.trim()}</p>
+            <div key={i} className="rounded p-2.5" style={{ backgroundColor: isTimings ? "rgba(59,130,246,0.07)" : isFlagged ? "rgba(251,191,36,0.06)" : "rgba(255,255,255,0.03)", border: `1px solid ${isTimings ? "rgba(59,130,246,0.2)" : isFlagged ? "rgba(251,191,36,0.25)" : "rgba(255,255,255,0.06)"}` }}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-xs font-semibold" style={{ color: isTimings ? "var(--psg-blue)" : isFlagged ? "#fbbf24" : "rgba(255,255,255,0.5)" }}>{h}</p>
+                {!isTimings && (
+                  <button onClick={() => toggleFlag(report, h)} title={isFlagged ? "Remove flag" : "Flag this section"}
+                    className="text-xs px-1 rounded transition-colors leading-none"
+                    style={{ color: isFlagged ? "#fbbf24" : "rgba(255,255,255,0.2)", backgroundColor: "transparent" }}>
+                    {isFlagged ? "⚑" : "⚐"}
+                  </button>
+                )}
+              </div>
               <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{cleanBody}</p>
             </div>
           );
@@ -3899,7 +3912,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="rounded-lg border divide-y overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
               {showReports.map(r => {
                 const isExpanded = expandedReports.has(r.id);
-                const flags = r.notes ? getNotesFlags(r.notes) : [];
+                const flags = parseFlags(r);
                 return (
                   <div key={r.id}>
                     {/* Collapsed header — always visible */}
@@ -3942,7 +3955,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     {/* Expanded notes */}
                     {isExpanded && (
                       <div className="px-4 pb-4 pt-1 border-t" style={{ borderColor: "var(--psg-card-border)" }}>
-                        {r.notes && renderReportNotes(r.notes)}
+                        {renderReportNotes(r)}
                         {r.emailSubject && <p className="text-xs mt-2 italic" style={{ color: "var(--psg-muted)", opacity: 0.5 }}>via email: {r.emailSubject}</p>}
                         {r.createdByUser && <p className="text-xs mt-1" style={{ color: "var(--psg-muted)", opacity: 0.6 }}>by {r.createdByUser.name}</p>}
                       </div>

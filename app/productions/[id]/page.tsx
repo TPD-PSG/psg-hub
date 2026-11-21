@@ -500,6 +500,26 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
     reloadReports();
   }
 
+  function renderReportNotes(notes: string) {
+    const sections = notes.split(/(?=\*\*[^*]+\*\*)/).filter(Boolean);
+    return (
+      <div className="mt-2 space-y-2">
+        {sections.map((section, i) => {
+          const m = section.match(/^\*\*([^*]+)\*\*\n?([\s\S]*)/);
+          if (!m) return <p key={i} className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{section.trim()}</p>;
+          const [, heading, body] = m;
+          const isTimings = heading.trim() === "Timings";
+          return (
+            <div key={i} className="rounded p-2.5" style={{ backgroundColor: isTimings ? "rgba(59,130,246,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${isTimings ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)"}` }}>
+              <p className="text-xs font-semibold mb-1" style={{ color: isTimings ? "var(--psg-blue)" : "rgba(255,255,255,0.5)" }}>{heading.trim()}</p>
+              <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{body.trim()}</p>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   async function uploadReportPdfs(files: File[]) {
     const pdfs = files.filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
     if (!pdfs.length) { setPdfUploadStatus("No PDF files found."); setTimeout(() => setPdfUploadStatus(null), 4000); return; }
@@ -3873,26 +3893,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         {r.playingTime && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Playing: {r.playingTime}</span>}
                         {!r.productionMatched && <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>Unmatched</span>}
                       </div>
-                      {r.notes && (() => {
-                        // Split notes into sections by **Heading** and render each distinctly
-                        const sections = r.notes.split(/(?=\*\*[^*]+\*\*)/).filter(Boolean);
-                        return (
-                          <div className="mt-2 space-y-2">
-                            {sections.map((section, i) => {
-                              const headingMatch = section.match(/^\*\*([^*]+)\*\*\n?([\s\S]*)/);
-                              if (!headingMatch) return <p key={i} className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{section.trim()}</p>;
-                              const [, heading, body] = headingMatch;
-                              const isTimings = heading.trim() === "Timings";
-                              return (
-                                <div key={i} className="rounded p-2.5" style={{ backgroundColor: isTimings ? "rgba(59,130,246,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${isTimings ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)"}` }}>
-                                  <p className="text-xs font-semibold mb-1" style={{ color: isTimings ? "var(--psg-blue)" : "var(--psg-muted)" }}>{heading.trim()}</p>
-                                  <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{body.trim()}</p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
+                      {r.notes && renderReportNotes(r.notes)}
                       {r.emailSubject && <p className="text-xs mt-1 italic" style={{ color: "var(--psg-muted)", opacity: 0.5 }}>via email: {r.emailSubject}</p>}
                       {r.createdByUser && <p className="text-xs mt-1" style={{ color: "var(--psg-muted)", opacity: 0.6 }}>by {r.createdByUser.name}</p>}
                     </div>

@@ -3765,7 +3765,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
           {showReports.length === 0 && !showReportForm ? (
             <div className="py-12 text-center rounded-lg border" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
-              No show reports yet.{prod.reportEmail ? "" : " Add a report email in Edit Production to set a distribution address."}
+              No show reports yet.{prod.reportEmail ? "" : " Reports sent to reports@production-solutions.group will be imported automatically."}
             </div>
           ) : (
             <div className="rounded-lg border divide-y overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>

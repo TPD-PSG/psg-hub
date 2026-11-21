@@ -256,6 +256,16 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // During backfill, skip early if subject doesn't match any known production
+    // (avoids burning the PDF-processing budget on unrelated shows)
+    if (backfill) {
+      const earlyMatch = matchProduction(msg.subject, productions);
+      if (!earlyMatch) {
+        results.push({ subject: msg.subject, status: "skipped_no_match" });
+        continue;
+      }
+    }
+
     if (!msg.hasAttachments) {
       if (!backfill) {
         await fetch(`https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}`, {

@@ -231,6 +231,8 @@ export async function POST(req: NextRequest) {
 
   const processedFolderId = await getOrCreateProcessedFolder(token);
   const results: { subject: string; status: string; reportId?: number; production?: string }[] = [];
+  const MAX_PER_RUN = 10; // keep well within Railway's 60s timeout
+  let pdfProcessed = 0;
 
   for (const msg of messages) {
     const dedupKey = `${msg.subject}||${msg.from?.emailAddress?.address ?? ""}`;
@@ -286,6 +288,12 @@ export async function POST(req: NextRequest) {
       contentBytes: Buffer.from(pdfBuffer).toString("base64"),
       name: pdfMeta.name,
     };
+
+    if (pdfProcessed >= MAX_PER_RUN) {
+      results.push({ subject: msg.subject, status: "deferred" });
+      continue;
+    }
+    pdfProcessed++;
 
     const productionId = matchProduction(msg.subject, productions);
     const production = productions.find(p => p.id === productionId);

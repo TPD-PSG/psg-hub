@@ -289,6 +289,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [showReports, setShowReports] = useState<ShowReport[]>([]);
   const [showReportForm, setShowReportForm] = useState(false);
   const [editReport, setEditReport] = useState<ShowReport | null>(null);
+  const [importingReports, setImportingReports] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
   const BLANK_REPORT = { reportDate: "", venue: "", performance: "", attendance: "", notes: "" };
   const [reportForm, setReportForm] = useState(BLANK_REPORT);
 
@@ -3724,29 +3726,51 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="flex gap-2">
               <button onClick={async () => {
                 const backfill = confirm("Import all historical emails (including already-read ones)?\n\nOK = backfill all\nCancel = new unread only");
+                setImportingReports(true);
+                setImportStatus(backfill ? "Checking inbox & Processed folder…" : "Checking inbox for new reports…");
+                let totalImported = 0;
+                let batch = 0;
                 try {
-                  const url = `/api/show-reports/ingest${backfill ? "?backfill=true" : ""}`;
-                  const res = await fetch(url, { method: "POST" });
-                  const data = await res.json();
-                  if (!res.ok) throw new Error(data.error ?? "Failed");
-                  const imported = data.results?.filter((r: any) => r.status.startsWith("imported")).length ?? 0;
-                  const skipped = data.results?.filter((r: any) => r.status === "already_imported").length ?? 0;
-                  const noPdf = data.results?.filter((r: any) => r.status === "skipped_no_pdf" || r.status === "skipped_no_attachment").length ?? 0;
-                  const errors = data.results?.filter((r: any) => r.status.includes("error")).length ?? 0;
-                  const lines = [`Done. ${data.processed} email(s) checked.`, `✓ ${imported} imported`, skipped ? `· ${skipped} already in system` : "", noPdf ? `· ${noPdf} had no PDF` : "", errors ? `· ${errors} errors` : "", ...(data.graphErrors ?? []).map((e: string) => `⚠ ${e}`)].filter(Boolean);
-                  alert(lines.join("\n"));
+                  while (true) {
+                    batch++;
+                    setImportStatus(`Batch ${batch}: parsing PDFs with AI…`);
+                    const url = `/api/show-reports/ingest${backfill ? "?backfill=true" : ""}`;
+                    const res = await fetch(url, { method: "POST" });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error ?? "Failed");
+                    const imported = data.results?.filter((r: any) => r.status.startsWith("imported")).length ?? 0;
+                    totalImported += imported;
+                    setImportStatus(`Batch ${batch} done — ${totalImported} imported so far…`);
+                    // If nothing new was imported this batch, we're done
+                    if (imported === 0 || !backfill) break;
+                  }
                   const refreshed = await fetch(`/api/productions/${prod.id}/show-reports`);
                   if (refreshed.ok) setShowReports(await refreshed.json());
-                } catch (e: any) { alert("Import error: " + e.message); }
-              }} className="text-sm px-3 py-1.5 rounded font-medium hover:opacity-90 transition-opacity"
+                  setImportStatus(`✓ Done — ${totalImported} report(s) imported`);
+                  setTimeout(() => setImportStatus(null), 5000);
+                } catch (e: any) {
+                  setImportStatus(`Error: ${e.message}`);
+                  setTimeout(() => setImportStatus(null), 8000);
+                } finally {
+                  setImportingReports(false);
+                }
+              }} disabled={importingReports}
+                className="text-sm px-3 py-1.5 rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: "rgba(59,130,246,0.15)", color: "var(--psg-blue)", border: "1px solid rgba(59,130,246,0.3)" }}>
-                Import from Email
+                {importingReports ? "Importing…" : "Import from Email"}
               </button>
               <button onClick={() => { setEditReport(null); setReportForm(BLANK_REPORT); setShowReportForm(true); }}
                 className="text-sm px-3 py-1.5 rounded font-medium text-white hover:opacity-90 transition-opacity"
                 style={{ backgroundColor: "var(--psg-blue)" }}>+ Add Report</button>
             </div>
           </div>
+
+          {importStatus && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded text-sm" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)", border: "1px solid rgba(59,130,246,0.2)" }}>
+              {importingReports && <span className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />}
+              {importStatus}
+            </div>
+          )}
 
           {showReportForm && (
             <div className="rounded-lg border p-4 space-y-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-blue)" }}>

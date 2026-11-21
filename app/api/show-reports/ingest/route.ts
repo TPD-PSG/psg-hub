@@ -27,7 +27,7 @@ async function getGraphToken(): Promise<string> {
   return access_token;
 }
 
-async function parsePdfWithClaude(base64: string, subject: string): Promise<{
+type ParsedReport = {
   reportDate: string | null;
   venue: string | null;
   performance: string | null;
@@ -37,11 +37,18 @@ async function parsePdfWithClaude(base64: string, subject: string): Promise<{
   runningTime: string | null;
   playingTime: string | null;
   notes: string | null;
-}> {
+};
+
+const EMPTY_REPORT: ParsedReport = {
+  reportDate: null, venue: null, performance: null, performanceNumber: null,
+  attendance: null, houseCapacity: null, runningTime: null, playingTime: null, notes: null,
+};
+
+async function parsePdfWithClaude(base64: string, subject: string): Promise<ParsedReport[]> {
   const client = new Anthropic();
   const message = await client.messages.create({
     model: "claude-sonnet-5-5",
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [
       {
         role: "user",
@@ -52,7 +59,7 @@ async function parsePdfWithClaude(base64: string, subject: string): Promise<{
           } as any,
           {
             type: "text",
-            text: `This is a show report from a theatre production team. The email subject was: "${subject}".
+            text: `This is a show report (or combined show reports) from a theatre production team. The email subject was: "${subject}".
 
 These reports are produced by stage managers after each performance. They follow a consistent structure including:
 - Date, venue, performance number, show time (e.g. "Evening", "Matinee", "7:30pm Evening")
@@ -61,20 +68,24 @@ These reports are produced by stage managers after each performance. They follow
 - Staff on duty
 - Categorised notes: General, Sound, Lighting/LX, Video, Costume, Movement, SM Notes, Health & Safety, Audience Reactions, Maintenance, Injury/Illness, Cast/staff absent with covers
 
-Extract the following fields and return ONLY valid JSON (no markdown, no explanation):
-{
-  "reportDate": "YYYY-MM-DD or null",
-  "venue": "venue name only (not address) or null",
-  "performance": "performance slot e.g. 'Evening – 7:30pm' or 'Matinee – 2:30pm' or null",
-  "performanceNumber": number (the show/performance number e.g. 81, 56, 68) or null,
-  "attendance": number (house number / audience count) or null,
-  "houseCapacity": number (total capacity of the venue) or null,
-  "runningTime": "total running time including interval e.g. '2:24' or null",
-  "playingTime": "total playing time excluding interval e.g. '2:03' or null",
-  "notes": "structured summary — see format below"
-}
+IMPORTANT: This PDF may contain multiple show reports (e.g. a matinee and an evening performance). Extract EACH report as a separate object.
 
-For the notes field, produce a well-structured markdown summary. Use EXACTLY this format — each section heading on its own line followed immediately by the content (no blank lines or separator lines between the heading and content):
+Return ONLY a valid JSON array (no markdown, no explanation). Each element represents one performance:
+[
+  {
+    "reportDate": "YYYY-MM-DD or null",
+    "venue": "venue name only (not address) or null",
+    "performance": "performance slot e.g. 'Evening – 7:30pm' or 'Matinee – 2:30pm' or null",
+    "performanceNumber": number (the show/performance number e.g. 81, 56, 68) or null,
+    "attendance": number (house number / audience count) or null,
+    "houseCapacity": number (total capacity of the venue) or null,
+    "runningTime": "total running time including interval e.g. '2:24' or null",
+    "playingTime": "total playing time excluding interval e.g. '2:03' or null",
+    "notes": "structured summary — see format below"
+  }
+]
+
+For the notes field of each report, produce a well-structured markdown summary. Use EXACTLY this format — each section heading on its own line followed immediately by the content (no blank lines or separator lines between the heading and content):
 
 **Timings**
 House open: HH:MM  FOH clearance: HH:MM
@@ -115,13 +126,12 @@ Omit sections with no content. Include specific cue numbers and scene references
 
   const text = ((message.content[0] as any).text ?? "").trim();
   try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.length > 0 ? parsed : [EMPTY_REPORT];
+    // Single object returned — wrap it
+    return [parsed];
   } catch {
-    return {
-      reportDate: null, venue: null, performance: null, performanceNumber: null,
-      attendance: null, houseCapacity: null, runningTime: null, playingTime: null,
-      notes: text || null,
-    };
+    return [{ ...EMPTY_REPORT, notes: text || null }];
   }
 }
 
@@ -326,32 +336,35 @@ export async function POST(req: NextRequest) {
     }
     const production = productions.find(p => p.id === productionId);
 
-    let parsed;
+    let parsedReports: ParsedReport[];
     try {
-      parsed = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
+      parsedReports = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
     } catch {
       results.push({ subject: msg.subject, status: "parse_error" });
       continue;
     }
 
-    const report = await prisma.showReport.create({
-      data: {
-        productionId: productionId,
-        reportDate: parsed.reportDate ? new Date(parsed.reportDate) : new Date(msg.receivedDateTime),
-        venue: parsed.venue,
-        performance: parsed.performance,
-        performanceNumber: parsed.performanceNumber,
-        attendance: parsed.attendance,
-        houseCapacity: parsed.houseCapacity,
-        runningTime: parsed.runningTime,
-        playingTime: parsed.playingTime,
-        notes: parsed.notes,
-        emailSubject: msg.subject,
-        emailFrom: msg.from?.emailAddress?.address ?? null,
-        rawPdf: pdf.contentBytes,
-        productionMatched: productionId !== null,
-      },
-    });
+    // Create one DB record per report found in the PDF
+    for (const parsed of parsedReports) {
+      await prisma.showReport.create({
+        data: {
+          productionId: productionId,
+          reportDate: parsed.reportDate ? new Date(parsed.reportDate) : new Date(msg.receivedDateTime),
+          venue: parsed.venue,
+          performance: parsed.performance,
+          performanceNumber: parsed.performanceNumber,
+          attendance: parsed.attendance,
+          houseCapacity: parsed.houseCapacity,
+          runningTime: parsed.runningTime,
+          playingTime: parsed.playingTime,
+          notes: parsed.notes,
+          emailSubject: msg.subject,
+          emailFrom: msg.from?.emailAddress?.address ?? null,
+          rawPdf: pdf.contentBytes,
+          productionMatched: productionId !== null,
+        },
+      });
+    }
 
     // Add to dedup set so we don't re-import within the same run
     importedKeys.add(dedupKey);
@@ -370,7 +383,6 @@ export async function POST(req: NextRequest) {
     results.push({
       subject: msg.subject,
       status: productionId ? "imported" : "imported_unmatched",
-      reportId: report.id,
       production: production?.name,
     });
   }

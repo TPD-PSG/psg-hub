@@ -3926,8 +3926,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     >
                       <span className="text-sm shrink-0" style={{ color: "var(--psg-muted)", marginTop: 1 }}>{isExpanded ? "▾" : "▸"}</span>
                       <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                        {r.performanceNumber != null && <span className="text-sm font-bold" style={{ color: "var(--psg-blue)", minWidth: "2.5rem" }}>#{r.performanceNumber}</span>}
                         <span className="font-medium text-white text-sm">{fmtDate(r.reportDate)}</span>
-                        {r.performanceNumber != null && <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(59,130,246,0.15)", color: "var(--psg-blue)" }}>#{r.performanceNumber}</span>}
                         {r.performance && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{r.performance}</span>}
                         {r.venue && <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>{r.venue}</span>}
                         {r.attendance != null && (

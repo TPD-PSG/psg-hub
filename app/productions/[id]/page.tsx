@@ -509,10 +509,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           if (!m) return <p key={i} className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{section.trim()}</p>;
           const [, heading, body] = m;
           const isTimings = heading.trim() === "Timings";
+          // Claude sometimes emits a standalone ** separator line after the heading — strip it
+          const cleanBody = body.replace(/^\*\*\s*\n+/, '').trim();
+          if (!cleanBody) return null;
           return (
             <div key={i} className="rounded p-2.5" style={{ backgroundColor: isTimings ? "rgba(59,130,246,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${isTimings ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)"}` }}>
               <p className="text-xs font-semibold mb-1" style={{ color: isTimings ? "var(--psg-blue)" : "rgba(255,255,255,0.5)" }}>{heading.trim()}</p>
-              <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{body.trim()}</p>
+              <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--psg-muted)" }}>{cleanBody}</p>
             </div>
           );
         })}

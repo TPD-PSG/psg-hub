@@ -53,14 +53,13 @@ Extract the following fields and return ONLY valid JSON (no markdown, no explana
   "notes": "structured summary — see format below"
 }
 
-For the notes field, produce a well-structured markdown summary. Use these sections in this order (omit sections with no content):
+For the notes field, produce a well-structured markdown summary. Use EXACTLY this format — each section heading on its own line followed immediately by the content (no blank lines or separator lines between the heading and content):
 
 **Timings**
 House open: HH:MM  FOH clearance: HH:MM
 Act 1: HH:MM – HH:MM (duration)
 Interval: HH:MM – HH:MM (duration)
 Act 2: HH:MM – HH:MM (duration)
-[include all acts/parts as labelled in the report]
 
 **General**
 [cast changes, covers, any general production notes — do NOT include timings here]
@@ -75,7 +74,7 @@ Act 2: HH:MM – HH:MM (duration)
 [video de-sync, automation issues]
 
 **Audience & House**
-[audience reactions, standing ovation, any audience incidents — not house numbers, those are in the structured fields]
+[audience reactions, standing ovation, any audience incidents]
 
 **Health & Safety / Incidents**
 [injuries, illnesses, audience medical incidents, show stops]
@@ -86,7 +85,7 @@ Act 2: HH:MM – HH:MM (duration)
 **Covers & Absences**
 [who was off, their role, who covered]
 
-Include specific cue numbers, scene references, and direct quotes where present. Be concise but complete.`,
+Omit sections with no content. Include specific cue numbers and scene references where present. Be concise but complete.`,
           },
         ],
       },

@@ -296,6 +296,10 @@ export async function POST(req: NextRequest) {
     pdfProcessed++;
 
     const productionId = matchProduction(msg.subject, productions);
+    if (!productionId) {
+      results.push({ subject: msg.subject, status: "skipped_no_match" });
+      continue;
+    }
     const production = productions.find(p => p.id === productionId);
 
     let parsed;
@@ -308,7 +312,7 @@ export async function POST(req: NextRequest) {
 
     const report = await prisma.showReport.create({
       data: {
-        productionId: productionId ?? 1,
+        productionId: productionId,
         reportDate: parsed.reportDate ? new Date(parsed.reportDate) : new Date(msg.receivedDateTime),
         venue: parsed.venue,
         performance: parsed.performance,

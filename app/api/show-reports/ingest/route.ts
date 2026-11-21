@@ -135,6 +135,55 @@ Omit sections with no content. Include specific cue numbers and scene references
   }
 }
 
+// Extract performance numbers from subjects like "Show Reports 55 and 56" or "Show Report #81"
+function parsePerformanceNumbers(subject: string): number[] {
+  const nums: number[] = [];
+  // "Reports 55 and 56" or "Reports 55 & 56"
+  const multi = subject.match(/reports?\s+(\d+)\s+(?:and|&)\s+(\d+)/i);
+  if (multi) return [parseInt(multi[1]), parseInt(multi[2])];
+  // "Report #81" or "Report 81"
+  const single = subject.match(/report\s+#?(\d+)/i);
+  if (single) nums.push(parseInt(single[1]));
+  return nums;
+}
+
+// Extract venue from end of subject: "28.10.2026 York" → "York"
+function parseVenueFromSubject(subject: string): string | null {
+  const m = subject.match(/\d{2}[./-]\d{2}[./-]\d{4}\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
+// Parse date formats like "28.10.2026"
+function parseDateFromSubject(subject: string): string | null {
+  const m = subject.match(/(\d{2})[./-](\d{2})[./-](\d{4})/);
+  if (!m) return null;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+// Fill in missing fields from the email subject when Claude returns nulls
+function applySubjectFallbacks(reports: ParsedReport[], subject: string): ParsedReport[] {
+  const nums = parsePerformanceNumbers(subject);
+  const venue = parseVenueFromSubject(subject);
+  const date = parseDateFromSubject(subject);
+
+  if (nums.length > 1 && reports.length === 1 && !reports[0].performanceNumber) {
+    // Combined PDF but Claude returned one record — split into one per performance number
+    return nums.map(n => ({
+      ...reports[0],
+      performanceNumber: n,
+      venue: reports[0].venue ?? venue,
+      reportDate: reports[0].reportDate ?? date,
+    }));
+  }
+
+  return reports.map((r, i) => ({
+    ...r,
+    performanceNumber: r.performanceNumber ?? (nums[i] ?? nums[0] ?? null),
+    venue: r.venue ?? venue,
+    reportDate: r.reportDate ?? date,
+  }));
+}
+
 function matchProduction(subject: string, productions: { id: number; name: string }[]): number | null {
   const s = subject.toLowerCase();
   // Sort longest name first to prefer more specific matches
@@ -338,7 +387,8 @@ export async function POST(req: NextRequest) {
 
     let parsedReports: ParsedReport[];
     try {
-      parsedReports = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
+      const raw = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
+      parsedReports = applySubjectFallbacks(raw, msg.subject);
     } catch {
       results.push({ subject: msg.subject, status: "parse_error" });
       continue;

@@ -253,6 +253,7 @@ export async function POST(req: NextRequest) {
 
   const url = new URL(req.url);
   const backfill = url.searchParams.get("backfill") === "true";
+  const debug = url.searchParams.get("debug") === "true";
 
   const token = await getGraphToken();
   const productions = await prisma.production.findMany({ select: { id: true, name: true }, where: { archived: false } });
@@ -303,7 +304,7 @@ export async function POST(req: NextRequest) {
   }
 
   const processedFolderId = await getOrCreateProcessedFolder(token);
-  const results: { subject: string; status: string; reportId?: number; production?: string }[] = [];
+  const results: { subject: string; status: string; reportId?: number; production?: string; claudeRaw?: any }[] = [];
   const MAX_PER_RUN = 4; // keep well within Railway's 60s timeout (~10-15s per PDF)
   let pdfProcessed = 0;
 
@@ -386,9 +387,10 @@ export async function POST(req: NextRequest) {
     const production = productions.find(p => p.id === productionId);
 
     let parsedReports: ParsedReport[];
+    let claudeRaw: any;
     try {
-      const raw = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
-      parsedReports = applySubjectFallbacks(raw, msg.subject);
+      claudeRaw = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
+      parsedReports = applySubjectFallbacks(claudeRaw, msg.subject);
     } catch {
       results.push({ subject: msg.subject, status: "parse_error" });
       continue;
@@ -434,6 +436,7 @@ export async function POST(req: NextRequest) {
       subject: msg.subject,
       status: productionId ? "imported" : "imported_unmatched",
       production: production?.name,
+      ...(debug ? { claudeRaw } : {}),
     });
   }
 

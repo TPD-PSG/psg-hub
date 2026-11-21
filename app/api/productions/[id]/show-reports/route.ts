@@ -15,7 +15,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       createdByUser: { select: { id: true, name: true } },
       createdAt: true, updatedAt: true,
     },
-    orderBy: { reportDate: "desc" },
+    orderBy: [{ performanceNumber: "desc" }, { reportDate: "desc" }],
   });
   // Strip rawPdf content but keep a hasPdf boolean to avoid sending MBs of base64
   const sanitised = reports.map(r => ({ ...r, rawPdf: r.rawPdf ? true : false }));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, Suspense, useRef } from "react";
+import { useEffect, useState, use, Suspense, useRef, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -9,6 +9,7 @@ import TasksPanel from "@/components/TasksPanel";
 import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF, exportMeetingMinutesPDF } from "@/lib/exports";
 import { parsePerms } from "@/lib/permissions";
+import { orderForTourList, hasLeftVenue } from "@/lib/tourStops";
 import { CONTACT_SECTIONS_SETTING, defaultSections, parseSections } from "@/lib/contactSections";
 import { confirmDialog, alertDialog } from "@/components/Dialogs";
 
@@ -2873,7 +2874,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           )}
 
           <div className="space-y-2">
-            {tourStops.map((stop) => {
+            {orderForTourList(tourStops).map((stop, idx, ordered) => {
+              // Stops the tour has already left sit at the bottom, under a "Finished" divider, slightly faded
+              const left = hasLeftVenue(stop);
+              const firstFinished = left && (idx === 0 || !hasLeftVenue(ordered[idx - 1]));
               const notesOpen = expandedStopNotes.has(stop.id);
               const draft = stopNoteDrafts[stop.id] ?? stop.notes ?? "";
               const toggleNotes = () => {
@@ -2893,7 +2897,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 reloadTourStops();
               };
               return (
-                <div key={stop.id} className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
+                <Fragment key={stop.id}>
+                {firstFinished && (
+                  <p className="text-xs font-semibold uppercase tracking-widest pt-4 pb-1" style={{ color: "var(--psg-muted)" }}>Finished</p>
+                )}
+                <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)", opacity: left ? 0.6 : 1 }}>
                   {/* Main row */}
                   <div className="flex items-start gap-4 p-4">
                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white" style={{ backgroundColor: "var(--psg-blue)" }}>
@@ -2959,6 +2967,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     </div>
                   )}
                 </div>
+                </Fragment>
               );
             })}
           </div>

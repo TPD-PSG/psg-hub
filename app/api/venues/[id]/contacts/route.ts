@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { touchVenue } from "@/lib/night-run-sync";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -17,5 +18,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       notes: body.notes || null,
     },
   });
+  await touchVenue(contact.venueId);
   return NextResponse.json(contact, { status: 201 });
 }

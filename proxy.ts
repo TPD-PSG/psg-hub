@@ -32,6 +32,7 @@ const MB = 1024 * 1024;
 function maxBodyBytes(pathname: string): number {
   if (pathname === "/api/users/me/avatar" || pathname.endsWith("/logo")) return 5 * MB;
   if (pathname === "/api/venues/import-pdfs") return 100 * MB; // several PDFs at once
+  if (pathname.startsWith("/api/integrations/")) return 1 * MB; // JSON only
   if (/^\/api\/productions\/\d+\/(documents|hs-documents)$/.test(pathname)) return 100 * MB; // drawings, packs
   return 25 * MB;
 }
@@ -60,9 +61,11 @@ export const proxy = auth((req) => {
     }
   }
 
-  // Routes that guard themselves: invite links (token), cron jobs (shared secret)
+  // Routes that guard themselves: invite links (token), cron jobs (shared secret),
+  // Night Run venue sync (bearer token, checked in lib/night-run-sync.ts)
   const selfGuarded =
     pathname.startsWith("/invite/") ||
+    pathname.startsWith("/api/integrations/night-run/") ||
     pathname.startsWith("/api/invites/") ||
     pathname === "/api/notify/daily" ||
     pathname === "/api/backup";

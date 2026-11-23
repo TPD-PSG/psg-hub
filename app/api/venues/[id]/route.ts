@@ -24,7 +24,7 @@ export async function PUT(req: NextRequest, {
       techNotes: body.techNotes ?? undefined,
       notes: body.notes ?? undefined,
     },
-    include: { contacts: true, _count: { select: { contacts: true } } },
+    include: { contacts: true, dropOff: true, _count: { select: { contacts: true } } },
   });
   // Don't send the stored tech-spec file back on every save
   const { techSpecFile, techSpecFileKey, ...rest } = venue;

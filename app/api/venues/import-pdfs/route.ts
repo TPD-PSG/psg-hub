@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { touchVenue } from "@/lib/night-run-sync";
 import { fileToContent, parseVenueDocument } from "@/lib/venueParser";
 import { ClaudeOutputError } from "@/lib/claude";
 import { saveFile } from "@/lib/storage";
@@ -50,6 +51,7 @@ async function processPDF(file: File): Promise<{ ok: true; name: string } | { ok
           notes: c.notes || null,
         })),
       });
+      await touchVenue(venue.id);
     }
     return { ok: true, name: v.name };
   } catch (err) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { loadFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   if ("error" in rec) return rec.error;
   const report = await prisma.showReport.findUnique({
     where: { id: parseInt(id) },
-    select: { rawPdf: true, emailSubject: true, reportDate: true, performanceNumber: true },
+    select: { rawPdf: true, pdfKey: true, emailSubject: true, reportDate: true, performanceNumber: true },
   });
 
-  if (!report?.rawPdf) return NextResponse.json({ error: "No PDF available" }, { status: 404 });
-
-  const buffer = Buffer.from(report.rawPdf, "base64");
+  const buffer = report ? await loadFile(report.pdfKey, report.rawPdf) : null;
+  if (!report || !buffer) return NextResponse.json({ error: "No PDF available" }, { status: 404 });
   const filename = report.emailSubject
     ? report.emailSubject.replace(/\.pdf$/i, "") + ".pdf"
     : `show-report-${report.performanceNumber ?? id}.pdf`;

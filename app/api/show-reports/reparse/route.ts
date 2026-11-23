@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { parseShowReportPdf } from "@/lib/showReportParser";
 import { toDate } from "@/lib/parse";
+import { loadBase64 } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   // Find records that have a stored PDF but no attendance data (incomplete parse)
   const incomplete = await prisma.showReport.findMany({
     where: {
-      rawPdf: { not: null },
+      OR: [{ rawPdf: { not: null } }, { pdfKey: { not: null } }],
       attendance: null,
     },
     select: {
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
       venue: true,
       reportDate: true,
       rawPdf: true,
+      pdfKey: true,
     },
     orderBy: { id: "asc" },
     take: MAX_PER_RUN,
@@ -49,7 +51,9 @@ export async function POST(req: NextRequest) {
   // Parse in parallel so four PDFs fit comfortably inside Railway's 60s request limit
   await Promise.all(incomplete.map(async record => {
     try {
-      const parsed = await parseShowReportPdf(record.rawPdf!, { subject: record.emailSubject ?? "" });
+      const pdf = await loadBase64(record.pdfKey, record.rawPdf);
+      if (!pdf) { results.push({ id: record.id, subject: record.emailSubject, status: "no_pdf" }); return; }
+      const parsed = await parseShowReportPdf(pdf, { subject: record.emailSubject ?? "" });
       console.log(`[reparse] id=${record.id} parsed ${parsed.length} report(s)`);
 
       // Pick the parsed entry that matches this record's performance number, or first
@@ -82,7 +86,7 @@ export async function POST(req: NextRequest) {
   }));
 
   const remaining = await prisma.showReport.count({
-    where: { rawPdf: { not: null }, attendance: null },
+    where: { OR: [{ rawPdf: { not: null } }, { pdfKey: { not: null } }], attendance: null },
   });
 
   return NextResponse.json({ reparsed: results.length, remaining, results });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireProductionAccess } from "@/lib/access";
+import { removeFile } from "@/lib/storage";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -135,6 +136,17 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
-  await prisma.production.delete({ where: { id: Number(id) } });
+  const pid = Number(id);
+  // Note the production's stored files so they can be removed from R2 once the rows are gone
+  // (company expenses and their receipts are kept: they're unlinked from the production, not deleted)
+  const [docs, hs, reports, spend] = await Promise.all([
+    prisma.productionDocument.findMany({ where: { productionId: pid }, select: { fileKey: true } }),
+    prisma.hSDocument.findMany({ where: { productionId: pid }, select: { fileKey: true } }),
+    prisma.showReport.findMany({ where: { productionId: pid }, select: { pdfKey: true } }),
+    prisma.spendDocument.findMany({ where: { expense: { budgetLine: { productionId: pid } } }, select: { fileKey: true } }),
+  ]);
+  await prisma.production.delete({ where: { id: pid } });
+  const keys = new Set([...docs, ...hs, ...spend].map(d => d.fileKey).concat(reports.map(r => r.pdfKey)));
+  for (const key of keys) await removeFile(key);
   return NextResponse.json({ ok: true });
 }

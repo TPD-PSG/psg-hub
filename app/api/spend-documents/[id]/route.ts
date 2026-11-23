@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { loadFile, removeFile } from "@/lib/storage";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -14,7 +15,8 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   if ("error" in rec) return rec.error;
   const doc = await prisma.spendDocument.findUnique({ where: { id: Number(id) } });
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const buffer = Buffer.from(doc.file, "base64");
+  const buffer = await loadFile(doc.fileKey, doc.file);
+  if (!buffer) return NextResponse.json({ error: "File missing" }, { status: 404 });
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": doc.mime,
@@ -59,6 +61,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const rec = await requireRecordAccess("spendDocument", id);
 
   if ("error" in rec) return rec.error;
-  await prisma.spendDocument.delete({ where: { id: Number(id) } });
+  const removed = await prisma.spendDocument.delete({ where: { id: Number(id) }, select: { fileKey: true } });
+  await removeFile(removed.fileKey);
   return NextResponse.json({ ok: true });
 }

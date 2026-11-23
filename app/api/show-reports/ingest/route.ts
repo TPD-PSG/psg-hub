@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { parseShowReportPdf, type ParsedReport } from "@/lib/showReportParser";
 import { ClaudeOutputError } from "@/lib/claude";
 import { toDate } from "@/lib/parse";
+import { saveFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -257,6 +258,9 @@ export async function POST(req: NextRequest) {
       return;
     }
 
+    // Store the PDF once (R2 if configured), shared by every report it contains
+    const stored = await saveFile("show-reports", pdf.name || `${msg.subject}.pdf`, Buffer.from(pdf.contentBytes, "base64"), "application/pdf");
+
     // Create one DB record per report found in the PDF
     for (const parsed of parsedReports) {
       await prisma.showReport.create({
@@ -273,7 +277,8 @@ export async function POST(req: NextRequest) {
           notes: parsed.notes,
           emailSubject: msg.subject,
           emailFrom: msg.from?.emailAddress?.address ?? null,
-          rawPdf: pdf.contentBytes,
+          rawPdf: stored.base64,
+          pdfKey: stored.key,
           productionMatched: productionId !== null,
         },
       });

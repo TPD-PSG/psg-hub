@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { saveFile } from "@/lib/storage";
 
 const ALLOWED_MIME = [
   "application/pdf",
@@ -38,8 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!ALLOWED_MIME.includes(file.type)) return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "File too large (max 20 MB)" }, { status: 400 });
 
-  const buf = await file.arrayBuffer();
-  const base64 = Buffer.from(buf).toString("base64");
+  const stored = await saveFile("expense-documents", file.name, await file.arrayBuffer(), file.type);
 
   const doc = await prisma.productionExpenseDocument.create({
     data: {
@@ -47,7 +47,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       type,
       name: file.name,
       mime: file.type,
-      file: base64,
+      file: stored.base64 ?? "",
+      fileKey: stored.key,
     },
     select: { id: true, type: true, name: true, mime: true, createdAt: true },
   });

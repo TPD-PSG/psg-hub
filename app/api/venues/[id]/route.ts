@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { removeFile } from "@/lib/storage";
 
 export async function PUT(req: NextRequest, {
  params }: { params: Promise<{ id: string }> }) {
@@ -26,8 +27,8 @@ export async function PUT(req: NextRequest, {
     include: { contacts: true, _count: { select: { contacts: true } } },
   });
   // Don't send the stored tech-spec file back on every save
-  const { techSpecFile, ...rest } = venue;
-  return NextResponse.json({ ...rest, hasTechSpecFile: !!techSpecFile });
+  const { techSpecFile, techSpecFileKey, ...rest } = venue;
+  return NextResponse.json({ ...rest, hasTechSpecFile: !!(techSpecFile || techSpecFileKey) });
 }
 
 export async function DELETE(_req: NextRequest, {
@@ -47,7 +48,10 @@ export async function DELETE(_req: NextRequest, {
       error: `This venue is on ${stops.length} tour date${stops.length === 1 ? "" : "s"}${names.length ? ` (${names.join(", ")})` : ""}. Remove or move those tour dates first.`,
     }, { status: 409 });
   }
+  // Note the venue's stored files so they can be removed from R2 once the rows are gone
+  const files = await prisma.venue.findUnique({ where: { id: venueId }, select: { techSpecFileKey: true, documents: { select: { fileKey: true } } } });
   await prisma.venueContact.deleteMany({ where: { venueId } });
   await prisma.venue.delete({ where: { id: venueId } });
+  for (const key of [files?.techSpecFileKey, ...(files?.documents ?? []).map(d => d.fileKey)]) await removeFile(key);
   return NextResponse.json({ ok: true });
 }

@@ -13,108 +13,108 @@ model User {
   email        String   @unique
   passwordHash String
   role         String   @default("member") // admin | member | client | freelancer
-  preferences  String?  // JSON: { widgets: string[] }
-  permissions  String?  // JSON: { modules: string[], allProductions: boolean }
+  preferences  String? // JSON: { widgets: string[] }
+  permissions  String? // JSON: { modules: string[], allProductions: boolean }
   avatarUrl    String?
-  color        String?  // hex colour for schedule grid badge
+  color        String? // hex colour for schedule grid badge
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  tasksAssigned       Task[]           @relation("TaskAssignee")
-  tasksSignoff        Task[]           @relation("TaskSignoff")
-  tasksCreated        Task[]           @relation("TaskCreatedBy")
+  tasksAssigned       Task[]              @relation("TaskAssignee")
+  tasksSignoff        Task[]              @relation("TaskSignoff")
+  tasksCreated        Task[]              @relation("TaskCreatedBy")
   notifications       Notification[]
   funSubmissions      FunSubmission[]
   productionTeams     ProductionTeam[]
   roadmapItems        RoadmapItem[]
   staffAssignments    StaffAssignment[]
-  helpTicketsCreated  HelpTicket[]     @relation("TicketCreator")
-  helpTicketsAssigned HelpTicket[]     @relation("TicketAssignee")
+  helpTicketsCreated  HelpTicket[]        @relation("TicketCreator")
+  helpTicketsAssigned HelpTicket[]        @relation("TicketAssignee")
   expensesSubmitted   ProductionExpense[] @relation("ExpenseSubmitter")
-  marketingPosts      MarketingPost[]    @relation("MarketingPostCreator")
-  showReports         ShowReport[]       @relation("ShowReportCreatedBy")
-  variationsRequested BudgetVariation[]  @relation("VariationRequester")
-  variationsApproved  BudgetVariation[]  @relation("VariationApprover")
+  marketingPosts      MarketingPost[]     @relation("MarketingPostCreator")
+  showReports         ShowReport[]        @relation("ShowReportCreatedBy")
+  variationsRequested BudgetVariation[]   @relation("VariationRequester")
+  variationsApproved  BudgetVariation[]   @relation("VariationApprover")
   productionNotes     ProductionNote[]
   meetings            Meeting[]
 }
 
 model Production {
-  id          Int       @id @default(autoincrement())
-  name        String
-  logoUrl     String?
-  type        String
-  venue       String?   // freetext fallback / override
-  venueId     Int?
-  venueRef    Venue?    @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  isTour      Boolean   @default(false)
-  startDate   DateTime?
-  endDate     DateTime?
+  id                  Int       @id @default(autoincrement())
+  name                String
+  logoUrl             String?
+  type                String
+  venue               String? // freetext fallback / override
+  venueId             Int?
+  venueRef            Venue?    @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  isTour              Boolean   @default(false)
+  startDate           DateTime?
+  endDate             DateTime?
   status              String    @default("planning")
   announcementStatus  String    @default("not_announced")
   internalStatus      String    @default("pencil") // pencil | confirmed
   archived            Boolean   @default(false)
   archivedAt          DateTime?
-  productionManager   String?   // free-text proj lead(s), e.g. "Toby / Tom"
-  color       String?
-  notes         String?
-  contactSections String? // JSON list of this production's own contact-sheet sections
-  reportEmail   String?
-  sharepointUrl String?
+  productionManager   String? // free-text proj lead(s), e.g. "Toby / Tom"
+  color               String?
+  notes               String?
+  contactSections     String? // JSON list of this production's own contact-sheet sections
+  reportEmail         String?
+  sharepointUrl       String?
   haulageBudgetLineId Int?
-  advancingStatus String  @default("triage")
-  contraEstimate  Float?
-  contraActual    Float?
-  bdClientId      Int?
-  bdClient        Client?   @relation("ProductionBDClient", fields: [bdClientId], references: [id], onDelete: SetNull)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  advancingStatus     String    @default("triage")
+  contraEstimate      Float?
+  contraActual        Float?
+  bdClientId          Int?
+  bdClient            Client?   @relation("ProductionBDClient", fields: [bdClientId], references: [id], onDelete: SetNull)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  events      Event[]
-  keyDates    ProductionKeyDate[]
-  budgetLines      BudgetLine[]
-  budgetVariations BudgetVariation[]
-  crew        ProductionCrew[]
-  hotelBookings     HotelBooking[]
-  haulageMovements  HaulageMovement[]
-  callSheets        CallSheet[]
-  tasks             Task[]
-  taskLists         TaskList[]
-  team              ProductionTeam[]
-  tourStops         TourStop[]
-  staffAssignments  StaffAssignment[]
-  expenses          ProductionExpense[]
-  marketingPosts    MarketingPost[]
-  invoiceTodos      InvoiceTodo[]      @relation("InvoiceTodos")
-  contacts          ProductionContact[]
-  showReports       ShowReport[]
-  productionDocuments ProductionDocument[]
-  productionLinks     ProductionLink[]
-  hsDocuments         HSDocument[]
-  toolboxSignatures   ToolboxTalkSignature[]
-  performanceSchedule PerformanceSchedule?
+  events               Event[]
+  keyDates             ProductionKeyDate[]
+  budgetLines          BudgetLine[]
+  budgetVariations     BudgetVariation[]
+  crew                 ProductionCrew[]
+  hotelBookings        HotelBooking[]
+  haulageMovements     HaulageMovement[]
+  callSheets           CallSheet[]
+  tasks                Task[]
+  taskLists            TaskList[]
+  team                 ProductionTeam[]
+  tourStops            TourStop[]
+  staffAssignments     StaffAssignment[]
+  expenses             ProductionExpense[]
+  marketingPosts       MarketingPost[]
+  invoiceTodos         InvoiceTodo[]             @relation("InvoiceTodos")
+  contacts             ProductionContact[]
+  showReports          ShowReport[]
+  productionDocuments  ProductionDocument[]
+  productionLinks      ProductionLink[]
+  hsDocuments          HSDocument[]
+  toolboxSignatures    ToolboxTalkSignature[]
+  performanceSchedule  PerformanceSchedule?
   performanceOverrides PerformanceDateOverride[]
-  productionNotes     ProductionNote[]
-  meetings            Meeting[]
+  productionNotes      ProductionNote[]
+  meetings             Meeting[]
 }
 
 model PerformanceSchedule {
-  id           Int        @id @default(autoincrement())
-  productionId Int        @unique
-  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  id             Int        @id @default(autoincrement())
+  productionId   Int        @unique
+  production     Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
   // Bitmask: bit 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
-  weekPattern     Int     @default(0)
-  matineePattern  Int     @default(0)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  weekPattern    Int        @default(0)
+  matineePattern Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }
 
 model PerformanceDateOverride {
   id           Int        @id @default(autoincrement())
   productionId Int
   production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  date         String     // YYYY-MM-DD
-  type         String     // "add" | "remove" | "matinee_add" | "matinee_remove"
+  date         String // YYYY-MM-DD
+  type         String // "add" | "remove" | "matinee_add" | "matinee_remove"
   createdAt    DateTime   @default(now())
 }
 
@@ -135,36 +135,37 @@ model ProductionDocument {
   production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
   name         String
   mime         String
-  data         String     // base64
+  data         String // base64
+  fileKey      String? // object key in R2 (files/…); when set the bytes live there and the base64 column is ""
   folder       String     @default("General")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 }
 
 model ShowReport {
-  id               Int        @id @default(autoincrement())
-  productionId     Int
-  production       Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  reportDate       DateTime
-  venue            String?
-  performance      String?    // e.g. "Evening – 7:30pm"
-  performanceNumber Int?      // show number e.g. 81
-  attendance       Int?
-  houseCapacity    Int?
-  runningTime      String?    // e.g. "2:24"
-  playingTime      String?    // e.g. "2:03"
-  notes            String?    // structured summary from Claude
-  flags            String?    // JSON array of flagged section headings e.g. ["Technical – Sound","H&S"]
-  emailSubject     String?
-  emailFrom        String?
-  productionMatched Boolean   @default(true)
-  rawPdf           String?    // base64 of original PDF
-  createdByUserId  Int?
-  createdByUser    User?      @relation("ShowReportCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  id                Int        @id @default(autoincrement())
+  productionId      Int
+  production        Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  reportDate        DateTime
+  venue             String?
+  performance       String? // e.g. "Evening – 7:30pm"
+  performanceNumber Int? // show number e.g. 81
+  attendance        Int?
+  houseCapacity     Int?
+  runningTime       String? // e.g. "2:24"
+  playingTime       String? // e.g. "2:03"
+  notes             String? // structured summary from Claude
+  flags             String? // JSON array of flagged section headings e.g. ["Technical – Sound","H&S"]
+  emailSubject      String?
+  emailFrom         String?
+  productionMatched Boolean    @default(true)
+  rawPdf            String? // base64 of original PDF
+  pdfKey            String? // object key in R2 for the original PDF; when set, rawPdf is null
+  createdByUserId   Int?
+  createdByUser     User?      @relation("ShowReportCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 }
-
 
 model Event {
   id           Int        @id @default(autoincrement())
@@ -192,48 +193,48 @@ model BudgetLine {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  expenses          Expense[]
-  variationItems    BudgetVariationItem[]
-  haulageMovements  HaulageMovement[]
+  expenses         Expense[]
+  variationItems   BudgetVariationItem[]
+  haulageMovements HaulageMovement[]
 }
 
 model BudgetVariation {
-  id              Int       @id @default(autoincrement())
+  id              Int        @id @default(autoincrement())
   productionId    Int
   production      Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  type            String    // reallocation | additional_spend | saving
-  status          String    @default("draft") // draft | pending_approval | approved | rejected
+  type            String // reallocation | additional_spend | saving
+  status          String     @default("draft") // draft | pending_approval | approved | rejected
   title           String
   justification   String?
-  clientRef       String?   // client PO / email ref / sign-off code
+  clientRef       String? // client PO / email ref / sign-off code
   requestedById   Int?
-  requestedBy     User?     @relation("VariationRequester", fields: [requestedById], references: [id])
-  requestedAt     DateTime  @default(now())
+  requestedBy     User?      @relation("VariationRequester", fields: [requestedById], references: [id])
+  requestedAt     DateTime   @default(now())
   approvedById    Int?
-  approvedBy      User?     @relation("VariationApprover", fields: [approvedById], references: [id])
+  approvedBy      User?      @relation("VariationApprover", fields: [approvedById], references: [id])
   approvedAt      DateTime?
   rejectionReason String?
   notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  items           BudgetVariationItem[]
+  items BudgetVariationItem[]
 }
 
 model BudgetVariationItem {
-  id            Int             @id @default(autoincrement())
-  variationId   Int
-  variation     BudgetVariation @relation(fields: [variationId], references: [id], onDelete: Cascade)
-  budgetLineId  Int
-  budgetLine    BudgetLine      @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
-  amount        Float           // positive = increase, negative = decrease
-  note          String?
+  id           Int             @id @default(autoincrement())
+  variationId  Int
+  variation    BudgetVariation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  budgetLineId Int
+  budgetLine   BudgetLine      @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  amount       Float // positive = increase, negative = decrease
+  note         String?
 }
 
 model HaulageMovement {
-  id               Int        @id @default(autoincrement())
+  id               Int         @id @default(autoincrement())
   productionId     Int
-  production       Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  production       Production  @relation(fields: [productionId], references: [id], onDelete: Cascade)
   haulageCompany   String
   driverName       String?
   vehicleInfo      String?
@@ -245,16 +246,16 @@ model HaulageMovement {
   notes            String?
   estimatedCost    Float?
   actualCost       Float?
-  rechargeable     Boolean    @default(false)
-  invoicedToClient Boolean    @default(false)
+  rechargeable     Boolean     @default(false)
+  invoicedToClient Boolean     @default(false)
   budgetLineId     Int?
   budgetLine       BudgetLine? @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 }
 
 model Hotel {
-  id        Int            @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   name      String
   city      String?
   address   String?
@@ -262,10 +263,10 @@ model Hotel {
   email     String?
   website   String?
   notes     String?
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  bookings  HotelBooking[]
+  bookings HotelBooking[]
 }
 
 model HotelBooking {
@@ -291,23 +292,23 @@ model HotelBooking {
 }
 
 model Crew {
-  id                   Int              @id @default(autoincrement())
-  name                 String
-  discipline           String
-  phone                String?
-  email                String?
-  company              String?
-  isFreelance          Boolean          @default(true)
-  insuranceProvider    String?
-  insurancePolicyNo    String?
-  insuranceExpiry      DateTime?
-  insuranceCoverType   String?
-  notes                String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  id                 Int       @id @default(autoincrement())
+  name               String
+  discipline         String
+  phone              String?
+  email              String?
+  company            String?
+  isFreelance        Boolean   @default(true)
+  insuranceProvider  String?
+  insurancePolicyNo  String?
+  insuranceExpiry    DateTime?
+  insuranceCoverType String?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  productions          ProductionCrew[]
-  hotelBookings        HotelBooking[]
+  productions   ProductionCrew[]
+  hotelBookings HotelBooking[]
 }
 
 model ProductionCrew {
@@ -326,20 +327,20 @@ model ProductionCrew {
 }
 
 model Client {
-  id            Int           @id @default(autoincrement())
-  name          String
-  type          String        // promoter | venue | council | broadcaster | corporate | other
-  website       String?
-  address       String?
-  notes         String?
+  id             Int           @id @default(autoincrement())
+  name           String
+  type           String // promoter | venue | council | broadcaster | corporate | other
+  website        String?
+  address        String?
+  notes          String?
   billingName    String?
   billingAddress String?
   billingEmail   String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  contacts      Contact[]
-  opportunities Opportunity[]
-  productions   Production[]  @relation("ProductionBDClient")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  contacts       Contact[]
+  opportunities  Opportunity[]
+  productions    Production[]  @relation("ProductionBDClient")
 }
 
 model Contact {
@@ -358,7 +359,7 @@ model Contact {
 model Opportunity {
   id          Int       @id @default(autoincrement())
   title       String
-  type        String    // production | event | scenic | rental | acquisition | fb | other
+  type        String // production | event | scenic | rental | acquisition | fb | other
   stage       String    @default("lead") // lead | qualified | proposal | negotiating | won | lost
   value       Float?
   clientId    Int?
@@ -384,24 +385,25 @@ model BDTask {
 }
 
 model Venue {
-  id          Int            @id @default(autoincrement())
-  name        String
-  type        String         // theatre | arena | outdoor | club | conference | other
-  city        String?
-  address     String?
-  postcode    String?
-  phone       String?
-  email       String?
-  website     String?
-  capacity    Int?
+  id              Int             @id @default(autoincrement())
+  name            String
+  type            String // theatre | arena | outdoor | club | conference | other
+  city            String?
+  address         String?
+  postcode        String?
+  phone           String?
+  email           String?
+  website         String?
+  capacity        Int?
   techNotes       String?
-  techSpecs       String?   // JSON: structured technical advancing data
-  techSpecFile    String?   // base64 encoded
+  techSpecs       String? // JSON: structured technical advancing data
+  techSpecFile    String? // base64 encoded
+  techSpecFileKey String? // object key in R2 for the tech-spec file; when set, techSpecFile is null
   techSpecName    String?
   techSpecMime    String?
   notes           String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   contacts        VenueContact[]
   productions     Production[]
   tourStops       TourStop[]
@@ -414,18 +416,19 @@ model VenueDocument {
   venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
   name      String
   mime      String
-  file      String   // base64 encoded
+  file      String // base64 encoded
+  fileKey   String? // object key in R2 (files/…); when set the bytes live there and the base64 column is ""
   createdAt DateTime @default(now())
 }
 
 model TourStop {
-  id               Int        @id @default(autoincrement())
+  id               Int               @id @default(autoincrement())
   productionId     Int
-  production       Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  production       Production        @relation(fields: [productionId], references: [id], onDelete: Cascade)
   venueId          Int
-  venue            Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  stopNumber       Int        @default(0)
-  advancingStatus  String     @default("triage")
+  venue            Venue             @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  stopNumber       Int               @default(0)
+  advancingStatus  String            @default("triage")
   contraEstimate   Float?
   contraActual     Float?
   loadInDate       DateTime?
@@ -434,8 +437,8 @@ model TourStop {
   performanceStart DateTime?
   performanceEnd   DateTime?
   notes            String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   staffAssignments StaffAssignment[]
 }
 
@@ -466,17 +469,17 @@ model CallSheet {
 }
 
 model CallSheetEntry {
-  id          Int        @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   callSheetId Int
-  callSheet   CallSheet  @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
+  callSheet   CallSheet @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
   discipline  String
   name        String?
   role        String?
   callTime    String?
   notes       String?
-  sortOrder   Int        @default(0)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model ProductionTeam {
@@ -501,27 +504,27 @@ model TaskList {
 }
 
 model Task {
-  id              Int       @id @default(autoincrement())
+  id              Int         @id @default(autoincrement())
   title           String
   description     String?
   productionId    Int?
   production      Production? @relation(fields: [productionId], references: [id], onDelete: Cascade)
   taskListId      Int?
-  taskList        TaskList? @relation(fields: [taskListId], references: [id], onDelete: SetNull)
+  taskList        TaskList?   @relation(fields: [taskListId], references: [id], onDelete: SetNull)
   assigneeUserId  Int?
-  assigneeUser    User?     @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
-  assigneeName    String?   // free-text if no user account
-  status          String    @default("todo") // todo | in_progress | awaiting_signoff | done
-  priority        String    @default("medium") // low | medium | high
+  assigneeUser    User?       @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  assigneeName    String? // free-text if no user account
+  status          String      @default("todo") // todo | in_progress | awaiting_signoff | done
+  priority        String      @default("medium") // low | medium | high
   dueDate         DateTime?
-  requiresSignoff Boolean   @default(false)
+  requiresSignoff Boolean     @default(false)
   signoffUserId   Int?
-  signoffUser     User?     @relation("TaskSignoff", fields: [signoffUserId], references: [id], onDelete: SetNull)
+  signoffUser     User?       @relation("TaskSignoff", fields: [signoffUserId], references: [id], onDelete: SetNull)
   signoffAt       DateTime?
   createdByUserId Int?
-  createdByUser   User?     @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdByUser   User?       @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   @@index([productionId])
   @@index([assigneeUserId])
@@ -538,17 +541,17 @@ model FunRoundup {
 }
 
 model FunSubmission {
-  id          Int         @id @default(autoincrement())
-  authorId    Int
-  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  title       String
-  story       String
-  monthYear   String      // "2026-11" — the month it was submitted
-  approved    Boolean     @default(false)
-  roundupId   Int?
-  roundup     FunRoundup? @relation(fields: [roundupId], references: [id], onDelete: SetNull)
-  media       FunMedia[]
-  createdAt   DateTime    @default(now())
+  id        Int         @id @default(autoincrement())
+  authorId  Int
+  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title     String
+  story     String
+  monthYear String // "2026-11" — the month it was submitted
+  approved  Boolean     @default(false)
+  roundupId Int?
+  roundup   FunRoundup? @relation(fields: [roundupId], references: [id], onDelete: SetNull)
+  media     FunMedia[]
+  createdAt DateTime    @default(now())
 }
 
 model FunMedia {
@@ -557,8 +560,8 @@ model FunMedia {
   submission   FunSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   name         String
   mime         String
-  data         String?       // base64 (legacy — null for file-system-stored media)
-  filePath     String?       // path on disk relative to MEDIA_DIR
+  data         String? // base64 (legacy — null for file-system-stored media)
+  filePath     String? // path on disk relative to MEDIA_DIR
   createdAt    DateTime      @default(now())
 }
 
@@ -577,45 +580,46 @@ model Notification {
 }
 
 model Expense {
-  id                Int        @id @default(autoincrement())
-  budgetLineId      Int
-  budgetLine        BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
-  phase             String     @default("pre-production") // pre-production, running, closing
-  description       String
-  estimated         Float      @default(0)
-  committed         Float      @default(0)
-  spent             Float      @default(0)
-  poNumber          String?
-  paymentDue        DateTime?
-  issuedForPayment  Boolean    @default(false)
-  vatExempt         Boolean    @default(false)
-  supplier          String?
-  notes             String?
-  approvedBy        String?
-  approvedDate      DateTime?
-  approvalMethod    String?
-  isPSGExpense      Boolean    @default(false)
-  invoicedToClient  Boolean    @default(false)
-  paymentMethod     String?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  id               Int        @id @default(autoincrement())
+  budgetLineId     Int
+  budgetLine       BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  phase            String     @default("pre-production") // pre-production, running, closing
+  description      String
+  estimated        Float      @default(0)
+  committed        Float      @default(0)
+  spent            Float      @default(0)
+  poNumber         String?
+  paymentDue       DateTime?
+  issuedForPayment Boolean    @default(false)
+  vatExempt        Boolean    @default(false)
+  supplier         String?
+  notes            String?
+  approvedBy       String?
+  approvedDate     DateTime?
+  approvalMethod   String?
+  isPSGExpense     Boolean    @default(false)
+  invoicedToClient Boolean    @default(false)
+  paymentMethod    String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  documents         SpendDocument[]
+  documents SpendDocument[]
 }
 
 model SpendDocument {
-  id               Int      @id @default(autoincrement())
+  id               Int       @id @default(autoincrement())
   expenseId        Int
-  expense          Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  type             String   // quote | po | invoice
+  expense          Expense   @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  type             String // quote | po | invoice
   name             String
   mime             String
-  file             String   // base64
+  file             String // base64
+  fileKey          String? // object key in R2 (files/…); when set the bytes live there and the base64 column is ""
   invoiceDate      DateTime?
   invoiceAmount    Float?
   invoiceNumber    String?
-  issuedForPayment Boolean  @default(false)
-  createdAt        DateTime @default(now())
+  issuedForPayment Boolean   @default(false)
+  createdAt        DateTime  @default(now())
 }
 
 model Property {
@@ -626,12 +630,12 @@ model Property {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  contacts     PropertyContact[]
-  documents    PropertyDocument[]
-  maintenance  PropertyMaintenance[]
-  rent         PropertyRent?
-  keys         PropertyKey[]
-  alarms       PropertyAlarm[]
+  contacts    PropertyContact[]
+  documents   PropertyDocument[]
+  maintenance PropertyMaintenance[]
+  rent        PropertyRent?
+  keys        PropertyKey[]
+  alarms      PropertyAlarm[]
 }
 
 model PropertyContact {
@@ -675,16 +679,16 @@ model PropertyMaintenance {
 }
 
 model PropertyRent {
-  id              Int      @id @default(autoincrement())
-  propertyId      Int      @unique
-  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id              Int       @id @default(autoincrement())
+  propertyId      Int       @unique
+  property        Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   amount          Float?
   frequency       String?
   nextPaymentDate DateTime?
   nextReviewDate  DateTime?
   landlordRef     String?
   notes           String?
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime  @updatedAt
 }
 
 model PropertyKey {
@@ -716,8 +720,8 @@ model ProductionKeyDate {
   id           Int        @id @default(autoincrement())
   productionId Int
   production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  type         String     // design_presentation | pre_production | first_rehearsal | rehearsal_period | load_in | fit_up | technical_rehearsal | dress_rehearsal | preview | press_night | performance | get_out | other
-  label        String?    // optional override label
+  type         String // design_presentation | pre_production | first_rehearsal | rehearsal_period | load_in | fit_up | technical_rehearsal | dress_rehearsal | preview | press_night | performance | get_out | other
+  label        String? // optional override label
   startDate    DateTime
   endDate      DateTime?
   notes        String?
@@ -726,11 +730,11 @@ model ProductionKeyDate {
 
 model CompanyInvoice {
   id          Int       @id @default(autoincrement())
-  type        String    // sales | purchase
+  type        String // sales | purchase
   reference   String?
   description String
-  party       String    // client (sales) or supplier (purchase)
-  production  String?   // free-text production name, for context
+  party       String // client (sales) or supplier (purchase)
+  production  String? // free-text production name, for context
   netAmount   Float     @default(0)
   vatAmount   Float     @default(0)
   issueDate   DateTime?
@@ -742,37 +746,38 @@ model CompanyInvoice {
 }
 
 model ProductionExpense {
-  id                Int        @id @default(autoincrement())
-  production        String?    // free-text fallback (legacy)
+  id                Int                         @id @default(autoincrement())
+  production        String? // free-text fallback (legacy)
   productionId      Int?
-  productionLink    Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  productionLink    Production?                 @relation(fields: [productionId], references: [id], onDelete: SetNull)
   submittedByUserId Int?
-  submittedByUser   User?      @relation("ExpenseSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
-  category          String     @default("misc") // travel | accommodation | marketing | props | costume | set | equipment | catering | venue | misc
+  submittedByUser   User?                       @relation("ExpenseSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  category          String                      @default("misc") // travel | accommodation | marketing | props | costume | set | equipment | catering | venue | misc
   description       String
   supplier          String?
-  netAmount         Float      @default(0)
-  vatAmount         Float      @default(0)
+  netAmount         Float                       @default(0)
+  vatAmount         Float                       @default(0)
   date              DateTime?
-  paymentMethod     String?    @default("to_pay") // card | cash | transfer | to_pay
-  status            String     @default("pending") // pending | approved | paid | rejected
+  paymentMethod     String?                     @default("to_pay") // card | cash | transfer | to_pay
+  status            String                      @default("pending") // pending | approved | paid | rejected
   reference         String?
   notes             String?
-  invoicedToClient  Boolean    @default(false)
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  invoicedToClient  Boolean                     @default(false)
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
   documents         ProductionExpenseDocument[]
 }
 
 model ProductionExpenseDocument {
-  id         Int              @id @default(autoincrement())
-  expenseId  Int
-  expense    ProductionExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  type       String           // invoice | receipt | other
-  name       String
-  mime       String
-  file       String           // base64
-  createdAt  DateTime         @default(now())
+  id        Int               @id @default(autoincrement())
+  expenseId Int
+  expense   ProductionExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  type      String // invoice | receipt | other
+  name      String
+  mime      String
+  file      String // base64
+  fileKey   String? // object key in R2 (files/…); when set the bytes live there and the base64 column is ""
+  createdAt DateTime          @default(now())
 }
 
 model Setting {
@@ -799,7 +804,7 @@ model StaffAssignment {
   tourStop     TourStop?  @relation(fields: [tourStopId], references: [id], onDelete: SetNull)
   startDate    DateTime
   endDate      DateTime
-  activityType String?    // GET IN | FIT UP | TECH | DRESS | PREVIEW | PERF | PERF+OUT | REH | IN | OUT | TBC
+  activityType String? // GET IN | FIT UP | TECH | DRESS | PREVIEW | PERF | PERF+OUT | REH | IN | OUT | TBC
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -809,56 +814,57 @@ model StaffAssignment {
 }
 
 model SalesBrand {
-  id          Int          @id @default(autoincrement())
-  name        String
-  category    String       @default("lighting") // lighting | sound | cable | staging | rigging | video | consumables | other
-  stage       String       @default("prospect")  // prospect | contacted | samples | negotiating | active | paused | lost
-  website     String?
-  rep         String?
-  repEmail    String?
-  repPhone    String?
-  notes       String?
-  priority    String       @default("medium")    // high | medium | low
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  tasks       SalesTask[]
+  id        Int         @id @default(autoincrement())
+  name      String
+  category  String      @default("lighting") // lighting | sound | cable | staging | rigging | video | consumables | other
+  stage     String      @default("prospect") // prospect | contacted | samples | negotiating | active | paused | lost
+  website   String?
+  rep       String?
+  repEmail  String?
+  repPhone  String?
+  notes     String?
+  priority  String      @default("medium") // high | medium | low
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  tasks     SalesTask[]
 }
 
 model SalesTask {
-  id          Int          @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   title       String
   notes       String?
   dueDate     DateTime?
   completedAt DateTime?
-  priority    String       @default("medium")    // high | medium | low
+  priority    String      @default("medium") // high | medium | low
   brandId     Int?
-  brand       SalesBrand?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  brand       SalesBrand? @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model KnowledgeDoc {
   id        Int      @id @default(autoincrement())
   name      String
   mime      String
-  file      String   // base64 encoded
+  file      String // base64 encoded
+  fileKey   String? // object key in R2 (files/…); when set the bytes live there and the base64 column is ""
   createdAt DateTime @default(now())
 }
 
 model HelpTicket {
-  id              Int       @id @default(autoincrement())
-  title           String
-  description     String?
-  category        String    @default("bug")    // bug | feature | question | other
-  priority        String    @default("medium") // low | medium | high | urgent
-  status          String    @default("open")   // open | in_progress | resolved | closed
-  createdByUserId Int?
-  createdByUser   User?     @relation("TicketCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  id               Int       @id @default(autoincrement())
+  title            String
+  description      String?
+  category         String    @default("bug") // bug | feature | question | other
+  priority         String    @default("medium") // low | medium | high | urgent
+  status           String    @default("open") // open | in_progress | resolved | closed
+  createdByUserId  Int?
+  createdByUser    User?     @relation("TicketCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   assignedToUserId Int?
-  assignedToUser  User?     @relation("TicketAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
-  resolvedAt      DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  assignedToUser   User?     @relation("TicketAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model Supplier {
@@ -876,7 +882,7 @@ model Supplier {
 }
 
 model InvoiceTodo {
-  id           Int      @id @default(autoincrement())
+  id           Int         @id @default(autoincrement())
   client       String
   description  String
   productionId Int?
@@ -884,29 +890,29 @@ model InvoiceTodo {
   amount       Float?
   dueDate      DateTime?
   notes        String?
-  done         Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  done         Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
 model MarketingPost {
-  id           Int      @id @default(autoincrement())
-  title        String
-  caption      String?
-  platforms    String   @default("[]") // JSON array: "instagram" | "facebook" | "twitter" | "linkedin" | "tiktok"
-  status       String   @default("draft") // draft | scheduled | published | cancelled
-  scheduledAt  DateTime?
-  publishedAt  DateTime?
-  productionId Int?
-  production   Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
-  imageUrl     String?
-  link         String?
-  tags         String?  // comma-separated
-  notes        String?
+  id              Int         @id @default(autoincrement())
+  title           String
+  caption         String?
+  platforms       String      @default("[]") // JSON array: "instagram" | "facebook" | "twitter" | "linkedin" | "tiktok"
+  status          String      @default("draft") // draft | scheduled | published | cancelled
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  productionId    Int?
+  production      Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  imageUrl        String?
+  link            String?
+  tags            String? // comma-separated
+  notes           String?
   createdByUserId Int?
-  createdByUser   User?  @relation("MarketingPostCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdByUser   User?       @relation("MarketingPostCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 model RoadmapItem {
@@ -914,7 +920,7 @@ model RoadmapItem {
   title           String
   body            String?
   category        String   @default("general") // general | feature | improvement | bug | infrastructure
-  status          String   @default("idea")    // idea | planned | in_progress | done | wont_do
+  status          String   @default("idea") // idea | planned | in_progress | done | wont_do
   pinned          Boolean  @default(false)
   createdByUserId Int?
   createdByUser   User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -947,25 +953,26 @@ model HSDocument {
   name         String
   mime         String
   data         String
+  fileKey      String? // object key in R2 (files/…); when set the bytes live there and the base64 column is ""
   tourStopId   Int?
   folder       String     @default("General")
   createdAt    DateTime   @default(now())
 }
 
 model ToolboxTalkSignature {
-  id           Int        @id @default(autoincrement())
-  productionId Int
-  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
-  tourStopId   Int?
-  venueName    String?
-  signeeName   String
-  signeeDate   String
-  employer     String?
-  position     String?
-  signature    String
-  agreedBriefing Boolean  @default(false)
-  agreedSafety   Boolean  @default(false)
-  createdAt    DateTime   @default(now())
+  id             Int        @id @default(autoincrement())
+  productionId   Int
+  production     Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  tourStopId     Int?
+  venueName      String?
+  signeeName     String
+  signeeDate     String
+  employer       String?
+  position       String?
+  signature      String
+  agreedBriefing Boolean    @default(false)
+  agreedSafety   Boolean    @default(false)
+  createdAt      DateTime   @default(now())
 }
 
 model Meeting {

@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type Anthropic from "@anthropic-ai/sdk";
 import { generateText, ClaudeOutputError } from "@/lib/claude";
+import { loadFile, loadBase64 } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   const { question, history } = await req.json();
   if (!question?.trim()) return NextResponse.json({ error: "No question" }, { status: 400 });
 
-  const docs = await prisma.knowledgeDoc.findMany({ select: { name: true, mime: true, file: true } });
+  const docs = await prisma.knowledgeDoc.findMany({ select: { name: true, mime: true, file: true, fileKey: true } });
 
   if (docs.length === 0) {
     return NextResponse.json({ answer: "No documents have been uploaded to the knowledge base yet. An admin needs to upload some policy documents first." });
@@ -25,12 +26,12 @@ export async function POST(req: NextRequest) {
     if (doc.mime === "application/pdf") {
       docBlocks.push({
         type: "document",
-        source: { type: "base64", media_type: "application/pdf", data: doc.file },
+        source: { type: "base64", media_type: "application/pdf", data: (await loadBase64(doc.fileKey, doc.file)) ?? "" },
         title: doc.name,
       } as any);
     } else {
       // For non-PDF docs, include as text with a header
-      const text = Buffer.from(doc.file, "base64").toString("utf-8");
+      const text = ((await loadFile(doc.fileKey, doc.file)) ?? Buffer.alloc(0)).toString("utf-8");
       docBlocks.push({ type: "text", text: `--- Document: ${doc.name} ---\n${text}` });
     }
   }

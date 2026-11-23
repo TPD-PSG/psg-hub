@@ -21,7 +21,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   });
   // The list only needs to know a PDF exists; don't read every PDF out of the database to find out
   const withPdf = new Set((await prisma.showReport.findMany({
-    where: { productionId: Number(id), rawPdf: { not: null } },
+    where: { productionId: Number(id), OR: [{ rawPdf: { not: null } }, { pdfKey: { not: null } }] },
     select: { id: true },
   })).map(r => r.id));
   return NextResponse.json(reports.map(r => ({ ...r, rawPdf: withPdf.has(r.id) })));

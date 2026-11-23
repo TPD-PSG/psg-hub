@@ -3,13 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { fileToContent, parseVenueDocument } from "@/lib/venueParser";
 import { ClaudeOutputError } from "@/lib/claude";
+import { saveFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
 async function processPDF(file: File): Promise<{ ok: true; name: string } | { ok: false; name: string; error: string }> {
   try {
     const buffer = await file.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
     const doc = await fileToContent(buffer, file.name, file.type);
     if (!doc) return { ok: false, name: file.name, error: "Unsupported file type" };
 
@@ -18,6 +18,7 @@ async function processPDF(file: File): Promise<{ ok: true; name: string } | { ok
     if (!v.name) return { ok: false, name: file.name, error: "Could not extract venue name" };
     const techSpecs = Object.keys(extracted.techSpecs).length ? extracted.techSpecs : null;
 
+    const stored = await saveFile("venue-tech-specs", file.name, buffer, file.type);
     const venue = await prisma.venue.create({
       data: {
         name: v.name,
@@ -30,7 +31,8 @@ async function processPDF(file: File): Promise<{ ok: true; name: string } | { ok
         website: v.website || null,
         capacity: v.capacity ?? null,
         notes: v.notes || null,
-        techSpecFile: base64,
+        techSpecFile: stored.base64,
+        techSpecFileKey: stored.key,
         techSpecName: file.name,
         techSpecMime: file.type,
         techSpecs: techSpecs ? JSON.stringify(techSpecs) : null,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { fileToContent, parseTechSpec } from "@/lib/venueParser";
 import { ClaudeOutputError } from "@/lib/claude";
 import { auth } from "@/auth";
+import { saveFile, loadFile, removeFile } from "@/lib/storage";
 
 const ALLOWED_MIME = [
   "application/pdf",
@@ -25,13 +26,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "File too large (max 20 MB)" }, { status: 400 });
 
   const buffer = await file.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString("base64");
 
-  // Store the file first
+  // Store the file first (R2 if configured), replacing any previous one
+  const previous = await prisma.venue.findUnique({ where: { id: Number(id) }, select: { techSpecFileKey: true } });
+  const stored = await saveFile("venue-tech-specs", file.name, buffer, file.type);
   await prisma.venue.update({
     where: { id: Number(id) },
-    data: { techSpecFile: base64, techSpecName: file.name, techSpecMime: file.type },
+    data: { techSpecFile: stored.base64, techSpecFileKey: stored.key, techSpecName: file.name, techSpecMime: file.type },
   });
+  await removeFile(previous?.techSpecFileKey);
 
   // Read the spec with Claude; the file is kept even if that fails
   const doc = await fileToContent(buffer, file.name, file.type);
@@ -54,10 +57,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const venue = await prisma.venue.findUnique({ where: { id: Number(id) }, select: { techSpecFile: true, techSpecName: true, techSpecMime: true } });
-  if (!venue?.techSpecFile) return NextResponse.json({ error: "No file" }, { status: 404 });
-
-  const buffer = Buffer.from(venue.techSpecFile, "base64");
+  const venue = await prisma.venue.findUnique({ where: { id: Number(id) }, select: { techSpecFile: true, techSpecFileKey: true, techSpecName: true, techSpecMime: true } });
+  const buffer = venue ? await loadFile(venue.techSpecFileKey, venue.techSpecFile) : null;
+  if (!venue || !buffer) return NextResponse.json({ error: "No file" }, { status: 404 });
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": venue.techSpecMime ?? "application/octet-stream",
@@ -70,6 +72,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  await prisma.venue.update({ where: { id: Number(id) }, data: { techSpecFile: null, techSpecName: null, techSpecMime: null } });
+  const previous = await prisma.venue.findUnique({ where: { id: Number(id) }, select: { techSpecFileKey: true } });
+  await prisma.venue.update({ where: { id: Number(id) }, data: { techSpecFile: null, techSpecFileKey: null, techSpecName: null, techSpecMime: null } });
+  await removeFile(previous?.techSpecFileKey);
   return NextResponse.json({ ok: true });
 }

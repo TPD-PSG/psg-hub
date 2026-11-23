@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { saveFile } from "@/lib/storage";
 
 const DOC_SELECT = { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, invoiceNumber: true, issuedForPayment: true, createdAt: true };
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
@@ -33,8 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!ALLOWED_MIME.includes(file.type)) return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "File too large (max 20 MB)" }, { status: 400 });
 
-  const buffer = await file.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString("base64");
+  const stored = await saveFile("spend-documents", file.name, await file.arrayBuffer(), file.type);
   const type = (formData.get("type") as string) || "quote";
   const invoiceDateRaw = formData.get("invoiceDate") as string | null;
   const invoiceAmountRaw = formData.get("invoiceAmount") as string | null;
@@ -47,7 +47,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       type,
       name: file.name,
       mime: file.type,
-      file: base64,
+      file: stored.base64 ?? "",
+      fileKey: stored.key,
       invoiceDate: invoiceDateRaw ? new Date(invoiceDateRaw) : null,
       invoiceAmount: invoiceAmountRaw ? Number(invoiceAmountRaw) : null,
       invoiceNumber: invoiceNumberRaw || null,

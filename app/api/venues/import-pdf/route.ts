@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { fileToContent, parseVenueDocument, type ParsedVenue } from "@/lib/venueParser";
 import { ClaudeOutputError } from "@/lib/claude";
+import { saveFile, removeFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,6 @@ export async function POST(req: NextRequest) {
   const updateId = formData.get("updateId") ? Number(formData.get("updateId")) : null;
 
   const buffer = await file.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString("base64");
   const doc = await fileToContent(buffer, file.name, file.type);
   if (!doc) return NextResponse.json({ error: "Upload a PDF, Word document or image" }, { status: 400 });
 
@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
 
   // ── Update existing venue ──────────────────────────────────────────────────
   if (updateId) {
+    const previous = await prisma.venue.findUnique({ where: { id: updateId }, select: { techSpecFileKey: true } });
+    const stored = await saveFile("venue-tech-specs", file.name, buffer, file.type);
+    await removeFile(previous?.techSpecFileKey);
     const updated = await prisma.venue.update({
       where: { id: updateId },
       data: {
@@ -64,7 +67,8 @@ export async function POST(req: NextRequest) {
         website: v.website || null,
         capacity: v.capacity ?? null,
         notes: v.notes || null,
-        techSpecFile: base64,
+        techSpecFile: stored.base64,
+        techSpecFileKey: stored.key,
         techSpecName: file.name,
         techSpecMime: file.type,
         techSpecs: techSpecs ? JSON.stringify(techSpecs) : null,
@@ -110,6 +114,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Create new venue ───────────────────────────────────────────────────────
+  const stored = await saveFile("venue-tech-specs", file.name, buffer, file.type);
   const venue = await prisma.venue.create({
     data: {
       name: venueName,
@@ -122,7 +127,8 @@ export async function POST(req: NextRequest) {
       website: v.website || null,
       capacity: v.capacity ?? null,
       notes: v.notes || null,
-      techSpecFile: base64,
+      techSpecFile: stored.base64,
+      techSpecFileKey: stored.key,
       techSpecName: file.name,
       techSpecMime: file.type,
       techSpecs: techSpecs ? JSON.stringify(techSpecs) : null,

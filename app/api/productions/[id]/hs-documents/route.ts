@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
+import { saveFile } from "@/lib/storage";
 
 export const maxDuration = 60;
 const ALLOWED_MIME = [
@@ -26,10 +27,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
   if (!ALLOWED_MIME.includes(file.type)) return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "File too large (max 20 MB)" }, { status: 400 });
-  const bytes = await file.arrayBuffer();
-  const data = Buffer.from(bytes).toString("base64");
+  const stored = await saveFile("hs-documents", file.name, await file.arrayBuffer(), file.type);
   const doc = await prisma.hSDocument.create({
-    data: { productionId: Number(id), name: file.name, mime: file.type, data, folder, tourStopId },
+    data: { productionId: Number(id), name: file.name, mime: file.type, data: stored.base64 ?? "", fileKey: stored.key, folder, tourStopId },
     select: { id: true, name: true, mime: true, folder: true, tourStopId: true, createdAt: true },
   });
   return NextResponse.json(doc, { status: 201 });

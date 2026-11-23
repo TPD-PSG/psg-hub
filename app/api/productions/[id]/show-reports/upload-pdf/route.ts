@@ -4,6 +4,7 @@ import { requireProductionAccess } from "@/lib/access";
 import { parseShowReportPdf, type ParsedReport } from "@/lib/showReportParser";
 import { ClaudeOutputError } from "@/lib/claude";
 import { toDate } from "@/lib/parse";
+import { saveFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `${file.name}: ${message}` }, { status: 422 });
   }
 
+  // Store the PDF once (R2 if configured), shared by every report it contains
+  const stored = await saveFile("show-reports", file.name, buffer, "application/pdf");
+
   // A PDF can hold several performances (e.g. matinee + evening): save each one
   const createdBy = (session.user as any)?.id ? parseInt((session.user as any).id) : null;
   const reports = [];
@@ -53,7 +57,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         playingTime: r.playingTime,
         notes: r.notes,
         emailSubject: file.name,
-        rawPdf: base64,
+        rawPdf: stored.base64,
+        pdfKey: stored.key,
         productionMatched: true,
         createdByUserId: createdBy,
       },

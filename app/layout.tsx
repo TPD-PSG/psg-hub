@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
+import { auth } from "@/auth";
 import { DialogHost } from "@/components/Dialogs";
 import UserNav from "@/components/UserNav";
 import NotificationBell from "@/components/NotificationBell";
@@ -24,7 +25,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
   return (
     <html lang="en">
       <head>
@@ -33,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#0a193d" />
       </head>
       <body className="min-h-screen" style={{ backgroundColor: "var(--psg-dark-bg)", color: "var(--psg-text)" }}>
-        <AuthProvider>
+        <AuthProvider session={session}>
           <MobileSidebarProvider>
             {/* Top bar */}
             <header style={{ backgroundColor: "var(--psg-navy)" }} className="h-14 flex items-center px-4 gap-3 shadow-lg shrink-0 sticky top-0 z-40">

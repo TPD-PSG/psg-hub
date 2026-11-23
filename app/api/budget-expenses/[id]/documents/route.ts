@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requireRecordAccess } from "@/lib/access";
 
 const DOC_SELECT = { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, invoiceNumber: true, issuedForPayment: true, createdAt: true };
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
@@ -10,6 +11,8 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const rec = await requireRecordAccess("budgetExpense", id);
+  if ("error" in rec) return rec.error;
   const docs = await prisma.spendDocument.findMany({
     where: { expenseId: Number(id) },
     select: DOC_SELECT,
@@ -22,6 +25,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const rec = await requireRecordAccess("budgetExpense", id);
+  if ("error" in rec) return rec.error;
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });

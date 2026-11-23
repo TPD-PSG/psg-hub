@@ -10,6 +10,17 @@ export function parsePerms(raw: string | null | undefined): UserPerms {
   try { return JSON.parse(raw); } catch { return { modules: [], allProductions: false }; }
 }
 
+// Production sections hidden by default for restricted roles (can be overridden per-user via permissions)
+export const DEFAULT_HIDDEN_SECTIONS: Record<string, string[]> = {
+  client: ["budget", "crew", "advancing", "links"],
+  freelancer: ["budget", "crew", "advancing", "links"],
+};
+
+export function hiddenSectionsFor(role: string, rawPerms: string | null | undefined): Set<string> {
+  if (role === "admin") return new Set();
+  return new Set(parsePerms(rawPerms).hiddenSections ?? DEFAULT_HIDDEN_SECTIONS[role] ?? []);
+}
+
 export function canAccess(perms: UserPerms | null, module: string, role: string): boolean {
   if (role === "admin") return true;
   if (role === "client") return CLIENT_MODULES.has(module);

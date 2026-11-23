@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "contacts");
   if ("error" in access) return access.error;
   const contacts = await prisma.productionContact.findMany({
     where: { productionId: Number(id) },
@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "contacts");
   if ("error" in access) return access.error;
   const body = await req.json();
   const contact = await prisma.productionContact.create({

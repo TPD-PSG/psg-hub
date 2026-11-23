@@ -253,7 +253,8 @@ export async function POST(req: NextRequest) {
 
   const url = new URL(req.url);
   const backfill = url.searchParams.get("backfill") === "true";
-  const debug = url.searchParams.get("debug") === "true";
+  // Raw Claude output only for admins, never for the cron caller
+  const debug = url.searchParams.get("debug") === "true" && (session?.user as any)?.role === "admin";
 
   const token = await getGraphToken();
   const productions = await prisma.production.findMany({ select: { id: true, name: true }, where: { archived: false } });
@@ -390,9 +391,8 @@ export async function POST(req: NextRequest) {
     let claudeRaw: any;
     try {
       claudeRaw = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
-      console.log(`[ingest] Claude raw for "${msg.subject}":`, JSON.stringify(claudeRaw));
       parsedReports = applySubjectFallbacks(claudeRaw, msg.subject);
-      console.log(`[ingest] After fallbacks for "${msg.subject}":`, JSON.stringify(parsedReports));
+      console.log(`[ingest] parsed ${parsedReports.length} report(s) from message ${msg.id}`);
     } catch {
       results.push({ subject: msg.subject, status: "parse_error" });
       continue;

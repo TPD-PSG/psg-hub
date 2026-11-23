@@ -106,7 +106,7 @@ Omit sections with no content. Include specific cue numbers and scene references
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "reports");
   if ("error" in access) return access.error;
   const { session } = access;
   const productionId = parseInt(id);

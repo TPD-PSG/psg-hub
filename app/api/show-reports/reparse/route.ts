@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
   for (const record of incomplete) {
     try {
       const parsed = await parsePdfWithClaude(record.rawPdf!, record.emailSubject ?? "");
-      console.log(`[reparse] id=${record.id} subject="${record.emailSubject}" claude returned:`, JSON.stringify(parsed));
+      console.log(`[reparse] id=${record.id} parsed ${parsed.length} report(s)`);
 
       // Pick the parsed entry that matches this record's performance number, or first
       const match = parsed.find(p => p.performanceNumber === record.performanceNumber) ?? parsed[0];

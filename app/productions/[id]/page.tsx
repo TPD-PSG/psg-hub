@@ -784,7 +784,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   useEffect(() => {
     reload();
-    fetch("/api/crew").then((r) => r.json()).then(setAllCrew);
+    fetch("/api/crew").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setAllCrew(d); });
     fetch("/api/hotels").then((r) => r.json()).then(setAllHotels);
     reloadCallSheets();
     reloadKeyDates();

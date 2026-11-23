@@ -137,7 +137,13 @@ export default function VenuesPage() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   async function deleteVenue(id: number) {
-    await fetch(`/api/venues/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/venues/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "Couldn't delete venue" }));
+      setConfirmDelete(null);
+      window.alert(error);
+      return;
+    }
     setSelected(null); setConfirmDelete(null); await reload();
   }
 

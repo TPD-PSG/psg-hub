@@ -34,8 +34,17 @@ export async function DELETE(_req: NextRequest, {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const venueId = Number(id);
-  // Clear venue reference from tour stops before deleting
-  await prisma.tourStop.deleteMany({ where: { venueId } });
+  // Don't silently wipe tour dates: refuse while any tour stop uses this venue
+  const stops = await prisma.tourStop.findMany({
+    where: { venueId },
+    select: { production: { select: { name: true } } },
+  });
+  if (stops.length) {
+    const names = [...new Set(stops.map(s => s.production?.name).filter(Boolean))];
+    return NextResponse.json({
+      error: `This venue is on ${stops.length} tour date${stops.length === 1 ? "" : "s"}${names.length ? ` (${names.join(", ")})` : ""}. Remove or move those tour dates first.`,
+    }, { status: 409 });
+  }
   await prisma.venueContact.deleteMany({ where: { venueId } });
   await prisma.venue.delete({ where: { id: venueId } });
   return NextResponse.json({ ok: true });

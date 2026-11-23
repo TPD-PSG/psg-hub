@@ -8,7 +8,7 @@ export const maxDuration = 60; // Claude API can take 15–30s on large document
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "contacts");
   if ("error" in access) return access.error;
 
   const apiKey = process.env.ANTHROPIC_API_KEY;

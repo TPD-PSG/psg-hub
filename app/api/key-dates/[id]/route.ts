@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
+import { requireRecordAccess } from "@/lib/access";
 
 const prisma = new PrismaClient();
 
@@ -9,6 +10,8 @@ export async function PUT(req: Request, {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const rec = await requireRecordAccess("keyDate", id);
+  if ("error" in rec) return rec.error;
   const body = await req.json();
   const keyDate = await prisma.productionKeyDate.update({
     where: { id: Number(id) },
@@ -28,6 +31,8 @@ export async function DELETE(_: Request, {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const rec = await requireRecordAccess("keyDate", id);
+  if ("error" in rec) return rec.error;
   await prisma.productionKeyDate.delete({ where: { id: Number(id) } });
   return NextResponse.json({ ok: true });
 }

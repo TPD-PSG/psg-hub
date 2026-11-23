@@ -4,7 +4,7 @@ import { requireProductionAccess } from "@/lib/access";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "reports");
   if ("error" in access) return access.error;
   const reports = await prisma.showReport.findMany({
     where: { productionId: Number(id) },
@@ -26,7 +26,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "reports");
   if ("error" in access) return access.error;
   const userId = access.userId;
   const body = await req.json();

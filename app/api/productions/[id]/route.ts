@@ -64,7 +64,18 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     },
   });
   if (!production) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(production);
+  // Don't send tabs the user can't see (e.g. budget and crew for freelancers/clients)
+  const h = access.hidden;
+  return NextResponse.json({
+    ...production,
+    budgetLines: h.has("budget") ? [] : production.budgetLines,
+    crew: h.has("crew") ? [] : production.crew,
+    productionLinks: h.has("links") ? [] : production.productionLinks,
+    hotelBookings: h.has("accommodation") ? [] : production.hotelBookings,
+    haulageMovements: h.has("haulage") ? [] : production.haulageMovements,
+    productionDocuments: h.has("documents") ? [] : production.productionDocuments,
+    hsDocuments: h.has("hs") ? [] : production.hsDocuments,
+  });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

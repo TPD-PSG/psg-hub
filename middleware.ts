@@ -1,9 +1,54 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import { parsePerms, canAccess } from "@/lib/permissions";
+
+// Which module each API area belongs to. `read` lists modules that may also GET it
+// (e.g. a production's budget picks a client from BD). "staff" = admin or member only.
+type Rule = { prefixes: string[]; write: string[]; read?: string[]; staff?: boolean };
+const PRODUCTION_AREAS = [
+  "/api/productions", "/api/budget-lines", "/api/budget-expenses", "/api/call-sheets", "/api/call-sheet-entries",
+  "/api/hotel-bookings", "/api/hotels", "/api/production-", "/api/show-reports", "/api/meetings", "/api/key-dates",
+  "/api/hs-documents", "/api/tour-stops", "/api/events",
+];
+const RULES: Rule[] = [
+  { prefixes: ["/api/crew", "/api/staff-assignments", "/api/budget-reallocation", "/api/haulage"], write: ["productions"], staff: true },
+  { prefixes: PRODUCTION_AREAS, write: ["productions"] },
+  { prefixes: ["/api/bd-tasks", "/api/opportunities"], write: ["bd"] },
+  { prefixes: ["/api/clients"], write: ["bd"], read: ["bd", "productions"] },
+  { prefixes: ["/api/invoices", "/api/invoice-todos", "/api/finance", "/api/expenses"], write: ["finance"] },
+  { prefixes: ["/api/extract-invoice", "/api/spend-documents"], write: ["finance", "productions"] },
+  { prefixes: ["/api/sales"], write: ["sales"] },
+  { prefixes: ["/api/marketing"], write: ["marketing"] },
+  { prefixes: ["/api/roadmap"], write: ["roadmap"] },
+  { prefixes: ["/api/property"], write: ["property"] },
+  { prefixes: ["/api/suppliers"], write: ["suppliers"] },
+  { prefixes: ["/api/fun"], write: ["fun"] },
+  { prefixes: ["/api/tasks", "/api/task-lists"], write: ["tasks", "productions"] },
+  { prefixes: ["/api/venues", "/api/venue-contacts", "/api/venue-documents"], write: ["venues"], read: ["venues", "productions"] },
+];
+
+function moduleDenied(pathname: string, method: string, user: { role?: string; permissions?: string | null }): boolean {
+  const role = user.role ?? "member";
+  if (role === "admin") return false;
+  const rule = RULES.find(r => r.prefixes.some(p => pathname === p || pathname.startsWith(p.endsWith("-") ? p : p + "/")));
+  if (!rule) return false;
+  if (rule.staff && role !== "member") return true;
+  const perms = parsePerms(user.permissions);
+  const allowed = method === "GET" || method === "HEAD" ? (rule.read ?? rule.write) : rule.write;
+  return !allowed.some(m => canAccess(perms, m, role));
+}
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const { pathname } = req.nextUrl;
+
+  // Routes that guard themselves: invite links (token), cron jobs (shared secret)
+  const selfGuarded =
+    pathname.startsWith("/invite/") ||
+    pathname.startsWith("/api/invites/") ||
+    pathname === "/api/notify/daily" ||
+    pathname === "/api/backup";
+  if (selfGuarded) return NextResponse.next();
 
   // Allow auth routes and public assets
   if (pathname.startsWith("/api/auth") || pathname === "/api/users/public" || pathname.startsWith("/_next") || pathname === "/login" || pathname.startsWith("/toolbox-talk") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-signatures") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-qr") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-info") || pathname === "/api/show-reports/ingest") {
@@ -14,6 +59,10 @@ export default auth((req) => {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (pathname.startsWith("/api/") && moduleDenied(pathname, req.method, (req.auth?.user ?? {}) as { role?: string; permissions?: string | null })) {
+    return NextResponse.json({ error: "Your account doesn't have access to this area" }, { status: 403 });
   }
 
   return NextResponse.next();

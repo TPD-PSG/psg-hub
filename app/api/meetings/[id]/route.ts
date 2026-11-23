@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requireRecordAccess } from "@/lib/access";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -8,6 +9,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const role = (session.user as any).role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
+  const rec = await requireRecordAccess("meeting", id);
+  if ("error" in rec) return rec.error;
   const body = await req.json();
   const meeting = await prisma.meeting.update({
     where: { id: Number(id) },
@@ -30,6 +33,8 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const role = (session.user as any).role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
+  const rec = await requireRecordAccess("meeting", id);
+  if ("error" in rec) return rec.error;
   await prisma.meeting.delete({ where: { id: Number(id) } });
   return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requireRecordAccess } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,10 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+
+  const rec = await requireRecordAccess("showReport", id);
+
+  if ("error" in rec) return rec.error;
   const report = await prisma.showReport.findUnique({
     where: { id: parseInt(id) },
     select: { rawPdf: true, emailSubject: true, reportDate: true, performanceNumber: true },

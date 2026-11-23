@@ -4,7 +4,7 @@ import { requireProductionAccess } from "@/lib/access";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "meetings");
   if ("error" in access) return access.error;
   const meetings = await prisma.meeting.findMany({
     where: { productionId: Number(id) },
@@ -16,7 +16,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "meetings");
   if ("error" in access) return access.error;
   if (access.role !== "admin" && access.role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const userId = access.userId;

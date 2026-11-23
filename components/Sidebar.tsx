@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, Suspense, createContext, useContext } from "react";
 import { useSession } from "next-auth/react";
-import { parsePerms } from "@/lib/permissions";
+import { parsePerms, DEFAULT_HIDDEN_SECTIONS } from "@/lib/permissions";
 
 // ── Mobile sidebar context ────────────────────────────────────────────────────
 
@@ -138,11 +138,6 @@ const PRODUCTION_SECTIONS_ALL: NavItem[] = [
 
 const TOUR_ONLY_SECTIONS = new Set(["tour"]);
 
-// Sections hidden by default for restricted roles (can be overridden per-user via permissions)
-const DEFAULT_HIDDEN_SECTIONS: Record<string, string[]> = {
-  client: ["budget", "crew", "advancing", "links"],
-  freelancer: ["budget", "crew", "advancing", "links"],
-};
 
 type CalProduction = { id: number; name: string; color: string };
 

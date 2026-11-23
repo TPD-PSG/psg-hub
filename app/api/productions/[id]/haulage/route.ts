@@ -4,7 +4,7 @@ import { requireProductionAccess } from "@/lib/access";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "haulage");
   if ("error" in access) return access.error;
   const body = await req.json();
   const movement = await prisma.haulageMovement.create({

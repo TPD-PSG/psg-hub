@@ -4,7 +4,7 @@ import { requireProductionAccess } from "@/lib/access";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "budget");
   if ("error" in access) return access.error;
   if (access.role !== "admin" && access.role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const body = await req.json();

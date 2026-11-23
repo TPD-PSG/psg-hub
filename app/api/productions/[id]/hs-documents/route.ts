@@ -21,7 +21,7 @@ export const config = {
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "hs");
   if ("error" in access) return access.error;
   const fd = await req.formData();
   const file = fd.get("file") as File | null;

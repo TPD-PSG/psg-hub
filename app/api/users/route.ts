@@ -6,10 +6,16 @@ import { auth } from "@/auth";
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const users = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true, color: true },
-    orderBy: { name: "asc" },
-  });
+  const role = (session.user as any)?.role;
+  // Admins get the full list for user management. Everyone else gets just
+  // enough for pickers (assign task, add to team): no roles or permissions,
+  // and clients/freelancers don't see staff email addresses.
+  const select = role === "admin"
+    ? { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true, color: true }
+    : role === "member"
+      ? { id: true, name: true, email: true, avatarUrl: true, color: true }
+      : { id: true, name: true, avatarUrl: true, color: true };
+  const users = await prisma.user.findMany({ select, orderBy: { name: "asc" } });
   return NextResponse.json(users);
 }
 

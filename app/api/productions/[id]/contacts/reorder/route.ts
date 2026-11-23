@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // PATCH body: { order: [{ id: number, sortOrder: number }] }
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
+  const access = await requireProductionAccess(id, "contacts");
   if ("error" in access) return access.error;
   const body = await req.json();
   const updates: { id: number; sortOrder: number }[] = body.order ?? [];

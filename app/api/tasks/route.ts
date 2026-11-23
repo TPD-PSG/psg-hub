@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -50,7 +51,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
+  if (body.productionId) {
+    const access = await requireProductionAccess(body.productionId, "tasks");
+    if ("error" in access) return access.error;
+  }
+  body.createdByUserId = Number((session.user as any).id);
   const {
     title, description, productionId, taskListId, assigneeUserId, assigneeName,
     status, priority, dueDate, requiresSignoff, signoffUserId, createdByUserId,

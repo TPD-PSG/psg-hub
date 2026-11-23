@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requireRecordAccess } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const rec = await requireRecordAccess("staffAssignment", id);
+  if ("error" in rec) return rec.error;
   const body = await req.json();
   const assignment = await prisma.staffAssignment.update({
     where: { id: Number(id) },
@@ -33,6 +36,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const rec = await requireRecordAccess("staffAssignment", id);
+  if ("error" in rec) return rec.error;
   await prisma.staffAssignment.delete({ where: { id: Number(id) } });
   return NextResponse.json({ ok: true });
 }

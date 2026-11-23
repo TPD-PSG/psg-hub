@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
+  const access = await requireProductionAccess(body.productionId);
+  if ("error" in access) return access.error;
   const assignment = await prisma.staffAssignment.create({
     data: {
       userId: Number(body.userId),

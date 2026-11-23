@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const productionId = Number(searchParams.get("productionId"));
   if (!productionId) return NextResponse.json({ error: "productionId required" }, { status: 400 });
+  const access = await requireProductionAccess(productionId, "budget");
+  if ("error" in access) return access.error;
 
   const variations = await prisma.budgetVariation.findMany({
     where: { productionId },
@@ -30,6 +33,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { productionId, type, title, justification, clientRef, notes, items } = body;
   if (!productionId || !type || !title) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  const access = await requireProductionAccess(productionId, "budget");
+  if ("error" in access) return access.error;
 
   const variation = await prisma.budgetVariation.create({
     data: {

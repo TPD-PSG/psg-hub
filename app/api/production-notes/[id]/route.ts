@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requireRecordAccess } from "@/lib/access";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -8,6 +9,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const role = (session.user as any).role;
   const userId = Number((session.user as any).id);
   const { id } = await params;
+  const rec = await requireRecordAccess("productionNote", id);
+  if ("error" in rec) return rec.error;
   const existing = await prisma.productionNote.findUnique({ where: { id: Number(id) } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (existing.createdByUserId !== userId && role !== "admin") {
@@ -32,6 +35,8 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const role = (session.user as any).role;
   const userId = Number((session.user as any).id);
   const { id } = await params;
+  const rec = await requireRecordAccess("productionNote", id);
+  if ("error" in rec) return rec.error;
   const existing = await prisma.productionNote.findUnique({ where: { id: Number(id) } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 403 });
   if (existing.createdByUserId !== userId && role !== "admin") {

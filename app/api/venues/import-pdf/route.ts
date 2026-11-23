@@ -54,40 +54,49 @@ export async function POST(req: NextRequest) {
     const previous = await prisma.venue.findUnique({ where: { id: updateId }, select: { techSpecFileKey: true } });
     const stored = await saveFile("venue-tech-specs", file.name, buffer, file.type);
     await removeFile(previous?.techSpecFileKey);
-    const updated = await prisma.venue.update({
+    // Re-importing fills in what the document gives; it never blanks details someone entered by hand
+    await prisma.venue.update({
       where: { id: updateId },
       data: {
         name: venueName,
-        type: v.type || "other",
-        address: v.address || null,
-        city: v.city || null,
-        postcode: v.postcode || null,
-        phone: v.phone || null,
-        email: v.email || null,
-        website: v.website || null,
-        capacity: v.capacity ?? null,
-        notes: v.notes || null,
+        type: v.type || undefined,
+        address: v.address || undefined,
+        city: v.city || undefined,
+        postcode: v.postcode || undefined,
+        phone: v.phone || undefined,
+        email: v.email || undefined,
+        website: v.website || undefined,
+        capacity: v.capacity ?? undefined,
+        notes: v.notes || undefined,
         techSpecFile: stored.base64,
         techSpecFileKey: stored.key,
         techSpecName: file.name,
         techSpecMime: file.type,
-        techSpecs: techSpecs ? JSON.stringify(techSpecs) : null,
+        techSpecs: techSpecs ? JSON.stringify(techSpecs) : undefined,
       },
-      include: { contacts: true, _count: { select: { contacts: true } } },
     });
 
-    if (rawContacts.length > 0) {
-      await prisma.venueContact.createMany({
-        data: rawContacts
-                    .map(c => ({
-            venueId: updateId,
-            name: c.name,
-            role: c.role || null,
-            email: c.email || null,
-            phone: c.phone || null,
-            notes: c.notes || null,
-          })),
-      });
+    // Merge contacts by name: add new people, fill gaps on existing ones, never duplicate
+    const existing = await prisma.venueContact.findMany({ where: { venueId: updateId } });
+    const byName = new Map(existing.map(c => [c.name.trim().toLowerCase(), c]));
+    for (const c of rawContacts) {
+      const match = byName.get(c.name.trim().toLowerCase());
+      if (match) {
+        await prisma.venueContact.update({
+          where: { id: match.id },
+          data: {
+            role: match.role || c.role || null,
+            email: match.email || c.email || null,
+            phone: match.phone || c.phone || null,
+            notes: match.notes || c.notes || null,
+          },
+        });
+      } else {
+        const created = await prisma.venueContact.create({
+          data: { venueId: updateId, name: c.name, role: c.role || null, email: c.email || null, phone: c.phone || null, notes: c.notes || null },
+        });
+        byName.set(c.name.trim().toLowerCase(), created);
+      }
     }
 
     const venueWithContacts = await prisma.venue.findUnique({

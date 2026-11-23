@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { money } from "@/lib/parse";
+import { removeFile } from "@/lib/storage";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -40,6 +41,9 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const rec = await requireRecordAccess("budgetLine", id);
 
   if ("error" in rec) return rec.error;
+  // Its expenses and their receipts go with it; note the R2 files first
+  const docs = await prisma.spendDocument.findMany({ where: { expense: { budgetLineId: Number(id) } }, select: { fileKey: true } });
   await prisma.budgetLine.delete({ where: { id: Number(id) } });
+  for (const d of docs) await removeFile(d.fileKey);
   return NextResponse.json({ ok: true });
 }

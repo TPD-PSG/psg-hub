@@ -4,3 +4,4 @@ export type JobStatus = { job: JobName; label: string; lateAfterH: number; state
 export const JOBS: Record<JobName, { label: string; lateAfterH: number }>;
 export function recordRun(db: unknown, job: JobName, ok: boolean, summary?: string): Promise<void>;
 export function readJobStatus(db: unknown, now?: Date): Promise<JobStatus[]>;
+export function alertAdmins(db: unknown, now?: Date): Promise<void>;

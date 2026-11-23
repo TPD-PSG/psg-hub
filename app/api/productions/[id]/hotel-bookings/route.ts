@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
+import { missingDates, money, toDate } from "@/lib/parse";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const access = await requireProductionAccess(id, "accommodation");
   if ("error" in access) return access.error;
   const body = await req.json();
+  const badDate = missingDates(body, ["checkIn", "checkOut"]);
+  if (badDate) return badDate;
   const booking = await prisma.hotelBooking.create({
     data: {
       productionId:   Number(id),
@@ -27,10 +30,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       guestName:      body.guestName || null,
       roomType:       body.roomType || null,
       roomNumber:     body.roomNumber || null,
-      checkIn:        new Date(body.checkIn),
-      checkOut:       new Date(body.checkOut),
-      ratePerNight:   body.ratePerNight ? Number(body.ratePerNight) : null,
-      totalCost:      body.totalCost ? Number(body.totalCost) : null,
+      checkIn:        toDate(body.checkIn)!,
+      checkOut:       toDate(body.checkOut)!,
+      ratePerNight:   money(body.ratePerNight),
+      totalCost:      money(body.totalCost),
       confirmationNo: body.confirmationNo || null,
       isPaid:         body.isPaid ?? false,
       notes:          body.notes || null,

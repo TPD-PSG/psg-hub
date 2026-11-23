@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { money } from "@/lib/parse";
 
 const PROPERTY_ID = 1;
 
@@ -13,7 +14,7 @@ export async function PUT(req: NextRequest) {
     where: { propertyId: PROPERTY_ID },
     create: {
       propertyId: PROPERTY_ID,
-      amount: body.amount ? Number(body.amount) : null,
+      amount: money(body.amount),
       frequency: body.frequency || null,
       nextPaymentDate: body.nextPaymentDate ? new Date(body.nextPaymentDate) : null,
       nextReviewDate: body.nextReviewDate ? new Date(body.nextReviewDate) : null,
@@ -21,7 +22,7 @@ export async function PUT(req: NextRequest) {
       notes: body.notes || null,
     },
     update: {
-      amount: body.amount ? Number(body.amount) : null,
+      amount: money(body.amount),
       frequency: body.frequency || null,
       nextPaymentDate: body.nextPaymentDate ? new Date(body.nextPaymentDate) : null,
       nextReviewDate: body.nextReviewDate ? new Date(body.nextReviewDate) : null,

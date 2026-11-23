@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { money } from "@/lib/parse";
 
 export async function GET() {
   const session = await auth();
@@ -20,8 +21,8 @@ export async function POST(req: NextRequest) {
       description: body.description,
       party: body.party,
       production: body.production || null,
-      netAmount: Number(body.netAmount) || 0,
-      vatAmount: Number(body.vatAmount) || 0,
+      netAmount: (money(body.netAmount) ?? 0),
+      vatAmount: (money(body.vatAmount) ?? 0),
       issueDate: body.issueDate ? new Date(body.issueDate) : null,
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
       status: body.status || "draft",

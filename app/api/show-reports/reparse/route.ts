@@ -121,6 +121,10 @@ export async function POST(req: NextRequest) {
   if (!session && !isCron) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const callerRole = (session?.user as any)?.role;
+  if (!isCron && callerRole !== "admin" && callerRole !== "member") {
+    return NextResponse.json({ error: "Only PSG staff can run the report import" }, { status: 403 });
+  }
 
   const MAX_PER_RUN = 4;
 

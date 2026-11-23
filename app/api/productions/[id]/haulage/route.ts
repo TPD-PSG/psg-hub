@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
+import { missingDates, money, toDate } from "@/lib/parse";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await requireProductionAccess(id, "haulage");
   if ("error" in access) return access.error;
   const body = await req.json();
+  const badDate = missingDates(body, ["departureAt"]);
+  if (badDate) return badDate;
   const movement = await prisma.haulageMovement.create({
     data: {
       productionId:   Number(id),
@@ -15,11 +18,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       vehicleInfo:    body.vehicleInfo || null,
       fromLocation:   body.fromLocation,
       toLocation:     body.toLocation,
-      departureAt:    new Date(body.departureAt),
+      departureAt:    toDate(body.departureAt)!,
       arrivalAt:      body.arrivalAt ? new Date(body.arrivalAt) : null,
       cargo:          body.cargo || null,
       notes:          body.notes || null,
-      estimatedCost:  body.estimatedCost != null ? Number(body.estimatedCost) : null,
+      estimatedCost:  money(body.estimatedCost),
       actualCost:     body.actualCost != null ? Number(body.actualCost) : null,
       rechargeable:   body.rechargeable ?? false,
       budgetLineId:   body.budgetLineId ? Number(body.budgetLineId) : null,

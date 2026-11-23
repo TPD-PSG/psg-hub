@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { safeJson } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -36,30 +37,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const user = await prisma.user.create({
-    data: {
-      name: invite.name,
-      email: invite.email,
-      role: invite.role,
-      passwordHash,
-      permissions: invite.permissions ?? null,
-    },
+  // Productions that still exist, without duplicates
+  const wanted = [...new Set(safeJson<unknown[]>(invite.productionIds, []).map(Number).filter(Number.isInteger))];
+  const productions = wanted.length
+    ? await prisma.production.findMany({ where: { id: { in: wanted } }, select: { id: true } })
+    : [];
+
+  // Create the account, mark the invite used and add team places together, so a failure can't leave half an account
+  await prisma.$transaction(async tx => {
+    const user = await tx.user.create({
+      data: {
+        name: invite.name,
+        email: invite.email,
+        role: invite.role,
+        passwordHash,
+        permissions: invite.permissions ?? null,
+      },
+    });
+    await tx.userInvite.update({ where: { token }, data: { usedAt: new Date() } });
+    for (const p of productions) {
+      await tx.productionTeam.upsert({
+        where: { productionId_userId: { productionId: p.id, userId: user.id } },
+        create: { productionId: p.id, userId: user.id },
+        update: {},
+      });
+    }
   });
-
-  await prisma.userInvite.update({ where: { token }, data: { usedAt: new Date() } });
-
-  // Add to specified productions
-  if (invite.productionIds) {
-    try {
-      const ids: number[] = JSON.parse(invite.productionIds);
-      if (ids.length) {
-        await prisma.productionTeam.createMany({
-          data: ids.map(pid => ({ productionId: pid, userId: user.id })),
-
-        });
-      }
-    } catch {}
-  }
 
   return NextResponse.json({ ok: true });
 }

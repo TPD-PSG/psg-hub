@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { safeJson } from "@/lib/parse";
 
 export async function GET() {
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const prefs = user.preferences ? JSON.parse(user.preferences) : null;
-  return NextResponse.json(prefs ?? {});
+  return NextResponse.json(safeJson<Record<string, unknown>>(user.preferences, {}));
 }
 
 export async function PUT(req: Request) {

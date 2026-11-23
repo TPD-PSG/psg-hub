@@ -17,8 +17,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!credentials?.email || !credentials?.password) return null;
 
         const headersList = await headers();
-        const ip = headersList.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-        const { allowed, retryAfterMs } = checkRateLimit(ip);
+        // The left-most X-Forwarded-For entry is whatever the client sent; Railway's proxy appends the real one last
+        const ip = headersList.get("x-forwarded-for")?.split(",").pop()?.trim() || headersList.get("x-real-ip") || "unknown";
+        const email = String(credentials.email).trim().toLowerCase();
+        const byIp = checkRateLimit(`ip:${ip}`);
+        const byEmail = checkRateLimit(`email:${email}`);
+        const allowed = byIp.allowed && byEmail.allowed;
+        const retryAfterMs = Math.max(byIp.retryAfterMs, byEmail.retryAfterMs);
         if (!allowed) {
           const minutes = Math.ceil(retryAfterMs / 60000);
           throw new Error(`Too many login attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`);
@@ -31,7 +36,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const valid = await compare(String(credentials.password), user.passwordHash);
         if (!valid) return null;
 
-        resetRateLimit(ip);
+        resetRateLimit(`ip:${ip}`);
+        resetRateLimit(`email:${email}`);
         return { id: String(user.id), name: user.name, email: user.email, role: user.role, permissions: user.permissions, avatarUrl: user.avatarUrl ?? null };
       },
     }),
@@ -48,7 +54,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       if (trigger === "update" && session) {
         if (session.avatarUrl !== undefined) token.avatarUrl = session.avatarUrl;
-        if (session.permissions !== undefined) token.permissions = session.permissions;
+        // Never take role/permissions from the browser — re-read them from the database instead
+        token.permissionsCheckedAt = 0;
       }
       // Re-fetch role + permissions from DB at most once every 5 minutes
       const FIVE_MIN = 5 * 60 * 1000;

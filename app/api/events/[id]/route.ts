@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse";
 
 export async function PUT(req: NextRequest, {
  params }: { params: Promise<{ id: string }> }) {
@@ -16,8 +17,8 @@ export async function PUT(req: NextRequest, {
     data: {
       title: body.title,
       type: body.type,
-      startAt: new Date(body.startAt),
-      endAt: new Date(body.endAt),
+      startAt: toDate(body.startAt),
+      endAt: toDate(body.endAt),
       location: body.location || null,
       notes: body.notes || null,
     },

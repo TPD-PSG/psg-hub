@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse";
 
 export async function PUT(req: NextRequest, {
  params }: { params: Promise<{ id: string }> }) {
@@ -14,7 +15,7 @@ export async function PUT(req: NextRequest, {
   const report = await prisma.showReport.update({
     where: { id: Number(id) },
     data: {
-      reportDate: new Date(body.reportDate),
+      reportDate: toDate(body.reportDate),
       venue: body.venue || null,
       performance: body.performance || null,
       attendance: body.attendance ? Number(body.attendance) : null,

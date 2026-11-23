@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +19,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       userId: Number(body.userId),
       productionId: Number(body.productionId),
       tourStopId: body.tourStopId ? Number(body.tourStopId) : null,
-      startDate: new Date(body.startDate),
-      endDate: new Date(body.endDate),
+      startDate: toDate(body.startDate),
+      endDate: toDate(body.endDate),
       activityType: body.activityType || null,
       notes: body.notes || null,
     },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
+import { money } from "@/lib/parse";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       department: body.department,
       description: body.description,
       nominalCode: body.nominalCode || null,
-      budgeted: Number(body.budgeted),
+      budgeted: (money(body.budgeted) ?? 0),
       notes: body.notes || null,
     },
   });

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { readFileSync } from "fs";
 import { resolve } from "path";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { snapshotDatabase } = require("@/lib/db-snapshot") as { snapshotDatabase: (db?: unknown) => Promise<Buffer> };
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
 
   let fileBuffer: Buffer;
   try {
-    fileBuffer = readFileSync(dbPath);
+    fileBuffer = await snapshotDatabase(prisma);
   } catch (err) {
     return NextResponse.json({ error: `Cannot read DB file at ${dbPath}: ${err}` }, { status: 500 });
   }

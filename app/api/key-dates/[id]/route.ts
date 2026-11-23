@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse";
 
 const prisma = new PrismaClient();
 
@@ -18,7 +19,7 @@ export async function PUT(req: Request, {
     data: {
       type: body.type,
       label: body.label || null,
-      startDate: new Date(body.startDate),
+      startDate: toDate(body.startDate),
       endDate: body.endDate ? new Date(body.endDate) : null,
       notes: body.notes || null,
     },

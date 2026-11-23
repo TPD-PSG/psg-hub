@@ -571,6 +571,9 @@ model Notification {
   link      String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, read])
 }
 
 model Expense {

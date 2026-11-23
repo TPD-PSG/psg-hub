@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { money } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,8 @@ export async function POST(req: NextRequest) {
       category: body.category || "misc",
       description: body.description,
       supplier: body.supplier || null,
-      netAmount: Number(body.netAmount) || 0,
-      vatAmount: Number(body.vatAmount) || 0,
+      netAmount: (money(body.netAmount) ?? 0),
+      vatAmount: (money(body.vatAmount) ?? 0),
       date: body.date ? new Date(body.date) : null,
       paymentMethod: body.paymentMethod || "to_pay",
       status: "pending",

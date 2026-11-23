@@ -2,11 +2,14 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const fs = require("fs");
 const path = require("path");
 
+const { snapshotDatabase } = require("../lib/db-snapshot");
+
 const DB_PATH = process.env.DATABASE_URL?.replace("file:", "") || "/data/prod.db";
-const BUCKET = "psg-hub-backups";
-const ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
-const ACCESS_KEY = process.env.R2_ACCESS_KEY_ID;
-const SECRET_KEY = process.env.R2_SECRET_ACCESS_KEY;
+// Same variables as /api/backup, with the older R2_* names still accepted
+const BUCKET = process.env.CLOUDFLARE_R2_BUCKET || "psg-hub-backups";
+const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.R2_ACCOUNT_ID;
+const ACCESS_KEY = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID;
+const SECRET_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY;
 
 if (!ACCOUNT_ID || !ACCESS_KEY || !SECRET_KEY) {
   console.error("Missing R2 credentials");
@@ -29,7 +32,7 @@ async function backup() {
   const timestamp = now.toISOString().replace(/[:.]/g, "-");
   const key = `backups/${timestamp}.db`;
 
-  const fileBuffer = fs.readFileSync(DB_PATH);
+  const fileBuffer = await snapshotDatabase();
 
   await s3.send(new PutObjectCommand({
     Bucket: BUCKET,

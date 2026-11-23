@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { money } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +29,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       category: body.category ?? undefined,
       description: body.description ?? undefined,
       supplier: body.supplier ?? undefined,
-      netAmount: body.netAmount !== undefined ? Number(body.netAmount) : undefined,
-      vatAmount: body.vatAmount !== undefined ? Number(body.vatAmount) : undefined,
+      netAmount: body.netAmount !== undefined ? (money(body.netAmount) ?? 0) : undefined,
+      vatAmount: body.vatAmount !== undefined ? (money(body.vatAmount) ?? 0) : undefined,
       date: body.date ? new Date(body.date) : body.date === "" ? null : undefined,
       paymentMethod: body.paymentMethod ?? undefined,
       status: body.status ?? undefined,

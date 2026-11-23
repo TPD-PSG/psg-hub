@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { money, toDate } from "@/lib/parse";
 
 export async function PUT(req: NextRequest, {
  params }: { params: Promise<{ id: string }> }) {
@@ -19,10 +20,10 @@ export async function PUT(req: NextRequest, {
       guestName:      body.guestName || null,
       roomType:       body.roomType || null,
       roomNumber:     body.roomNumber || null,
-      checkIn:        new Date(body.checkIn),
-      checkOut:       new Date(body.checkOut),
-      ratePerNight:   body.ratePerNight ? Number(body.ratePerNight) : null,
-      totalCost:      body.totalCost ? Number(body.totalCost) : null,
+      checkIn:        toDate(body.checkIn),
+      checkOut:       toDate(body.checkOut),
+      ratePerNight:   money(body.ratePerNight),
+      totalCost:      money(body.totalCost),
       confirmationNo: body.confirmationNo || null,
       isPaid:         body.isPaid ?? false,
       notes:          body.notes || null,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { money } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
       client: body.client,
       description: body.description,
       productionId: body.productionId ? Number(body.productionId) : null,
-      amount: body.amount ? Number(body.amount) : null,
+      amount: money(body.amount),
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
       notes: body.notes || null,
       done: false,

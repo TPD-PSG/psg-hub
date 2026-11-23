@@ -25,7 +25,9 @@ export async function PUT(req: NextRequest, {
     },
     include: { contacts: true, _count: { select: { contacts: true } } },
   });
-  return NextResponse.json(venue);
+  // Don't send the stored tech-spec file back on every save
+  const { techSpecFile, ...rest } = venue;
+  return NextResponse.json({ ...rest, hasTechSpecFile: !!techSpecFile });
 }
 
 export async function DELETE(_req: NextRequest, {

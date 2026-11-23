@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { safeJson } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -26,5 +27,5 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     select: { id: true, flags: true },
   });
 
-  return NextResponse.json({ id: report.id, flags: report.flags ? JSON.parse(report.flags) : [] });
+  return NextResponse.json({ id: report.id, flags: safeJson<string[]>(report.flags, []) });
 }

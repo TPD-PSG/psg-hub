@@ -196,7 +196,8 @@ function SidebarInner() {
 
   useEffect(() => {
     if (!prodId) { setProdName(null); setProdIsTour(null); return; }
-    fetch(`/api/productions/${prodId}`)
+    // Lightweight endpoint: just name, tour flag and stops (the full production includes budget, crew, etc.)
+    fetch(`/api/productions/${prodId}/toolbox-info`)
       .then(r => r.json())
       .then(d => { setProdName(d?.name ?? null); setProdIsTour(d?.isTour ?? false); })
       .catch(() => { setProdName(null); setProdIsTour(null); });

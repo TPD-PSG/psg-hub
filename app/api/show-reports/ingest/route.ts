@@ -246,6 +246,10 @@ export async function POST(req: NextRequest) {
   if (!session && !isCron) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const callerRole = (session?.user as any)?.role;
+  if (!isCron && callerRole !== "admin" && callerRole !== "member") {
+    return NextResponse.json({ error: "Only PSG staff can run the report import" }, { status: 403 });
+  }
 
   if (!process.env.AZURE_TENANT_ID || !process.env.AZURE_CLIENT_ID || !process.env.AZURE_CLIENT_SECRET) {
     return NextResponse.json({ error: "Microsoft Graph not configured" }, { status: 503 });

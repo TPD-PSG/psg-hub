@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { money } from "@/lib/parse";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -15,7 +16,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       status: body.status,
       priority: body.priority,
       contractor: body.contractor || null,
-      cost: body.cost ? Number(body.cost) : null,
+      cost: money(body.cost),
       resolvedAt: body.status === "resolved" ? new Date() : null,
       notes: body.notes || null,
     },

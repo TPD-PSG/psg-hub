@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { requireProductionAccess } from "@/lib/access";
+import { missingDates, toDate } from "@/lib/parse";
 
 const prisma = new PrismaClient();
 
@@ -20,12 +21,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const access = await requireProductionAccess(id);
   if ("error" in access) return access.error;
   const body = await req.json();
+  const badDate = missingDates(body, ["startDate"]);
+  if (badDate) return badDate;
   const keyDate = await prisma.productionKeyDate.create({
     data: {
       productionId: Number(id),
       type: body.type,
       label: body.label || null,
-      startDate: new Date(body.startDate),
+      startDate: toDate(body.startDate)!,
       endDate: body.endDate ? new Date(body.endDate) : null,
       notes: body.notes || null,
     },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { money } from "@/lib/parse";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -15,9 +16,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       budgetLineId:     Number(id),
       phase:            body.phase || "Capitalisation",
       description:      body.description,
-      estimated:        Number(body.estimated) || 0,
-      committed:        Number(body.committed) || 0,
-      spent:            Number(body.spent) || 0,
+      estimated:        (money(body.estimated) ?? 0),
+      committed:        (money(body.committed) ?? 0),
+      spent:            (money(body.spent) ?? 0),
       poNumber:         body.poNumber || null,
       paymentDue:       body.paymentDue ? new Date(body.paymentDue) : null,
       issuedForPayment: body.issuedForPayment ?? false,

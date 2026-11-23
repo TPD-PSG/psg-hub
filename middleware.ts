@@ -27,6 +27,14 @@ const RULES: Rule[] = [
   { prefixes: ["/api/venues", "/api/venue-contacts", "/api/venue-documents"], write: ["venues"], read: ["venues", "productions"] },
 ];
 
+// Upload size caps, checked before any route reads the body
+const MB = 1024 * 1024;
+function maxBodyBytes(pathname: string): number {
+  if (pathname === "/api/users/me/avatar" || pathname.endsWith("/logo")) return 5 * MB;
+  if (pathname === "/api/venues/import-pdfs") return 100 * MB; // several PDFs at once
+  return 25 * MB;
+}
+
 function moduleDenied(pathname: string, method: string, user: { role?: string; permissions?: string | null }): boolean {
   const role = user.role ?? "member";
   if (role === "admin") return false;
@@ -41,6 +49,14 @@ function moduleDenied(pathname: string, method: string, user: { role?: string; p
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const { pathname } = req.nextUrl;
+
+  if (req.method !== "GET" && req.method !== "HEAD" && pathname.startsWith("/api/")) {
+    const len = Number(req.headers.get("content-length") ?? 0);
+    const max = maxBodyBytes(pathname);
+    if (len > max) {
+      return NextResponse.json({ error: `File too large (max ${Math.round(max / MB)} MB)` }, { status: 413 });
+    }
+  }
 
   // Routes that guard themselves: invite links (token), cron jobs (shared secret)
   const selfGuarded =

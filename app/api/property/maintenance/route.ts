@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { money } from "@/lib/parse";
 
 const PROPERTY_ID = 1;
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
       status: body.status || "reported",
       priority: body.priority || "normal",
       contractor: body.contractor || null,
-      cost: body.cost ? Number(body.cost) : null,
+      cost: money(body.cost),
       notes: body.notes || null,
     },
   });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -16,7 +17,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     where: { id: Number(id) },
     data: {
       title: body.title,
-      meetingDate: new Date(body.meetingDate),
+      meetingDate: toDate(body.meetingDate),
       location: body.location || null,
       attendees: body.attendees || null,
       agenda: body.agenda || null,

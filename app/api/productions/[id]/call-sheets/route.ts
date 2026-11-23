@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
+import { missingDates, toDate } from "@/lib/parse";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,10 +20,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const access = await requireProductionAccess(id, "callsheets");
   if ("error" in access) return access.error;
   const body = await req.json();
+  const badDate = missingDates(body, ["date"]);
+  if (badDate) return badDate;
   const sheet = await prisma.callSheet.create({
     data: {
       productionId: Number(id),
-      date: new Date(body.date),
+      date: toDate(body.date)!,
       title: body.title || null,
       venue: body.venue || null,
       generalNotes: body.generalNotes || null,

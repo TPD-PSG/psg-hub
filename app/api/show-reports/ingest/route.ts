@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { parseShowReportPdf, type ParsedReport } from "@/lib/showReportParser";
 import { ClaudeOutputError } from "@/lib/claude";
 import { toDate } from "@/lib/parse";
-import { saveFile } from "@/lib/storage";
+import { saveFile, removeFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -263,32 +263,50 @@ export async function POST(req: NextRequest) {
       return;
     }
 
-    // Store each PDF once (R2 if configured), shared by every report it contains; one DB record per report
+    // Store each PDF once (R2 if configured), shared by every report it contains
+    const storedPdfs = await Promise.all(readPdfs.map(async pdf => ({
+      pdf,
+      stored: await saveFile("show-reports", pdf.name || `${msg.subject}.pdf`, Buffer.from(pdf.base64, "base64"), "application/pdf"),
+    })));
+    const emailFrom = msg.from?.emailAddress?.address ?? null;
+
+    // Check-and-save in one transaction, so two overlapping imports (e.g. the scheduled one and a
+    // manual "Import from Email") can't both save the same email
     const parsedReports: ParsedReport[] = [];
-    for (const pdf of readPdfs) {
-      const stored = await saveFile("show-reports", pdf.name || `${msg.subject}.pdf`, Buffer.from(pdf.base64, "base64"), "application/pdf");
-      for (const parsed of pdf.reports) {
-        parsedReports.push(parsed);
-        await prisma.showReport.create({
-          data: {
-            productionId: productionId,
-            reportDate: toDate(parsed.reportDate) ?? new Date(msg.receivedDateTime),
-            venue: parsed.venue,
-            performance: parsed.performance,
-            performanceNumber: parsed.performanceNumber,
-            attendance: parsed.attendance,
-            houseCapacity: parsed.houseCapacity,
-            runningTime: parsed.runningTime,
-            playingTime: parsed.playingTime,
-            notes: parsed.notes,
-            emailSubject: msg.subject,
-            emailFrom: msg.from?.emailAddress?.address ?? null,
-            rawPdf: stored.base64,
-            pdfKey: stored.key,
-            productionMatched: productionId !== null,
-          },
-        });
+    const saved = await prisma.$transaction(async tx => {
+      if (await tx.showReport.count({ where: { emailSubject: msg.subject, emailFrom } })) return false;
+      for (const { pdf, stored } of storedPdfs) {
+        for (const parsed of pdf.reports) {
+          parsedReports.push(parsed);
+          await tx.showReport.create({
+            data: {
+              productionId: productionId,
+              reportDate: toDate(parsed.reportDate) ?? new Date(msg.receivedDateTime),
+              venue: parsed.venue,
+              performance: parsed.performance,
+              performanceNumber: parsed.performanceNumber,
+              attendance: parsed.attendance,
+              houseCapacity: parsed.houseCapacity,
+              runningTime: parsed.runningTime,
+              playingTime: parsed.playingTime,
+              notes: parsed.notes,
+              emailSubject: msg.subject,
+              emailFrom,
+              rawPdf: stored.base64,
+              pdfKey: stored.key,
+              productionMatched: productionId !== null,
+            },
+          });
+        }
       }
+      return true;
+    });
+    if (!saved) {
+      // Another import got there first: drop the PDFs this run uploaded
+      for (const { stored } of storedPdfs) await removeFile(stored.key);
+      inFlight.delete(dedupKey);
+      results.push({ subject: msg.subject, status: "already_imported" });
+      return;
     }
 
     // Add to dedup set so we don't re-import within the same run

@@ -18,4 +18,21 @@ export default () => run("server-pages", async ({ db, users, login, results }) =
   } finally {
     await db.staffAssignment.delete({ where: { id: assignment.id } }).catch(() => {});
   }
+
+  // Finance, BD and Sales: data in the admin's first HTML, none of it for a freelancer
+  const inv = await db.companyInvoice.create({ data: { type: "sales", party: "SSR Invoice Party", description: "server-pages-test", netAmount: 1, status: "sent" } });
+  const client = await db.client.create({ data: { name: "SSR Test Client", type: "other" } });
+  const brand = await db.salesBrand.create({ data: { name: "SSR Test Brand" } });
+  try {
+    for (const [path, marker] of [["/finance", "SSR Invoice Party"], ["/bd", "SSR Test Client"], ["/sales", "SSR Test Brand"]]) {
+      ok((await html(a, path)).includes(marker), `${path} (admin): data in the first HTML`);
+      ok(!(await html(f, path)).includes(marker), `${path} (freelancer): no data in the page`);
+    }
+    const ph = await html(a, "/property");
+    ok(!/>Loading…</.test(ph), "/property (admin): no Loading… placeholder");
+  } finally {
+    await db.companyInvoice.delete({ where: { id: inv.id } }).catch(() => {});
+    await db.client.delete({ where: { id: client.id } }).catch(() => {});
+    await db.salesBrand.delete({ where: { id: brand.id } }).catch(() => {});
+  }
 });

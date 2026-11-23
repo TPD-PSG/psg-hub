@@ -3,6 +3,7 @@ import { BUILTIN_CONTACT_SECTIONS, CONTACT_SECTIONS_SETTING, defaultSections } f
 
 import { useEffect, useState } from "react";
 import SeasonalOverlay from "@/components/SeasonalOverlay";
+import SystemStatus from "@/components/SystemStatus";
 
 type QuickLink = { id: number; label: string; url: string; icon: string; order: number };
 type SeasonMode = "auto" | "off" | "christmas" | "halloween" | "spring" | "bonfire" | "newyear";
@@ -103,6 +104,8 @@ export default function AdminSettingsPage() {
   return (
     <div className="max-w-2xl space-y-8">
       <h1 className="text-2xl font-bold text-white">Hub Settings</h1>
+
+      <SystemStatus />
 
       {/* News banner */}
       <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>

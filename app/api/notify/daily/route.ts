@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { recordRun } from "@/lib/job-status";
+import { summariseDaily } from "@/lib/jobSummaries";
 
 export const dynamic = "force-dynamic";
 
 // Called by Railway cron daily — creates in-app notifications for upcoming/overdue items.
 // Protected by a shared secret set in NOTIFY_SECRET env var.
-export async function POST(req: NextRequest) {
+async function runDaily(req: NextRequest): Promise<Response> {
   const secret = process.env.NOTIFY_SECRET;
   if (!secret || req.headers.get("x-notify-secret") !== secret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -125,4 +127,21 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, created: created.length, items: created, backup: backupResult });
+}
+
+// Runs runDaily and records the outcome for the Hub Settings status panel. Rejected callers
+// (401/403) aren't runs, so they aren't recorded.
+export async function POST(req: NextRequest) {
+  let res: Response;
+  try {
+    res = await runDaily(req);
+  } catch (err) {
+    await recordRun(prisma, "notify-daily", false, `Crashed: ${err instanceof Error ? err.message : String(err)}`);
+    throw err;
+  }
+  if (res.status === 401 || res.status === 403) return res;
+  const body = await res.clone().json().catch(() => ({}));
+  const { ok, summary } = summariseDaily(res, body);
+  await recordRun(prisma, "notify-daily", ok, summary);
+  return res;
 }

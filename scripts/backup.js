@@ -3,6 +3,8 @@ const fs = require("fs");
 const path = require("path");
 
 const { snapshotDatabase } = require("../lib/db-snapshot");
+const { createPrismaClient } = require("../lib/prisma-client");
+const { recordRun } = require("../lib/job-status");
 
 const DB_PATH = process.env.DATABASE_URL?.replace("file:", "") || "/data/prod.db";
 // Same variables as /api/backup, with the older R2_* names still accepted
@@ -18,7 +20,9 @@ if (!ACCOUNT_ID || !ACCESS_KEY || !SECRET_KEY) {
 
 const s3 = new S3Client({
   region: "auto",
-  endpoint: `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  // R2_ENDPOINT points tests at a local stand-in, as in lib/storage.js
+  endpoint: process.env.R2_ENDPOINT || `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  forcePathStyle: !!process.env.R2_ENDPOINT,
   credentials: { accessKeyId: ACCESS_KEY, secretAccessKey: SECRET_KEY },
 });
 
@@ -42,7 +46,16 @@ async function backup() {
   }));
 
   console.log(`Backup uploaded: ${key} (${fileBuffer.length} bytes)`);
-  await prune(now);
+  // The backup is safe at this point; a tidy-up failure is reported but isn't a failed backup
+  let note = "";
+  try { await prune(now); } catch (err) { console.error("Pruning old backups failed:", err.message); note = ` (removing old copies failed: ${err.message})`; }
+  await record(true, `${(fileBuffer.length / 1024 / 1024).toFixed(1)} MB saved to R2${note}`);
+}
+
+// Status for the Hub Settings panel; uses its own short-lived connection
+async function record(ok, summary) {
+  const db = createPrismaClient();
+  try { await recordRun(db, "backup-hourly", ok, summary); } finally { await db.$disconnect(); }
 }
 
 // Keep every backup from the last 48 hours, then the first backup of each day for 30 days.
@@ -73,7 +86,8 @@ async function prune(now) {
   if (toDelete.length) console.log(`Pruned ${toDelete.length} old backup(s)`);
 }
 
-backup().catch((err) => {
+backup().catch(async (err) => {
   console.error("Backup failed:", err.message);
+  await record(false, `Failed: ${err.message}`).catch(() => {});
   process.exit(1);
 });

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { recordRun } from "@/lib/job-status";
+import { summariseImport } from "@/lib/jobSummaries";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { parseShowReportPdf, type ParsedReport } from "@/lib/showReportParser";
@@ -84,7 +86,7 @@ async function getOrCreateProcessedFolder(token: string): Promise<string | null>
   } catch { return null; }
 }
 
-export async function POST(req: NextRequest) {
+async function runIngest(req: NextRequest): Promise<Response> {
   const session = await auth();
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("x-cron-secret");
@@ -346,4 +348,21 @@ export async function POST(req: NextRequest) {
   }));
 
   return NextResponse.json({ processed: results.length, deferred, results, graphErrors: graphErrors.length ? graphErrors : undefined });
+}
+
+// Runs runIngest and records the outcome for the Hub Settings status panel. Rejected callers
+// (401/403) aren't runs, so they aren't recorded.
+export async function POST(req: NextRequest) {
+  let res: Response;
+  try {
+    res = await runIngest(req);
+  } catch (err) {
+    await recordRun(prisma, "report-import", false, `Crashed: ${err instanceof Error ? err.message : String(err)}`);
+    throw err;
+  }
+  if (res.status === 401 || res.status === 403) return res;
+  const body = await res.clone().json().catch(() => ({}));
+  const { ok, summary } = summariseImport(res, body);
+  await recordRun(prisma, "report-import", ok, summary);
+  return res;
 }

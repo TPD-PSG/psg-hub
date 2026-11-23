@@ -3,6 +3,8 @@ import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand }
 import { resolve } from "path";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { recordRun } from "@/lib/job-status";
+import { summariseBackup } from "@/lib/jobSummaries";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { snapshotDatabase } = require("@/lib/db-snapshot") as { snapshotDatabase: (db?: unknown) => Promise<Buffer> };
 
@@ -11,7 +13,7 @@ export const maxDuration = 60;
 
 // Called by Railway cron daily — backs up the SQLite database file to Cloudflare R2.
 // Protected by the same NOTIFY_SECRET used by the daily notify route.
-export async function POST(req: NextRequest) {
+async function runBackup(req: NextRequest): Promise<Response> {
   const secret = process.env.NOTIFY_SECRET;
   const secretHeader = req.headers.get("x-notify-secret");
   if (secret) {
@@ -86,4 +88,21 @@ export async function POST(req: NextRequest) {
     pruned: toDelete.length,
     backupsRetained: objects.length - toDelete.length + 1,
   });
+}
+
+// Runs runBackup and records the outcome for the Hub Settings status panel. Rejected callers
+// (401/403) aren't runs, so they aren't recorded.
+export async function POST(req: NextRequest) {
+  let res: Response;
+  try {
+    res = await runBackup(req);
+  } catch (err) {
+    await recordRun(prisma, "backup-daily", false, `Crashed: ${err instanceof Error ? err.message : String(err)}`);
+    throw err;
+  }
+  if (res.status === 401 || res.status === 403) return res;
+  const body = await res.clone().json().catch(() => ({}));
+  const { ok, summary } = summariseBackup(res, body);
+  await recordRun(prisma, "backup-daily", ok, summary);
+  return res;
 }

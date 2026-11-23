@@ -1,4 +1,5 @@
 "use client";
+import { BUILTIN_CONTACT_SECTIONS, CONTACT_SECTIONS_SETTING, defaultSections } from "@/lib/contactSections";
 
 import { useEffect, useState } from "react";
 import SeasonalOverlay from "@/components/SeasonalOverlay";
@@ -22,6 +23,9 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 
 export default function AdminSettingsPage() {
   const [news, setNews] = useState("");
+  const [sections, setSections] = useState<string[]>(BUILTIN_CONTACT_SECTIONS);
+  const [newSection, setNewSection] = useState("");
+  const [sectionsSaved, setSectionsSaved] = useState(false);
   const [newsSaved, setNewsSaved] = useState(false);
   const [links, setLinks] = useState<QuickLink[]>([]);
   const [addForm, setAddForm] = useState({ label: "", url: "", icon: "🔗" });
@@ -37,6 +41,7 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     fetch("/api/settings").then(r => r.json()).then((d: Record<string, string>) => {
       if (d?.news) setNews(d.news);
+      setSections(defaultSections(d?.[CONTACT_SECTIONS_SETTING]));
       if (d?.seasonal_mode) setSeasonMode(d.seasonal_mode as SeasonMode);
       if (d?.seasonal_intensity) setSeasonIntensity(d.seasonal_intensity as SeasonIntensity);
     });
@@ -48,6 +53,13 @@ export default function AdminSettingsPage() {
     await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "news", value: news }) });
     setNewsSaved(true);
     setTimeout(() => setNewsSaved(false), 2000);
+  }
+
+  async function saveSections(next: string[]) {
+    setSections(next);
+    await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: CONTACT_SECTIONS_SETTING, value: JSON.stringify(next) }) });
+    setSectionsSaved(true);
+    setTimeout(() => setSectionsSaved(false), 2000);
   }
 
   async function clearNews() {
@@ -116,6 +128,39 @@ export default function AdminSettingsPage() {
               </button>
             )}
           </div>
+        </form>
+      </div>
+
+      {/* Contact sheet sections */}
+      <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-white">Contact Sheet Sections</h2>
+          {sectionsSaved && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Saved ✓</span>}
+        </div>
+        <p className="text-sm" style={{ color: "var(--psg-muted)" }}>
+          The default sections offered on every production&apos;s contact sheet, in this order. Productions can add their own too. Removing one here doesn&apos;t touch existing contacts.
+        </p>
+        <div className="space-y-1">
+          {sections.map((s, i) => (
+            <div key={s} className="flex items-center gap-2 rounded border px-3 py-1.5 text-sm" style={{ borderColor: "var(--psg-card-border)" }}>
+              <span className="flex-1 text-white">{s}</span>
+              <button type="button" disabled={i === 0} onClick={() => { const n = [...sections]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; saveSections(n); }}
+                className="text-xs px-1.5 disabled:opacity-20" style={{ color: "var(--psg-muted)" }} aria-label={`Move ${s} up`}>↑</button>
+              <button type="button" disabled={i === sections.length - 1} onClick={() => { const n = [...sections]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; saveSections(n); }}
+                className="text-xs px-1.5 disabled:opacity-20" style={{ color: "var(--psg-muted)" }} aria-label={`Move ${s} down`}>↓</button>
+              <button type="button" disabled={sections.length === 1} onClick={() => saveSections(sections.filter(x => x !== s))}
+                className="text-xs px-1.5 text-red-400 disabled:opacity-20" aria-label={`Remove ${s}`}>✕</button>
+            </div>
+          ))}
+        </div>
+        <form className="flex gap-2" onSubmit={e => {
+          e.preventDefault();
+          const t = newSection.trim();
+          if (t && !sections.some(x => x.toLowerCase() === t.toLowerCase())) saveSections([...sections, t]);
+          setNewSection("");
+        }}>
+          <input value={newSection} onChange={e => setNewSection(e.target.value)} placeholder="New section, e.g. Orchestra" className={inp} style={inpStyle} />
+          <button type="submit" className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity shrink-0" style={{ backgroundColor: "var(--psg-blue)" }}>Add</button>
         </form>
       </div>
 

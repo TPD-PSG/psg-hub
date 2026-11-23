@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
+import { CONTACT_SECTIONS_SETTING, defaultSections, parseSections } from "@/lib/contactSections";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Claude API can take 15–30s on large documents
@@ -112,7 +113,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     docContent = { type: "document", source: { type: "file", file_id: fileId } };
   }
 
-  const SECTION_PRESETS = ["Creative Team", "Production Team", "Show Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage", "General"];
+  const [sectionSetting, prodSections] = await Promise.all([
+    prisma.setting.findUnique({ where: { key: CONTACT_SECTIONS_SETTING } }),
+    prisma.production.findUnique({ where: { id: Number(id) }, select: { contactSections: true } }),
+  ]);
+  const SECTION_PRESETS = Array.from(new Set([...parseSections(prodSections?.contactSections), ...defaultSections(sectionSetting?.value)]));
 
   const PROMPT = `This is a contact sheet for a theatre/live production. Extract every named person using the extract_contacts tool.
 

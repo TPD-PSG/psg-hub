@@ -9,6 +9,7 @@ import TasksPanel from "@/components/TasksPanel";
 import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF, exportMeetingMinutesPDF } from "@/lib/exports";
 import { parsePerms } from "@/lib/permissions";
+import { CONTACT_SECTIONS_SETTING, defaultSections, parseSections } from "@/lib/contactSections";
 
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
 type ProdDoc = { id: number; name: string; mime: string; folder: string; createdAt: string };
@@ -118,6 +119,7 @@ type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: numb
 type Production = {
   id: number;
   name: string;
+  contactSections?: string | null;
   logoUrl: string | null;
   type: string;
   venue: string | null;
@@ -665,6 +667,21 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [contactForm, setContactForm] = useState(BLANK_CONTACT);
   const [dragContactId, setDragContactId] = useState<number | null>(null);
   const [dragSectionName, setDragSectionName] = useState<string | null>(null);
+  // Contact-sheet sections: company defaults (Hub Settings) + this production's own list
+  const [companySections, setCompanySections] = useState<string[]>(defaultSections(null));
+  const [showSectionsModal, setShowSectionsModal] = useState(false);
+  const [newSectionName, setNewSectionName] = useState("");
+  useEffect(() => {
+    fetch("/api/settings").then(r => r.json()).then((d: Record<string, string>) => setCompanySections(defaultSections(d?.[CONTACT_SECTIONS_SETTING]))).catch(() => {});
+  }, []);
+  const prodSections = parseSections(prod?.contactSections);
+  async function saveProdSections(next: string[]) {
+    const res = await fetch(`/api/productions/${id}/contacts/sections`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sections: next }) });
+    if (res.ok) {
+      const { sections } = await res.json();
+      setProd(p => p ? { ...p, contactSections: JSON.stringify(sections) } : p);
+    }
+  }
   const [showContra, setShowContra] = useState(false);
   // Contact sheet import
   const contactImportRef = useRef<HTMLInputElement>(null);
@@ -2992,6 +3009,11 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
                 {contactImportState === "uploading" ? "Analysing…" : "↑ Import"}
               </button>
+              <button onClick={() => setShowSectionsModal(true)}
+                className="px-3 py-2 rounded text-sm border hover:bg-white/5 transition-colors"
+                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                Sections
+              </button>
               <button onClick={() => { setEditContact(null); setContactForm(BLANK_CONTACT); setShowContactForm(true); }}
                 className="px-4 py-2 rounded font-medium text-white text-sm" style={{ backgroundColor: "var(--psg-blue)" }}>
                 + Add Contact
@@ -3075,7 +3097,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div className="text-sm text-center py-4" style={{ color: "var(--psg-muted)" }}>Importing contacts…</div>
           )}
 
-          {contacts.length === 0 ? (
+          {contacts.length === 0 && prodSections.length === 0 ? (
             <div className="rounded-xl border p-10 text-center text-sm" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
               No contacts yet — add people associated with this production.
             </div>
@@ -3165,7 +3187,64 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                 </div>
               ))}
+              {prodSections.filter(s => !contacts.some(c => c.section === s)).map(section => (
+                <div key={`empty-${section}`}>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--psg-muted)" }}>{section}</span>
+                  </div>
+                  <button onClick={() => { setEditContact(null); setContactForm({ ...BLANK_CONTACT, section }); setShowContactForm(true); }}
+                    className="w-full rounded-xl border border-dashed p-4 text-sm text-left hover:bg-white/5 transition-colors"
+                    style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                    No contacts yet · + Add one to {section}
+                  </button>
+                </div>
+              ))}
             </div>
+          )}
+
+          {showSectionsModal && (
+            <Modal title="Contact sheet sections" onClose={() => { setShowSectionsModal(false); setNewSectionName(""); }}>
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-white">This production's sections</p>
+                  <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Show on the contact sheet even before anyone is in them. Removing one doesn't delete its contacts.</p>
+                  {prodSections.length === 0 && <p className="text-xs italic" style={{ color: "var(--psg-muted)" }}>None yet.</p>}
+                  <div className="space-y-1">
+                    {prodSections.map((s, i) => (
+                      <div key={s} className="flex items-center gap-2 rounded border px-3 py-1.5 text-sm" style={{ borderColor: "var(--psg-card-border)" }}>
+                        <span className="flex-1 text-white">{s}</span>
+                        <button type="button" disabled={i === 0} onClick={() => { const n = [...prodSections]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; saveProdSections(n); }}
+                          className="text-xs px-1.5 disabled:opacity-20" style={{ color: "var(--psg-muted)" }} aria-label={`Move ${s} up`}>↑</button>
+                        <button type="button" disabled={i === prodSections.length - 1} onClick={() => { const n = [...prodSections]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; saveProdSections(n); }}
+                          className="text-xs px-1.5 disabled:opacity-20" style={{ color: "var(--psg-muted)" }} aria-label={`Move ${s} down`}>↓</button>
+                        <button type="button" onClick={() => saveProdSections(prodSections.filter(x => x !== s))}
+                          className="text-xs px-1.5 text-red-400" aria-label={`Remove ${s}`}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <form className="flex gap-2" onSubmit={e => { e.preventDefault(); if (newSectionName.trim()) { saveProdSections([...prodSections, newSectionName.trim()]); setNewSectionName(""); } }}>
+                    <input className={inp} style={inpStyle} value={newSectionName} onChange={e => setNewSectionName(e.target.value)} placeholder="New section, e.g. Wardrobe" />
+                    <button type="submit" className="px-3 py-2 rounded text-sm font-medium text-white shrink-0" style={{ backgroundColor: "var(--psg-blue)" }}>Add</button>
+                  </form>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-white">Company defaults</p>
+                  <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Offered on every production. Click one to add it here. Admins can change this list in Hub Settings.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {companySections.map(s => {
+                      const added = prodSections.includes(s);
+                      return (
+                        <button key={s} type="button" disabled={added} onClick={() => saveProdSections([...prodSections, s])}
+                          className="px-2.5 py-1 rounded-full text-xs border transition-colors disabled:opacity-40"
+                          style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
+                          {added ? "✓ " : "+ "}{s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </Modal>
           )}
 
           {showContactForm && (
@@ -3174,8 +3253,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 <F label="Section">
                   {(() => {
                     const existingSections = Array.from(new Set(contacts.map(c => c.section)));
-                    const presets = ["General", "Creative Team", "Production Team", "Show Team", "Cast", "Venue", "Press & Marketing", "Transport & Haulage"];
-                    const allOptions = Array.from(new Set([...existingSections, ...presets]));
+                    const allOptions = Array.from(new Set([...existingSections, ...prodSections, ...companySections]));
                     const isCustom = contactForm.section && !allOptions.includes(contactForm.section);
                     return (
                       <div className="space-y-2">

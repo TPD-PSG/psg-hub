@@ -58,6 +58,7 @@ model Production {
   productionManager   String?   // free-text proj lead(s), e.g. "Toby / Tom"
   color       String?
   notes         String?
+  contactSections String? // JSON list of this production's own contact-sheet sections
   reportEmail   String?
   sharepointUrl String?
   haulageBudgetLineId Int?

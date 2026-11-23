@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
-import Anthropic, { toFile } from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { toFile } from "@anthropic-ai/sdk";
+import { extractJson, objectSchema, nullable, ClaudeOutputError, claude } from "@/lib/claude";
 import { CONTACT_SECTIONS_SETTING, defaultSections, parseSections } from "@/lib/contactSections";
 
 export const dynamic = "force-dynamic";
@@ -59,9 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type.includes("csv");
   const isXlsx = file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls") || file.type.includes("spreadsheet") || file.type.includes("excel");
 
-  const client = new Anthropic({ apiKey });
-
-  let docContent: Anthropic.MessageParam["content"][number];
+  let docContent: Anthropic.Beta.BetaContentBlockParam;
 
   if (isDocx) {
     try {
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // PDF — upload via Files API to avoid large inline base64 payloads causing connection resets
     let fileId: string;
     try {
-      const uploadedFile = await client.files.upload({
+      const uploadedFile = await claude.files.upload({
         file: await toFile(Buffer.from(buffer), file.name || "contact-sheet.pdf", { type: "application/pdf" }),
         expires_in_seconds: 3600,
       });
@@ -119,84 +119,45 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   ]);
   const SECTION_PRESETS = Array.from(new Set([...parseSections(prodSections?.contactSections), ...defaultSections(sectionSetting?.value)]));
 
-  const PROMPT = `This is a contact sheet for a theatre/live production. Extract every named person using the extract_contacts tool.
+  const PROMPT = `This is a contact sheet for a theatre/live production. Extract every named person.
 
 Section headers: rows/cells that contain only a category label (often ALL-CAPS, e.g. CREATIVES, CAST, PRODUCTION, COMPANY) with no name/email/phone data are section dividers — not contacts. Use them to group the people below.
 
 Map each section to the closest name from this list: ${SECTION_PRESETS.join(", ")}
 If nothing fits, use the section heading from the document as-is.
 
-Skip any row with no name. Include every named person. Call extract_contacts once with all contacts.`;
+Skip any row with no name. Include every named person. Use null for details that aren't given; combine several phone numbers with ' / '.`;
 
-  let message;
+  type Extracted = { section: string; name: string; role: string | null; company: string | null; phone: string | null; email: string | null; notes: string | null };
+  let extracted: Extracted[];
   try {
-    message = await client.messages.create({
+    ({ contacts: extracted } = await extractJson<{ contacts: Extracted[] }>({
       model: "claude-sonnet-5-5",
-      max_tokens: 16000,
-      tools: [
-        {
-          name: "extract_contacts",
-          description: "Output all extracted contacts from the contact sheet",
-          input_schema: {
-            type: "object" as const,
-            properties: {
-              contacts: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    section: { type: "string", description: "Group/section this person belongs to" },
-                    name: { type: "string", description: "Full name" },
-                    role: { type: "string", description: "Job title or role" },
-                    company: { type: "string", description: "Organisation they represent" },
-                    phone: { type: "string", description: "Phone number(s), combine multiples with ' / '" },
-                    email: { type: "string", description: "Email address" },
-                    notes: { type: "string", description: "Any other relevant info" },
-                  },
-                  required: ["section", "name"],
-                },
-              },
-            },
-            required: ["contacts"],
-          },
+      content: [docContent, { type: "text", text: PROMPT }],
+      schema: objectSchema({
+        contacts: {
+          type: "array",
+          items: objectSchema({
+            section: { type: "string", description: "Group/section this person belongs to" },
+            name: { type: "string", description: "Full name" },
+            role: nullable("string", "Job title or role"),
+            company: nullable("string", "Organisation they represent"),
+            phone: nullable("string"),
+            email: nullable("string"),
+            notes: nullable("string", "Any other relevant info"),
+          }),
         },
-      ],
-      tool_choice: { type: "auto" as const },
-      messages: [
-        {
-          role: "user",
-          content: [
-            docContent,
-            { type: "text", text: PROMPT },
-          ],
-        },
-      ],
-    });
+      }),
+    }));
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("Contacts import: Anthropic API error", msg);
-    return NextResponse.json({ error: `AI processing failed: ${msg}` }, { status: 502 });
+    const msg = err instanceof ClaudeOutputError ? err.message : "AI processing failed — please try again";
+    console.error("Contacts import:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  const toolBlock = message.content.find(b => b.type === "tool_use" && b.name === "extract_contacts");
-  if (toolBlock && toolBlock.type === "tool_use") {
-    const contacts = Array.isArray((toolBlock.input as { contacts?: unknown[] }).contacts)
-      ? (toolBlock.input as { contacts: unknown[] }).contacts
-      : [];
-    return NextResponse.json({ contacts });
-  }
-
-  // Fallback: Claude returned text — try JSON parsing
-  const textBlock = message.content.find(b => b.type === "text");
-  const rawText = textBlock && textBlock.type === "text" ? textBlock.text : "";
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  const cleaned = jsonMatch ? jsonMatch[0] : rawText.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-  try {
-    const extracted = JSON.parse(cleaned) as { contacts?: unknown[] };
-    const contacts = Array.isArray(extracted.contacts) ? extracted.contacts : [];
-    return NextResponse.json({ contacts });
-  } catch {
-    console.error("Contacts import: failed to parse AI response", rawText.slice(0, 500));
-    return NextResponse.json({ error: "AI returned an unreadable response — please try again" }, { status: 502 });
-  }
+  // The review screen expects missing details to be absent rather than null
+  const contacts = extracted
+    .filter(c => c.name?.trim())
+    .map(c => Object.fromEntries(Object.entries(c).filter(([, v]) => v !== null)));
+  return NextResponse.json({ contacts });
 }

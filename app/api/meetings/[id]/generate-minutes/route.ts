@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText, ClaudeOutputError } from "@/lib/claude";
 
-const client = new Anthropic();
 
 export async function POST(req: NextRequest, { params: _params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -33,12 +32,17 @@ Write concise, professional meeting minutes from this transcript. Structure them
 
 Write in past tense. Be concise — capture what matters, not every word. Plain text only, no markdown symbols.`;
 
-  const message = await client.messages.create({
-    model: "claude-opus-5-5",
-    max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const minutes = (message.content[0] as { type: string; text: string }).text;
+  let minutes: string;
+  try {
+    minutes = await generateText({
+      model: "claude-opus-5-5",
+      maxTokens: 16000, // room for thinking plus the minutes themselves
+      effort: "medium",
+      content: [{ type: "text", text: prompt }],
+    });
+  } catch (err) {
+    const message = err instanceof ClaudeOutputError ? err.message : "Couldn't generate minutes";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
   return NextResponse.json({ minutes });
 }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import Anthropic from "@anthropic-ai/sdk";
+import { parseShowReportPdf, type ParsedReport } from "@/lib/showReportParser";
+import { ClaudeOutputError } from "@/lib/claude";
+import { toDate } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -25,163 +27,6 @@ async function getGraphToken(): Promise<string> {
   if (!res.ok) throw new Error(`Graph token error: ${await res.text()}`);
   const { access_token } = await res.json();
   return access_token;
-}
-
-type ParsedReport = {
-  reportDate: string | null;
-  venue: string | null;
-  performance: string | null;
-  performanceNumber: number | null;
-  attendance: number | null;
-  houseCapacity: number | null;
-  runningTime: string | null;
-  playingTime: string | null;
-  notes: string | null;
-};
-
-const EMPTY_REPORT: ParsedReport = {
-  reportDate: null, venue: null, performance: null, performanceNumber: null,
-  attendance: null, houseCapacity: null, runningTime: null, playingTime: null, notes: null,
-};
-
-async function parsePdfWithClaude(base64: string, subject: string): Promise<ParsedReport[]> {
-  const client = new Anthropic();
-  const message = await client.messages.create({
-    model: "claude-sonnet-5-5",
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: base64 },
-          } as any,
-          {
-            type: "text",
-            text: `This is a show report (or combined show reports) from a theatre production team. The email subject was: "${subject}".
-
-These reports are produced by stage managers after each performance. They follow a consistent structure including:
-- Date, venue, performance number, show time (e.g. "Evening", "Matinee", "7:30pm Evening")
-- House number (attendance), house capacity, house percentage
-- Act timings: house open, FOH clearance, act up/down times with durations, interval times, playing time, running time
-- Staff on duty
-- Categorised notes: General, Sound, Lighting/LX, Video, Costume, Movement, SM Notes, Health & Safety, Audience Reactions, Maintenance, Injury/Illness, Cast/staff absent with covers
-
-IMPORTANT: This PDF may contain multiple show reports (e.g. a matinee and an evening performance). Extract EACH report as a separate object.
-
-Return ONLY a valid JSON array (no markdown, no explanation). Each element represents one performance:
-[
-  {
-    "reportDate": "YYYY-MM-DD or null",
-    "venue": "venue name only (not address) or null",
-    "performance": "performance slot e.g. 'Evening – 7:30pm' or 'Matinee – 2:30pm' or null",
-    "performanceNumber": number (the show/performance number e.g. 81, 56, 68) or null,
-    "attendance": number (house number / audience count) or null,
-    "houseCapacity": number (total capacity of the venue) or null,
-    "runningTime": "total running time including interval e.g. '2:24' or null",
-    "playingTime": "total playing time excluding interval e.g. '2:03' or null",
-    "notes": "structured summary — see format below"
-  }
-]
-
-For the notes field of each report, produce a well-structured markdown summary. Use EXACTLY this format — each section heading on its own line followed immediately by the content (no blank lines or separator lines between the heading and content):
-
-**Timings**
-House open: HH:MM  FOH clearance: HH:MM
-Act 1: HH:MM – HH:MM (duration)
-Interval: HH:MM – HH:MM (duration)
-Act 2: HH:MM – HH:MM (duration)
-
-**General**
-[cast changes, covers, any general production notes — do NOT include timings here]
-
-**Technical – Sound**
-[sound cue issues, operator errors, equipment problems]
-
-**Technical – Lighting**
-[LX cue issues, operator errors, spotlight issues]
-
-**Technical – Video/Automation**
-[video de-sync, automation issues]
-
-**Audience & House**
-[audience reactions, standing ovation, any audience incidents]
-
-**Health & Safety / Incidents**
-[injuries, illnesses, audience medical incidents, show stops]
-
-**Maintenance**
-[equipment to fix, items to investigate]
-
-**Covers & Absences**
-[who was off, their role, who covered]
-
-Omit sections with no content. Include specific cue numbers and scene references where present. Be concise but complete.`,
-          },
-        ],
-      },
-    ],
-  });
-
-  const text = ((message.content[0] as any).text ?? "").trim();
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.length > 0 ? parsed : [EMPTY_REPORT];
-    // Single object returned — wrap it
-    return [parsed];
-  } catch {
-    return [{ ...EMPTY_REPORT, notes: text || null }];
-  }
-}
-
-// Extract performance numbers from subjects like "Show Reports 55 and 56" or "Show Report #81"
-function parsePerformanceNumbers(subject: string): number[] {
-  const nums: number[] = [];
-  // "Reports/Performances/Previews N and M" or "N & M"
-  const multi = subject.match(/(?:reports?|performances?|previews?)\s+(?:\w+\s+)?(\d+)\s+(?:and|&)\s+(\d+)/i);
-  if (multi) return [parseInt(multi[1]), parseInt(multi[2])];
-  // "Report Performance 6" or "Report Preview 7" or "Report #81" or "Report 81"
-  const single = subject.match(/(?:reports?|performances?|previews?)\s+(?:performance\s+|preview\s+)?#?(\d+)/i);
-  if (single) nums.push(parseInt(single[1]));
-  return nums;
-}
-
-// Extract venue from end of subject: "28.10.2026 York" → "York"
-function parseVenueFromSubject(subject: string): string | null {
-  const m = subject.match(/\d{2}[./-]\d{2}[./-]\d{4}\s+(.+)$/i);
-  return m ? m[1].trim() : null;
-}
-
-// Parse date formats like "28.10.2026"
-function parseDateFromSubject(subject: string): string | null {
-  const m = subject.match(/(\d{2})[./-](\d{2})[./-](\d{4})/);
-  if (!m) return null;
-  return `${m[3]}-${m[2]}-${m[1]}`;
-}
-
-// Fill in missing fields from the email subject when Claude returns nulls
-function applySubjectFallbacks(reports: ParsedReport[], subject: string): ParsedReport[] {
-  const nums = parsePerformanceNumbers(subject);
-  const venue = parseVenueFromSubject(subject);
-  const date = parseDateFromSubject(subject);
-
-  if (nums.length > 1 && reports.length === 1 && !reports[0].performanceNumber) {
-    // Combined PDF but Claude returned one record — split into one per performance number
-    return nums.map(n => ({
-      ...reports[0],
-      performanceNumber: n,
-      venue: reports[0].venue ?? venue,
-      reportDate: reports[0].reportDate ?? date,
-    }));
-  }
-
-  return reports.map((r, i) => ({
-    ...r,
-    performanceNumber: r.performanceNumber ?? (nums[i] ?? nums[0] ?? null),
-    venue: r.venue ?? venue,
-    reportDate: r.reportDate ?? date,
-  }));
 }
 
 function matchProduction(subject: string, productions: { id: number; name: string }[]): number | null {
@@ -309,7 +154,7 @@ export async function POST(req: NextRequest) {
   }
 
   const processedFolderId = await getOrCreateProcessedFolder(token);
-  const results: { subject: string; status: string; reportId?: number; production?: string; claudeRaw?: any }[] = [];
+  const results: { subject: string; status: string; reportId?: number; production?: string; parsed?: ParsedReport[] }[] = [];
   const MAX_PER_RUN = 4; // keep well within Railway's 60s timeout (~10-15s per PDF)
   let pdfProcessed = 0;
 
@@ -392,13 +237,12 @@ export async function POST(req: NextRequest) {
     const production = productions.find(p => p.id === productionId);
 
     let parsedReports: ParsedReport[];
-    let claudeRaw: any;
     try {
-      claudeRaw = await parsePdfWithClaude(pdf.contentBytes, msg.subject);
-      parsedReports = applySubjectFallbacks(claudeRaw, msg.subject);
+      parsedReports = await parseShowReportPdf(pdf.contentBytes, { subject: msg.subject });
       console.log(`[ingest] parsed ${parsedReports.length} report(s) from message ${msg.id}`);
-    } catch {
-      results.push({ subject: msg.subject, status: "parse_error" });
+    } catch (err) {
+      // Leave the email in the inbox so the next run retries it
+      results.push({ subject: msg.subject, status: err instanceof ClaudeOutputError ? `parse_error: ${err.message}` : "parse_error" });
       continue;
     }
 
@@ -407,7 +251,7 @@ export async function POST(req: NextRequest) {
       await prisma.showReport.create({
         data: {
           productionId: productionId,
-          reportDate: parsed.reportDate ? new Date(parsed.reportDate) : new Date(msg.receivedDateTime),
+          reportDate: toDate(parsed.reportDate) ?? new Date(msg.receivedDateTime),
           venue: parsed.venue,
           performance: parsed.performance,
           performanceNumber: parsed.performanceNumber,
@@ -442,7 +286,7 @@ export async function POST(req: NextRequest) {
       subject: msg.subject,
       status: productionId ? "imported" : "imported_unmatched",
       production: production?.name,
-      ...(debug ? { claudeRaw } : {}),
+      ...(debug ? { parsed: parsedReports } : {}),
     });
   }
 

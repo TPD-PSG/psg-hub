@@ -64,7 +64,7 @@ export default function AskPage() {
       body: JSON.stringify({ question: q, history }),
     });
     const data = await r.json();
-    setMessages(prev => [...prev, { role: "assistant", content: data.answer ?? "Sorry, something went wrong." }]);
+    setMessages(prev => [...prev, { role: "assistant", content: data.answer ?? data.error ?? "Sorry, something went wrong." }]);
     setLoading(false);
   }
 

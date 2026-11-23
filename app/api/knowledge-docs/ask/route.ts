@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { generateText, ClaudeOutputError } from "@/lib/claude";
 
 export const dynamic = "force-dynamic";
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -21,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Build document blocks for PDFs, plain text for others
-  const docBlocks: Anthropic.MessageParam["content"] = [];
+  const docBlocks: Anthropic.Beta.BetaContentBlockParam[] = [];
   for (const doc of docs) {
     if (doc.mime === "application/pdf") {
       docBlocks.push({
@@ -36,33 +35,31 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Build conversation messages
-  const messages: Anthropic.MessageParam[] = [];
+  // Mark the end of the documents for caching: follow-up questions reuse them at a fraction of the cost
+  const last = docBlocks[docBlocks.length - 1];
+  if (last && (last.type === "document" || last.type === "text")) last.cache_control = { type: "ephemeral" };
 
-  // Prior conversation turns
-  if (Array.isArray(history)) {
-    for (const turn of history) {
-      messages.push({ role: turn.role, content: turn.content });
-    }
-  }
+  // The documents always lead the conversation, so follow-up questions are answered from them too
+  const turns = (Array.isArray(history) ? history : [])
+    .filter((t: { role?: string; content?: unknown }) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string" && t.content.trim())
+    .slice(-20) as { role: "user" | "assistant"; content: string }[];
+  const messages: Anthropic.Beta.BetaMessageParam[] = [
+    { role: "user", content: [...docBlocks, { type: "text", text: "These are Production Solutions Group's policy documents. Answer my questions from them." }] },
+    { role: "assistant", content: "Understood. What would you like to know?" },
+    ...turns,
+    { role: "user", content: question },
+  ];
 
-  // Current question — docs only on first turn or if no history
-  if (messages.length === 0) {
-    messages.push({
-      role: "user",
-      content: [...docBlocks, { type: "text", text: question }],
+  try {
+    const answer = await generateText({
+      model: "claude-sonnet-5-5",
+      maxTokens: 8000,
+      system: `You are a helpful assistant for Production Solutions Group. Answer questions based on the company policy documents provided. Be concise and practical. If the answer isn't in the documents, say so clearly rather than guessing.`,
+      messages,
     });
-  } else {
-    messages.push({ role: "user", content: question });
+    return NextResponse.json({ answer });
+  } catch (err) {
+    const message = err instanceof ClaudeOutputError ? err.message : "Couldn't get an answer just now — please try again";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
-
-  const response = await client.messages.create({
-    model: "claude-sonnet-5-5",
-    max_tokens: 1024,
-    system: `You are a helpful assistant for Production Solutions Group. Answer questions based on the company policy documents provided. Be concise and practical. If the answer isn't in the documents, say so clearly rather than guessing.`,
-    messages,
-  });
-
-  const answer = (response.content[0] as Anthropic.TextBlock).text;
-  return NextResponse.json({ answer });
 }

@@ -1,4 +1,4 @@
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const fs = require("fs");
 const path = require("path");
 
@@ -42,6 +42,35 @@ async function backup() {
   }));
 
   console.log(`Backup uploaded: ${key} (${fileBuffer.length} bytes)`);
+  await prune(now);
+}
+
+// Keep every backup from the last 48 hours, then the first backup of each day for 30 days.
+// Only touches backups/ (uploaded files live under files/, the daily route's under db-backup-).
+async function prune(now) {
+  const keys = [];
+  let token;
+  do {
+    const page = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix: "backups/", ContinuationToken: token }));
+    for (const o of page.Contents ?? []) if (o.Key) keys.push(o.Key);
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+
+  // Keys look like backups/2026-11-23T19-59-30-123Z.db, so sorting them sorts by time
+  keys.sort();
+  const keepDays = new Set();
+  const toDelete = [];
+  for (const key of keys) {
+    const m = key.match(/^backups\/(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})/);
+    if (!m) continue; // not one of ours: leave it alone
+    const at = new Date(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`);
+    const ageH = (now - at) / 3600e3;
+    if (ageH <= 48) continue;
+    if (ageH <= 30 * 24 && !keepDays.has(m[1])) { keepDays.add(m[1]); continue; }
+    toDelete.push(key);
+  }
+  for (const key of toDelete) await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+  if (toDelete.length) console.log(`Pruned ${toDelete.length} old backup(s)`);
 }
 
 backup().catch((err) => {

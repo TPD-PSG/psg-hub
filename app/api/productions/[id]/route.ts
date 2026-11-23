@@ -3,80 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireProductionAccess } from "@/lib/access";
 import { removeFile } from "@/lib/storage";
+import { loadProductionForViewer } from "@/lib/productionData";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await requireProductionAccess(id);
-  if ("error" in access) return access.error;
-  const production = await prisma.production.findUnique({
-    where: { id: Number(id) },
-    include: {
-      events: { orderBy: { startAt: "asc" } },
-      budgetLines: {
-        orderBy: { department: "asc" },
-        include: {
-          expenses: {
-            orderBy: { createdAt: "asc" },
-            include: {
-              documents: {
-                select: { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, invoiceNumber: true, issuedForPayment: true, createdAt: true },
-                orderBy: { createdAt: "asc" },
-              },
-            },
-          },
-        },
-      },
-      crew: {
-        orderBy: { createdAt: "asc" },
-        include: { crew: true },
-      },
-      hotelBookings: {
-        orderBy: { checkIn: "asc" },
-        include: { hotel: true, crew: true },
-      },
-      haulageMovements: {
-        orderBy: { departureAt: "asc" },
-      },
-      productionDocuments: {
-        select: { id: true, name: true, mime: true, folder: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      },
-      productionLinks: {
-        orderBy: { createdAt: "asc" },
-      },
-      tourStops: {
-        orderBy: { stopNumber: "asc" },
-        include: { venue: { select: { id: true, name: true, city: true } } },
-      },
-      hsDocuments: {
-        select: { id: true, name: true, mime: true, folder: true, tourStopId: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      },
-      toolboxSignatures: {
-        select: { id: true, tourStopId: true, venueName: true, signeeName: true, signeeDate: true, employer: true, position: true, agreedBriefing: true, agreedSafety: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      },
-      team: {
-        include: { user: { select: { id: true, name: true, email: true, role: true } } },
-        orderBy: { createdAt: "asc" },
-      },
-      venueRef: { select: { id: true, name: true, city: true, capacity: true } },
-      bdClient: { select: { id: true, name: true, type: true, address: true, website: true, billingName: true, billingAddress: true, billingEmail: true } },
-    },
-  });
-  if (!production) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  // Don't send tabs the user can't see (e.g. budget and crew for freelancers/clients)
-  const h = access.hidden;
-  return NextResponse.json({
-    ...production,
-    budgetLines: h.has("budget") ? [] : production.budgetLines,
-    crew: h.has("crew") ? [] : production.crew,
-    productionLinks: h.has("links") ? [] : production.productionLinks,
-    hotelBookings: h.has("accommodation") ? [] : production.hotelBookings,
-    haulageMovements: h.has("haulage") ? [] : production.haulageMovements,
-    productionDocuments: h.has("documents") ? [] : production.productionDocuments,
-    hsDocuments: h.has("hs") ? [] : production.hsDocuments,
-  });
+  const result = await loadProductionForViewer(id);
+  if (result.status !== 200) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json(result.data);
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

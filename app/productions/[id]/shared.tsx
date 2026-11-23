@@ -115,6 +115,8 @@ export type PerfOverride = { id: number; date: string; type: string };
 export type TourStop = { id: number; venueId: number; venue: VenueRef; stopNumber: number; advancingStatus: string; contraEstimate: number | null; contraActual: number | null; loadInDate: string | null; startDate: string | null; endDate: string | null; performanceStart: string | null; performanceEnd: string | null; notes: string | null };
 export type ProdContact = { id: number; section: string; sortOrder: number; name: string; company: string | null; role: string | null; phone: string | null; email: string | null; notes: string | null };
 export type Production = {
+  internalStatus?: string | null;
+  productionManager?: string | null;
   id: number;
   name: string;
   contactSections?: string | null;

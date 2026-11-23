@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { touchVenue } from "@/lib/night-run-sync";
 import { fileToContent, parseVenueDocument, type ParsedVenue } from "@/lib/venueParser";
 import { ClaudeOutputError } from "@/lib/claude";
 import { saveFile, removeFile } from "@/lib/storage";
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest) {
         byName.set(c.name.trim().toLowerCase(), created);
       }
     }
+    if (rawContacts.length > 0) await touchVenue(updateId);
 
     const venueWithContacts = await prisma.venue.findUnique({
       where: { id: updateId },
@@ -157,6 +159,7 @@ export async function POST(req: NextRequest) {
           notes: c.notes || null,
         })),
     });
+    await touchVenue(venue.id);
   }
 
   const venueWithContacts = await prisma.venue.findUnique({

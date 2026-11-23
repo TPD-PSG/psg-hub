@@ -16,6 +16,7 @@ export async function GET() {
       notes: true,
       // techSpecFile excluded — base64 blob only needed on download
       contacts: { orderBy: { name: "asc" } },
+      dropOff: true, // read-only here; Night Run owns it
       _count: { select: { contacts: true } },
     },
     orderBy: { name: "asc" },

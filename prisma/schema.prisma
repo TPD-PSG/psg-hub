@@ -408,6 +408,32 @@ model Venue {
   productions     Production[]
   tourStops       TourStop[]
   documents       VenueDocument[]
+  dropOff         VenueDropOff?
+
+  @@index([updatedAt])
+}
+
+// Haulage drop-off details. Night Run owns these and pushes them here; PSG Hub shows them read-only.
+model VenueDropOff {
+  id              Int      @id @default(autoincrement())
+  venueId         Int      @unique
+  venue           Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  loadingAddress  String?
+  loadingPostcode String?
+  what3words      String?
+  accessTimes     String?
+  maxVehicle      String?
+  heightLimitMm   Int?
+  widthLimitMm    Int?
+  dockNotes       String?
+  unloadingNotes  String?
+  forkliftOnSite  Boolean?
+  parkingNotes    String?
+  emissionZone    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([updatedAt])
 }
 
 model VenueDocument {

@@ -18,11 +18,19 @@ type TechSpecs = {
   healthSafety?: Record<string, string | null>;
 };
 type VenueDoc = { id: number; name: string; mime: string; createdAt: string };
+// Sent by Night Run (haulage app) through /api/integrations/night-run; read-only here
+type DropOff = {
+  loadingAddress: string | null; loadingPostcode: string | null; what3words: string | null; accessTimes: string | null;
+  maxVehicle: string | null; heightLimitMm: number | null; widthLimitMm: number | null; dockNotes: string | null;
+  unloadingNotes: string | null; forkliftOnSite: boolean | null; parkingNotes: string | null; emissionZone: string | null;
+  updatedAt: string;
+};
 type Venue = {
   id: number; name: string; type: string; city: string | null; address: string | null; postcode: string | null;
   phone: string | null; email: string | null; website: string | null; capacity: number | null;
   techNotes: string | null; techSpecs: string | null; techSpecName: string | null; notes: string | null;
   contacts: VenueContact[];
+  dropOff?: DropOff | null;
   _count: { contacts: number };
 };
 
@@ -480,7 +488,7 @@ export default function VenuesPage() {
                     className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
                   {confirmDelete === selected.id ? (
                     <span className="flex items-center gap-1">
-                      <span className="text-xs" style={{ color: "#f87171" }}>Sure?</span>
+                      <span className="text-xs" style={{ color: "#f87171" }}>{selected.dropOff ? "Night Run uses this venue for haulage. Sure?" : "Sure?"}</span>
                       <button onClick={() => deleteVenue(selected.id)} className="text-xs px-2 py-1 rounded" style={{ color: "#f87171", backgroundColor: "rgba(239,68,68,0.15)" }}>Yes, delete</button>
                       <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Cancel</button>
                     </span>
@@ -588,6 +596,25 @@ export default function VenuesPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Drop-off details: owned by Night Run, shown read-only */}
+                  {selected.dropOff && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Drop-off details (from Night Run)</div>
+                      <SpecRow label="Loading address" value={[selected.dropOff.loadingAddress, selected.dropOff.loadingPostcode].filter(Boolean).join(", ") || null} />
+                      <SpecRow label="what3words" value={selected.dropOff.what3words} />
+                      <SpecRow label="Access times" value={selected.dropOff.accessTimes} />
+                      <SpecRow label="Max vehicle" value={selected.dropOff.maxVehicle} />
+                      <SpecRow label="Height limit" value={selected.dropOff.heightLimitMm != null ? `${(selected.dropOff.heightLimitMm / 1000).toFixed(2)} m` : null} />
+                      <SpecRow label="Width limit" value={selected.dropOff.widthLimitMm != null ? `${(selected.dropOff.widthLimitMm / 1000).toFixed(2)} m` : null} />
+                      <SpecRow label="Forklift on site" value={selected.dropOff.forkliftOnSite == null ? null : selected.dropOff.forkliftOnSite ? "Yes" : "No"} />
+                      <SpecRow label="Emission zone" value={selected.dropOff.emissionZone} />
+                      <SpecRow label="Dock" value={selected.dropOff.dockNotes} />
+                      <SpecRow label="Unloading" value={selected.dropOff.unloadingNotes} />
+                      <SpecRow label="Parking" value={selected.dropOff.parkingNotes} />
+                      <div className="text-xs mt-2" style={{ color: "var(--psg-muted)" }}>Edit these in Night Run. Last updated {new Date(selected.dropOff.updatedAt).toLocaleDateString("en-GB")}.</div>
+                    </div>
+                  )}
 
                   {/* General notes */}
                   {selected.notes && (

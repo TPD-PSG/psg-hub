@@ -3,6 +3,8 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDay } from "@/lib/format";
+const fmtDate = (s: string | null) => (s ? fmtDay(s) : null);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,10 +51,6 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 
 function stageColor(key: string) { return STAGES.find(s => s.key === key)?.color ?? "#6b7280"; }
 function priColor(key: string)   { return PRIORITIES.find(p => p.key === key)?.color ?? "#6b7280"; }
-function fmtDate(s: string | null) {
-  if (!s) return null;
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 function isOverdue(s: string | null) {
   if (!s) return false;
   return new Date(s) < new Date();

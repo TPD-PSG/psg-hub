@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDate as fmtDateShared } from "@/lib/format";
+const fmtDate = (s: string | null) => (s ? fmtDateShared(s) : null);
 
 type Client = { id: number; name: string; type: string; website?: string | null; address?: string | null; notes?: string | null; billingName?: string | null; billingAddress?: string | null; billingEmail?: string | null };
 type BDTask = { id: number; description: string; dueDate: string | null; completedAt: string | null };
@@ -36,10 +38,6 @@ const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--ps
 function fmtValue(v: number | null) {
   if (!v) return null;
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(v);
-}
-function fmtDate(s: string | null) {
-  if (!s) return null;
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 function isOverdue(s: string | null) {
   if (!s) return false;

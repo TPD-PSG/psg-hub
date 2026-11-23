@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { confirmDialog, alertDialog } from "@/components/Dialogs";
+import { fmtDate } from "@/lib/format";
 
 type User = { id: number; name: string; email: string; role: string; createdAt: string };
 
@@ -11,9 +12,6 @@ const BLANK = { name: "", email: "", password: "", role: "member" };
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
 
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
 
 export default function UsersPage() {
   const { data: session, status } = useSession();

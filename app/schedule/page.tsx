@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { fmtWeekdayDate as fmtDate, fmtTime } from "@/lib/format";
 
 type TimedEvent = {
   id: number; title: string; type: string; startAt: string; endAt: string;
@@ -28,12 +29,6 @@ const EVENT_COLORS: Record<string, string> = {
   Other: "bg-white/10 text-white/60",
 };
 
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-}
-function fmtTime(s: string) {
-  return new Date(s).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
 
 export default function SchedulePage() {
   const [timedEvents, setTimedEvents] = useState<TimedEvent[]>([]);

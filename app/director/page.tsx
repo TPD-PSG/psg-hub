@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import UserAvatar from "@/components/UserAvatar";
+import { fmtDate, fmtMoney } from "@/lib/format";
+const fmt = (n: number) => fmtMoney(n, { whole: true });
 
 type Production = { id: number; name: string; status: string; startDate: string | null; endDate: string | null; announcementStatus?: string; budgetLines?: { estimated: number; committed: number; spent: number }[] };
 type Invoice = { id: number; type: string; status: string; netAmount: number; vatAmount: number; dueDate: string | null; issuedDate: string | null };
@@ -13,14 +15,7 @@ type Task = { id: number; title: string; status: string; dueDate: string | null;
 type HelpTicket = { id: number; status: string; priority: string; title: string };
 type Expense = { id: number; status: string; netAmount: number; vatAmount: number };
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(n);
-}
 
-function fmtDate(s: string | null) {
-  if (!s) return "—";
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (

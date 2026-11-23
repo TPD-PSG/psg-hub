@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { parsePerms, canAccess } from "@/lib/permissions";
+import { fmtDay as fmtDate } from "@/lib/format";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,10 +19,6 @@ type SalesBrand = { id: number; stage: string };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtDate(s: string | null) {
-  if (!s) return "";
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 
 const ANN_COLORS: Record<string, string> = {
   not_announced: "bg-gray-800 text-gray-400",

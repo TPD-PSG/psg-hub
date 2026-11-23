@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import ExportMenu from "@/components/ExportMenu";
 import { exportHaulagePDF, exportHaulageXLSX } from "@/lib/exports";
+import { fmtDate, fmtTime } from "@/lib/format";
 
 type Movement = {
   id: number;
@@ -20,12 +21,6 @@ type Movement = {
   notes: string | null;
 };
 
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-function fmtTime(s: string) {
-  return new Date(s).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
 
 export default function HaulagePage() {
   const [movements, setMovements] = useState<Movement[]>([]);

@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 
 async function saveXlsx(wb: ExcelJS.Workbook, filename: string) {
   const buffer = await wb.xlsx.writeBuffer();
@@ -28,12 +29,6 @@ function addSheet(wb: ExcelJS.Workbook, name: string, rows: (string | number | b
 
 function fmtGBP(n: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
-}
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-function fmtDateTime(s: string) {
-  return new Date(s).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 type LogoAsset = { dataUrl: string; w: number; h: number } | null;

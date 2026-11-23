@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDay as fmtDate } from "@/lib/format";
 
 type Ticket = {
   id: number;
@@ -49,9 +50,6 @@ function badge(text: string, color: string) {
   );
 }
 
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 
 const inp = "w-full rounded-lg px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "rgba(255,255,255,0.05)", borderColor: "var(--psg-card-border)" };

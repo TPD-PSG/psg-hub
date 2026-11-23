@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import UserAvatar from "@/components/UserAvatar";
 import { exportProductionSpendPDF } from "@/lib/exports";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDate, fmtMoney as fmt } from "@/lib/format";
 
 type Invoice = {
   id: number;
@@ -85,13 +86,6 @@ const BLANK_EXP: Partial<Expense> & { productionId: number | null } = {
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
-}
-function fmtDate(s: string | null) {
-  if (!s) return "—";
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
 function isOverdue(s: string | null, status: string) {
   if (!s || status === "paid") return false;
   return new Date(s) < new Date();

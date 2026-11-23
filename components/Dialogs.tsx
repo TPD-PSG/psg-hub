@@ -65,7 +65,8 @@ export function DialogHost() {
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
       onMouseDown={e => { if (e.target === e.currentTarget) close(false); }}
-      onKeyDown={e => { if (e.key === "Escape") close(false); }}
+      // stopPropagation: Escape cancels only this dialog, not a Modal underneath it
+      onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); close(false); } }}
     >
       <div
         role={current.kind === "confirm" ? "alertdialog" : "dialog"}

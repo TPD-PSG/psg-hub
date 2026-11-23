@@ -4,19 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import UserAvatar from "@/components/UserAvatar";
 import { confirmDialog, alertDialog } from "@/components/Dialogs";
+import { fmtMonthYear as fmtMonth, fmtDay as fmtDate } from "@/lib/format";
 
 type MediaRef = { id: number; name: string; mime: string };
 type Author = { id: number; name: string; avatarUrl?: string | null };
 type Submission = { id: number; title: string; story: string; monthYear: string; approved: boolean; author: Author; media: MediaRef[]; createdAt: string };
 type Roundup = { id: number; monthYear: string; sentAt: string; submissions: Submission[] };
 
-function fmtMonth(my: string) {
-  const [y, m] = my.split("-");
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
-}
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 
 function MediaTile({ m }: { m: MediaRef }) {
   const isVideo = m.mime.startsWith("video/");

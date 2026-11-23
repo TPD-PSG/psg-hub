@@ -5,6 +5,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import UserAvatar from "@/components/UserAvatar";
+import { fmtDate as fmtDateShared } from "@/lib/format";
+const fmtDate = (s: string | null) => fmtDateShared(s, "");
 
 type TeamMember = { user: { id: number; name: string; email: string; avatarUrl?: string | null } };
 type Production = {
@@ -33,10 +35,6 @@ const ANN_LABELS: Record<string, string> = {
   nda: "NDA", not_announced: "Not Announced", on_sale: "On Sale", open: "Open",
 };
 
-function fmtDate(s: string | null) {
-  if (!s) return "";
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
 
 function StatTile({ value, label, sub }: { value: string | number; label: string; sub?: string }) {
   return (

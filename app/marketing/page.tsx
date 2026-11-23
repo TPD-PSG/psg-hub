@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDay as fmtDate, fmtDayTime as fmtDateTime } from "@/lib/format";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,17 +56,7 @@ function parsePlatforms(raw: string): Platform[] {
   try { return JSON.parse(raw) as Platform[]; } catch { return []; }
 }
 
-function fmtDate(iso: string | null) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 
-function fmtDateTime(iso: string | null) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " " +
-    d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
 
 function statusMeta(key: string) {
   return STATUSES.find(s => s.key === key) ?? STATUSES[0];

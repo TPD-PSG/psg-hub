@@ -3,6 +3,8 @@
 // Types, constants and small building blocks shared by the production page and its tabs.
 
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
+export { Modal } from "@/components/Modal";
+export { fmtMoney as fmt, fmtDate, fmtTime } from "@/lib/format";
 
 // ── Types ──
 
@@ -184,15 +186,6 @@ export const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "v
 
 // ── Formatting ──
 
-export function fmt(n: number) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
-}
-export function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-export function fmtTime(s: string) {
-  return new Date(s).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
 export function fmtShortDate(s: string) {
   return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
@@ -271,19 +264,6 @@ export function F({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-export function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-          <h2 className="font-semibold text-white">{title}</h2>
-          <button onClick={onClose} className="text-xl leading-none hover:text-white transition-colors" style={{ color: "var(--psg-muted)" }}>×</button>
-        </div>
-        <div className="px-5 py-4">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 export function Btns({ onCancel, label = "Save" }: { onCancel: () => void; label?: string }) {
   return (

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDate, fmtMoney as fmt } from "@/lib/format";
 
 type BudgetLine = { id: number; department: string; description: string };
 type VariationItem = { id: number; budgetLineId: number; amount: number; note: string | null; budgetLine: BudgetLine };
@@ -34,13 +35,7 @@ const STATUS_STYLES: Record<string, { label: string; color: string; bg: string }
   rejected:         { label: "Rejected",         color: "text-red-400",    bg: "bg-red-900/30" },
 };
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
-}
 
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
 
 type ItemRow = { budgetLineId: string; amount: string; note: string };
 const BLANK_ITEM: ItemRow = { budgetLineId: "", amount: "", note: "" };

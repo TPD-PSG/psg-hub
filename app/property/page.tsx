@@ -3,6 +3,9 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDate, fmtMoney as fmt } from "@/lib/format";
+import { Modal as BaseModal } from "@/components/Modal";
+const Modal = (props: { title: string; onClose: () => void; children: React.ReactNode }) => <BaseModal {...props} bodyClassName="p-4 space-y-4" />;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,13 +38,6 @@ const FREQ_LABELS: Record<string, string> = { monthly: "Monthly", quarterly: "Qu
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
 
-function fmtDate(s: string | null) {
-  if (!s) return "—";
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-function fmt(n: number) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
-}
 function daysUntil(s: string | null) {
   if (!s) return null;
   return Math.round((new Date(s).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -64,19 +60,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
-      <div className="w-full max-w-lg rounded-xl shadow-2xl overflow-y-auto max-h-[90vh]" style={{ backgroundColor: "var(--psg-card-bg)", border: "1px solid var(--psg-card-border)" }}>
-        <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-          <h2 className="font-semibold">{title}</h2>
-          <button onClick={onClose} className="text-xl leading-none" style={{ color: "var(--psg-muted)" }}>×</button>
-        </div>
-        <div className="p-4 space-y-4">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 function Btns({ onCancel, label = "Save" }: { onCancel: () => void; label?: string }) {
   return (

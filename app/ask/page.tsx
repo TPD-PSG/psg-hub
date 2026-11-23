@@ -3,13 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDate } from "@/lib/format";
 
 type Doc = { id: number; name: string; mime: string; createdAt: string };
 type Message = { role: "user" | "assistant"; content: string };
 
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
 
 export default function AskPage() {
   const { data: session } = useSession();

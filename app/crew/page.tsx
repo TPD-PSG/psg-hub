@@ -5,6 +5,7 @@ import Link from "next/link";
 import ExportMenu from "@/components/ExportMenu";
 import { exportCrewPDF, exportCrewXLSX } from "@/lib/exports";
 import { confirmDialog } from "@/components/Dialogs";
+import { fmtDate } from "@/lib/format";
 
 type CrewMember = {
   id: number;
@@ -44,9 +45,6 @@ const BLANK = {
   notes: "",
 };
 
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
 
 function isExpiringSoon(expiry: string | null) {
   if (!expiry) return false;

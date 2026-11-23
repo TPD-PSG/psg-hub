@@ -3909,7 +3909,10 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                     const imported = data.results?.filter((r: any) => r.status.startsWith("imported")).length ?? 0;
                     totalImported += imported;
                     setImportStatus(`Batch ${batch} done — ${totalImported} imported so far…`);
-                    // If nothing new was imported this batch, we're done
+                    // Keep going while the server had to leave reports for the next batch
+                    // (or, when backfilling, while each batch still finds new ones)
+                    if (batch >= 50) break; // safety stop
+                    if ((data.deferred ?? 0) > 0) continue;
                     if (imported === 0 || !backfill) break;
                   }
                   const refreshed = await fetch(`/api/productions/${prod.id}/show-reports`);

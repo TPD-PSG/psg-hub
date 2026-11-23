@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
 
   const results: { id: number; subject: string | null; status: string; parsed?: any }[] = [];
 
-  for (const record of incomplete) {
+  // Parse in parallel so four PDFs fit comfortably inside Railway's 60s request limit
+  await Promise.all(incomplete.map(async record => {
     try {
       const parsed = await parseShowReportPdf(record.rawPdf!, { subject: record.emailSubject ?? "" });
       console.log(`[reparse] id=${record.id} parsed ${parsed.length} report(s)`);
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
 
       if (!match || (!match.attendance && !match.notes)) {
         results.push({ id: record.id, subject: record.emailSubject, status: "still_empty", parsed: match });
-        continue;
+        return;
       }
 
       await prisma.showReport.update({
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
     } catch (err: any) {
       results.push({ id: record.id, subject: record.emailSubject, status: `error: ${err?.message}` });
     }
-  }
+  }));
 
   const remaining = await prisma.showReport.count({
     where: { rawPdf: { not: null }, attendance: null },

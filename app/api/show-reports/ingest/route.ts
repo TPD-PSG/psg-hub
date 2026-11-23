@@ -155,15 +155,20 @@ export async function POST(req: NextRequest) {
 
   const processedFolderId = await getOrCreateProcessedFolder(token);
   const results: { subject: string; status: string; reportId?: number; production?: string; parsed?: ParsedReport[] }[] = [];
-  const MAX_PER_RUN = 4; // keep well within Railway's 60s timeout (~10-15s per PDF)
-  let pdfProcessed = 0;
+  // Railway ends requests at 60s. Stop starting new PDFs after 40s and parse a few at once;
+  // anything left is reported as "deferred" and picked up by the next call.
+  const started = Date.now();
+  const TIME_BUDGET_MS = 40_000;
+  const CONCURRENCY = 3;
+  let deferred = 0;
+  const inFlight = new Set<string>();
 
-  for (const msg of messages) {
+  const handle = async (msg: any): Promise<void> => {
     const dedupKey = `${msg.subject}||${msg.from?.emailAddress?.address ?? ""}`;
 
     if (importedKeys.has(dedupKey)) {
       results.push({ subject: msg.subject, status: "already_imported" });
-      continue;
+      return;
     }
 
     // During backfill, skip early if subject doesn't match any known production
@@ -172,7 +177,7 @@ export async function POST(req: NextRequest) {
       const earlyMatch = matchProduction(msg.subject, productions);
       if (!earlyMatch) {
         results.push({ subject: msg.subject, status: "skipped_no_match" });
-        continue;
+        return;
       }
     }
 
@@ -185,7 +190,7 @@ export async function POST(req: NextRequest) {
         });
       }
       results.push({ subject: msg.subject, status: "skipped_no_attachment" });
-      continue;
+      return;
     }
 
     // Fetch attachment list (without contentBytes — avoid inline size limit)
@@ -195,7 +200,7 @@ export async function POST(req: NextRequest) {
     );
     if (!attRes.ok) {
       results.push({ subject: msg.subject, status: `attachment_error_${attRes.status}` });
-      continue;
+      return;
     }
     const { value: attachments } = await attRes.json();
 
@@ -205,8 +210,18 @@ export async function POST(req: NextRequest) {
     );
     if (!pdfMeta) {
       results.push({ subject: msg.subject, status: "skipped_no_pdf" });
-      continue;
+      return;
     }
+
+    // Out of time for this request: leave it for the next batch (don't download what we won't parse)
+    if (Date.now() - started > TIME_BUDGET_MS) {
+      deferred++;
+      results.push({ subject: msg.subject, status: "deferred" });
+      return;
+    }
+    // Claim it so a parallel worker doesn't import a duplicate email twice
+    if (inFlight.has(dedupKey)) { results.push({ subject: msg.subject, status: "already_imported" }); return; }
+    inFlight.add(dedupKey);
 
     // Download the attachment content separately (handles any size)
     const pdfBytesRes = await fetch(
@@ -215,7 +230,7 @@ export async function POST(req: NextRequest) {
     );
     if (!pdfBytesRes.ok) {
       results.push({ subject: msg.subject, status: `attachment_download_error_${pdfBytesRes.status}` });
-      continue;
+      return;
     }
     const pdfBuffer = await pdfBytesRes.arrayBuffer();
     const pdf = {
@@ -223,16 +238,11 @@ export async function POST(req: NextRequest) {
       name: pdfMeta.name,
     };
 
-    if (pdfProcessed >= MAX_PER_RUN) {
-      results.push({ subject: msg.subject, status: "deferred" });
-      continue;
-    }
-    pdfProcessed++;
 
     const productionId = matchProduction(msg.subject, productions);
     if (!productionId) {
       results.push({ subject: msg.subject, status: "skipped_no_match" });
-      continue;
+      return;
     }
     const production = productions.find(p => p.id === productionId);
 
@@ -242,8 +252,9 @@ export async function POST(req: NextRequest) {
       console.log(`[ingest] parsed ${parsedReports.length} report(s) from message ${msg.id}`);
     } catch (err) {
       // Leave the email in the inbox so the next run retries it
+      inFlight.delete(dedupKey);
       results.push({ subject: msg.subject, status: err instanceof ClaudeOutputError ? `parse_error: ${err.message}` : "parse_error" });
-      continue;
+      return;
     }
 
     // Create one DB record per report found in the PDF
@@ -288,7 +299,21 @@ export async function POST(req: NextRequest) {
       production: production?.name,
       ...(debug ? { parsed: parsedReports } : {}),
     });
-  }
+  };
 
-  return NextResponse.json({ processed: results.length, results, graphErrors: graphErrors.length ? graphErrors : undefined });
+  const queue = [...messages];
+  await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
+    while (queue.length) {
+      const msg = queue.shift();
+      try {
+        await handle(msg);
+      } catch (err) {
+        // One bad email shouldn't stop the rest of the batch
+        console.error(`[ingest] message ${msg?.id} failed:`, err instanceof Error ? err.message : err);
+        results.push({ subject: msg?.subject, status: "error" });
+      }
+    }
+  }));
+
+  return NextResponse.json({ processed: results.length, deferred, results, graphErrors: graphErrors.length ? graphErrors : undefined });
 }

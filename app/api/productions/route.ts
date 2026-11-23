@@ -1,42 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { parsePerms } from "@/lib/permissions";
-
-const include = {
-  _count: { select: { events: true, budgetLines: true, crew: true } },
-  budgetLines: { include: { expenses: true } },
-  events: { orderBy: { startAt: "asc" as const } },
-  team: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } }, orderBy: { createdAt: "asc" as const } },
-  venueRef: { select: { name: true, city: true } },
-  bdClient: { select: { id: true, name: true, type: true, address: true, website: true, billingName: true, billingAddress: true, billingEmail: true } },
-};
+import { loadProductionsForViewer } from "@/lib/productionList";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  const role: string = (session?.user as any)?.role ?? "member";
-  const userId: number | undefined = (session?.user as any)?.id ? Number((session!.user as any).id) : undefined;
-  const permsRaw: string | null = (session?.user as any)?.permissions ?? null;
-  const perms = parsePerms(permsRaw);
-
-  const { searchParams } = new URL(req.url);
-  const showArchived = searchParams.get("archived") === "1";
-
-  const where: Record<string, unknown> = { archived: showArchived };
-  const restrictToTeam = role === "client" || role === "freelancer" || (role !== "admin" && !perms.allProductions);
-  if (restrictToTeam && userId) {
-    where.team = { some: { userId } };
-  }
-
-  const productions = await prisma.production.findMany({
-    where,
-    orderBy: showArchived ? { archivedAt: "desc" } : { createdAt: "desc" },
-    include,
-  });
-  return NextResponse.json(productions);
+  const archived = new URL(req.url).searchParams.get("archived") === "1";
+  return NextResponse.json(await loadProductionsForViewer({ archived }));
 }
 
 export async function POST(req: NextRequest) {
+  // Creating productions is for PSG staff (it was open to anyone signed in)
+  const session = await auth();
+  const role = (session?.user as any)?.role;
+  if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Only PSG staff can create productions" }, { status: 403 });
   const body = await req.json();
   const production = await prisma.production.create({
     data: {

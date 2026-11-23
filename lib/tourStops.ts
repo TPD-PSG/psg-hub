@@ -19,10 +19,23 @@ export function hasLeftVenue(stop: StopDates, now: Date = new Date()): boolean {
   return ukDay(last) < ukDay(now);
 }
 
-/** Upcoming and current stops first, then finished ones; each group in stop-number order. */
+const hasDates = (s: StopDates) => !!(s.endDate ?? s.performanceEnd ?? s.startDate ?? s.loadInDate);
+
+/**
+ * Upcoming and current stops first, then finished ones; each group in stop-number order.
+ * A stop with no dates entered counts as finished when a later stop on the tour has finished
+ * (e.g. an opening venue nobody went back and dated).
+ */
 export function orderForTourList<T extends StopDates>(stops: T[], now: Date = new Date()): T[] {
   const byNumber = (a: T, b: T) => a.stopNumber - b.stopNumber;
-  const upcoming = stops.filter(s => !hasLeftVenue(s, now)).sort(byNumber);
-  const finished = stops.filter(s => hasLeftVenue(s, now)).sort(byNumber);
-  return [...upcoming, ...finished];
+  const lastFinished = Math.max(-Infinity, ...stops.filter(s => hasLeftVenue(s, now)).map(s => s.stopNumber));
+  const finished = (s: T) => hasLeftVenue(s, now) || (!hasDates(s) && s.stopNumber < lastFinished);
+  return [...stops.filter(s => !finished(s)).sort(byNumber), ...stops.filter(finished).sort(byNumber)];
+}
+
+/** Same rule as the list, for styling one stop (needs the whole tour for undated stops). */
+export function isFinishedStop<T extends StopDates>(stop: T, stops: T[], now: Date = new Date()): boolean {
+  if (hasLeftVenue(stop, now)) return true;
+  if (hasDates(stop)) return false;
+  return stops.some(s => s.stopNumber > stop.stopNumber && hasLeftVenue(s, now));
 }

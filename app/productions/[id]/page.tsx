@@ -9,7 +9,7 @@ import TasksPanel from "@/components/TasksPanel";
 import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF, exportMeetingMinutesPDF } from "@/lib/exports";
 import { parsePerms } from "@/lib/permissions";
-import { orderForTourList, hasLeftVenue } from "@/lib/tourStops";
+import { orderForTourList, isFinishedStop } from "@/lib/tourStops";
 import { CONTACT_SECTIONS_SETTING, defaultSections, parseSections } from "@/lib/contactSections";
 import { confirmDialog, alertDialog } from "@/components/Dialogs";
 
@@ -2876,8 +2876,8 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
           <div className="space-y-2">
             {orderForTourList(tourStops).map((stop, idx, ordered) => {
               // Stops the tour has already left sit at the bottom, under a "Finished" divider, slightly faded
-              const left = hasLeftVenue(stop);
-              const firstFinished = left && (idx === 0 || !hasLeftVenue(ordered[idx - 1]));
+              const left = isFinishedStop(stop, tourStops);
+              const firstFinished = left && (idx === 0 || !isFinishedStop(ordered[idx - 1], tourStops));
               const notesOpen = expandedStopNotes.has(stop.id);
               const draft = stopNoteDrafts[stop.id] ?? stop.notes ?? "";
               const toggleNotes = () => {

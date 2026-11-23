@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { confirmDialog } from "@/components/Dialogs";
-import { F, Btns, inp, inpStyle, fmtDate, pickFiles, sendJson, toggled, useList, type TabProps } from "../shared";
+import { F, Btns, inp, inpStyle, pickFiles, sendJson, toggled, useList, type TabProps } from "../shared";
+import { fmtWeekdayDate } from "@/lib/format";
 
 export default function ReportsTab({ prod }: TabProps) {
   const id = String(prod.id);
@@ -270,7 +271,7 @@ export default function ReportsTab({ prod }: TabProps) {
                   <span className="text-sm shrink-0" style={{ color: "var(--psg-muted)", marginTop: 1 }}>{isExpanded ? "▾" : "▸"}</span>
                   <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                     {r.performanceNumber != null && <span className="text-sm font-bold" style={{ color: "var(--psg-blue)", minWidth: "2.5rem" }}>#{r.performanceNumber}</span>}
-                    <span className="font-medium text-white text-sm">{fmtDate(r.reportDate)}</span>
+                    <span className="font-medium text-white text-sm">{fmtWeekdayDate(r.reportDate)}</span>
                     {r.performance && <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{r.performance}</span>}
                     {r.venue && <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "var(--psg-blue)" }}>{r.venue}</span>}
                     {r.attendance != null && (

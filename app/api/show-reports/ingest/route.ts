@@ -103,6 +103,9 @@ export async function POST(req: NextRequest) {
 
   const url = new URL(req.url);
   const backfill = url.searchParams.get("backfill") === "true";
+  // ?productionIds=1,4 limits a run to those productions (e.g. re-importing one show's reports)
+  const onlyIds = url.searchParams.get("productionIds");
+  const only = onlyIds ? new Set(onlyIds.split(",").map(Number).filter(Number.isInteger)) : null;
   // Raw Claude output only for admins, never for the cron caller
   const debug = url.searchParams.get("debug") === "true" && (session?.user as any)?.role === "admin";
 
@@ -175,8 +178,15 @@ export async function POST(req: NextRequest) {
     // Skip reports for shows that aren't Hub productions before downloading anything.
     // (This used to apply only to backfill, so the scheduled import re-downloaded every
     // unrelated PDF in the inbox on every run.)
-    if (!matchProduction(msg.subject, productions)) {
+    const matched = matchProduction(msg.subject, productions);
+    if (!matched) {
       results.push({ subject: msg.subject, status: "skipped_no_match" });
+      return;
+    }
+    // Matched against every production (so "Jack and the Beanstalk DRAG" isn't mistaken for
+    // "Jack and the Beanstalk"), then limited to the requested ones
+    if (only && !only.has(matched)) {
+      results.push({ subject: msg.subject, status: "skipped_other_production" });
       return;
     }
 

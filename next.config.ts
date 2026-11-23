@@ -31,9 +31,13 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "200mb",
     },
+    // Request bodies pass through proxy.ts; above this they'd be cut short (default 10 MB).
+    // Matches the largest upload cap in proxy.ts.
+    proxyClientMaxBodySize: "100mb",
   },
+  // Type errors now fail the build instead of deploying broken code
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   async headers() {
     return [

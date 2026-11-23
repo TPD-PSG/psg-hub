@@ -32,6 +32,7 @@ const MB = 1024 * 1024;
 function maxBodyBytes(pathname: string): number {
   if (pathname === "/api/users/me/avatar" || pathname.endsWith("/logo")) return 5 * MB;
   if (pathname === "/api/venues/import-pdfs") return 100 * MB; // several PDFs at once
+  if (/^\/api\/productions\/\d+\/(documents|hs-documents)$/.test(pathname)) return 100 * MB; // drawings, packs
   return 25 * MB;
 }
 
@@ -46,7 +47,8 @@ function moduleDenied(pathname: string, method: string, user: { role?: string; p
   return !allowed.some(m => canAccess(perms, m, role));
 }
 
-export default auth((req) => {
+// Next 16 "proxy" (formerly middleware): runs before every request, on the Node.js runtime
+export const proxy = auth((req) => {
   const isLoggedIn = !!req.auth;
   const { pathname } = req.nextUrl;
 
@@ -83,6 +85,8 @@ export default auth((req) => {
 
   return NextResponse.next();
 });
+
+export default proxy;
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|psg-logo.png).*)"],

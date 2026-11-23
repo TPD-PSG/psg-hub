@@ -21,41 +21,39 @@ export async function POST(req: NextRequest) {
 
   const created: string[] = [];
 
+  // Load today's notifications once, so re-running the job never sends duplicates
+  // (this used to check the database separately for every task, date and person)
+  const today = await prisma.notification.findMany({
+    where: { createdAt: { gte: startOfToday } },
+    select: { userId: true, link: true, title: true },
+  });
+  const sentLinks = new Set(today.map(n => `${n.userId}|${n.link}`));
+  const sentTitles = new Set(today.map(n => `${n.userId}|${n.title}`));
+  const todoTitles = today.filter(n => n.link === "/finance?tab=todo");
+  const queue: { userId: number; title: string; body?: string; link: string }[] = [];
+  const add = (n: { userId: number; title: string; body?: string; link: string }, key: string) => {
+    queue.push(n);
+    sentLinks.add(`${n.userId}|${n.link}`);
+    sentTitles.add(`${n.userId}|${n.title}`);
+    created.push(key);
+  };
+
   // ── 1. Tasks due today or overdue (not done) ──────────────────────────────
   const overdueTasks = await prisma.task.findMany({
-    where: {
-      status: { not: "done" },
-      dueDate: { lt: endOfToday },
-      assigneeUserId: { not: null },
-    },
+    where: { status: { not: "done" }, dueDate: { lt: endOfToday }, assigneeUserId: { not: null } },
     select: { id: true, title: true, dueDate: true, assigneeUserId: true, production: { select: { name: true } } },
   });
-
   for (const task of overdueTasks) {
     if (!task.assigneeUserId) continue;
-    const isToday = task.dueDate && new Date(task.dueDate) >= startOfToday;
-    const label = isToday ? "due today" : "overdue";
-    const prodLabel = task.production ? ` · ${task.production.name}` : "";
-
-    // Avoid duplicate: don't re-notify if one already exists today for this task
-    const existing = await prisma.notification.findFirst({
-      where: {
-        userId: task.assigneeUserId,
-        link: `/tasks?highlight=${task.id}`,
-        createdAt: { gte: startOfToday },
-      },
-    });
-    if (existing) continue;
-
-    await prisma.notification.create({
-      data: {
-        userId: task.assigneeUserId,
-        title: `Task ${label}: ${task.title}`,
-        body: prodLabel || undefined,
-        link: `/tasks?highlight=${task.id}`,
-      },
-    });
-    created.push(`task-${task.id}`);
+    const link = `/tasks?highlight=${task.id}`;
+    if (sentLinks.has(`${task.assigneeUserId}|${link}`)) continue;
+    const label = task.dueDate && new Date(task.dueDate) >= startOfToday ? "due today" : "overdue";
+    add({
+      userId: task.assigneeUserId,
+      title: `Task ${label}: ${task.title}`,
+      body: task.production ? ` · ${task.production.name}` : undefined,
+      link,
+    }, `task-${task.id}`);
   }
 
   // ── 2. Tasks awaiting sign-off ────────────────────────────────────────────
@@ -63,27 +61,11 @@ export async function POST(req: NextRequest) {
     where: { status: "awaiting_signoff", signoffUserId: { not: null } },
     select: { id: true, title: true, signoffUserId: true, production: { select: { name: true } } },
   });
-
   for (const task of signoffTasks) {
     if (!task.signoffUserId) continue;
-    const existing = await prisma.notification.findFirst({
-      where: {
-        userId: task.signoffUserId,
-        link: `/tasks?highlight=${task.id}`,
-        createdAt: { gte: startOfToday },
-      },
-    });
-    if (existing) continue;
-
-    await prisma.notification.create({
-      data: {
-        userId: task.signoffUserId,
-        title: `Sign-off needed: ${task.title}`,
-        body: task.production?.name || undefined,
-        link: `/tasks?highlight=${task.id}`,
-      },
-    });
-    created.push(`signoff-${task.id}`);
+    const link = `/tasks?highlight=${task.id}`;
+    if (sentLinks.has(`${task.signoffUserId}|${link}`)) continue;
+    add({ userId: task.signoffUserId, title: `Sign-off needed: ${task.title}`, body: task.production?.name || undefined, link }, `signoff-${task.id}`);
   }
 
   // ── 3. Key dates in the next 7 days ──────────────────────────────────────
@@ -91,45 +73,21 @@ export async function POST(req: NextRequest) {
     where: { startDate: { gte: now, lte: in7Days } },
     select: {
       id: true, type: true, label: true, startDate: true,
-      production: {
-        select: {
-          id: true, name: true,
-          team: { select: { userId: true } },
-        },
-      },
+      production: { select: { id: true, name: true, team: { select: { userId: true } } } },
     },
   });
-
   const KEY_DATE_LABELS: Record<string, string> = {
     first_rehearsal: "First Rehearsal", press_night: "Press Night", opening_night: "Opening Night",
     closing_night: "Closing Night", load_in: "Load In", get_out: "Get Out",
     tech_week: "Technical Rehearsals", dress_rehearsal: "Dress Rehearsal", touring_start: "Touring Start",
     touring_end: "Touring End",
   };
-
   for (const kd of keyDates) {
     const dateStr = new Date(kd.startDate!).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    const kdLabel = kd.label || KEY_DATE_LABELS[kd.type] || kd.type;
-    const title = `${kd.production.name} — ${kdLabel} on ${dateStr}`;
-
+    const title = `${kd.production.name} — ${kd.label || KEY_DATE_LABELS[kd.type] || kd.type} on ${dateStr}`;
     for (const member of kd.production.team) {
-      const existing = await prisma.notification.findFirst({
-        where: {
-          userId: member.userId,
-          title,
-          createdAt: { gte: startOfToday },
-        },
-      });
-      if (existing) continue;
-
-      await prisma.notification.create({
-        data: {
-          userId: member.userId,
-          title,
-          link: `/productions/${kd.production.id}?section=schedule`,
-        },
-      });
-      created.push(`kd-${kd.id}-user-${member.userId}`);
+      if (sentTitles.has(`${member.userId}|${title}`)) continue;
+      add({ userId: member.userId, title, link: `/productions/${kd.production.id}?section=schedule` }, `kd-${kd.id}-user-${member.userId}`);
     }
   }
 
@@ -138,34 +96,20 @@ export async function POST(req: NextRequest) {
     where: { done: false, dueDate: { gte: now, lte: in3Days } },
     select: { id: true, client: true, description: true, dueDate: true },
   });
-
   if (dueTodos.length > 0) {
     const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
     for (const todo of dueTodos) {
       const dateStr = new Date(todo.dueDate!).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
       for (const admin of admins) {
-        const existing = await prisma.notification.findFirst({
-          where: {
-            userId: admin.id,
-            link: `/finance?tab=todo`,
-            title: { contains: todo.client },
-            createdAt: { gte: startOfToday },
-          },
-        });
-        if (existing) continue;
-
-        await prisma.notification.create({
-          data: {
-            userId: admin.id,
-            title: `Invoice due ${dateStr}: ${todo.client}`,
-            body: todo.description || undefined,
-            link: `/finance?tab=todo`,
-          },
-        });
-        created.push(`todo-${todo.id}-admin-${admin.id}`);
+        const already = todoTitles.some(n => n.userId === admin.id && n.title.includes(todo.client))
+          || queue.some(n => n.userId === admin.id && n.link === "/finance?tab=todo" && n.title.includes(todo.client));
+        if (already) continue;
+        add({ userId: admin.id, title: `Invoice due ${dateStr}: ${todo.client}`, body: todo.description || undefined, link: "/finance?tab=todo" }, `todo-${todo.id}-admin-${admin.id}`);
       }
     }
   }
+
+  if (queue.length) await prisma.notification.createMany({ data: queue });
 
   // ── 5. SQLite backup to Cloudflare R2 ────────────────────────────────────
   let backupResult: Record<string, unknown> = { skipped: true };

@@ -15,10 +15,6 @@ const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export const dynamic = "force-dynamic";
 
-export const config = {
-  api: { bodyParser: { sizeLimit: "100mb" } },
-};
-
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await requireProductionAccess(id, "documents");

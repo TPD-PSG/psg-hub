@@ -1301,8 +1301,9 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
+      {/* Wraps on phones so the Edit / Archive / Delete buttons drop below the title instead of widening the page */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-4 min-w-0">
           {/* Production logo — click opens SharePoint folder if URL set */}
           {prod.sharepointUrl ? (
             <a

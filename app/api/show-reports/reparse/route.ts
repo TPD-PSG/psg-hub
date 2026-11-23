@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
       reportDate: true,
       rawPdf: true,
       pdfKey: true,
+      createdAt: true,
     },
     orderBy: { id: "asc" },
     take: MAX_PER_RUN,
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     try {
       const pdf = await loadBase64(record.pdfKey, record.rawPdf);
       if (!pdf) { results.push({ id: record.id, subject: record.emailSubject, status: "no_pdf" }); return; }
-      const parsed = await parseShowReportPdf(pdf, { subject: record.emailSubject ?? "" });
+      const parsed = await parseShowReportPdf(pdf, { subject: record.emailSubject ?? "", receivedAt: record.createdAt });
       console.log(`[reparse] id=${record.id} parsed ${parsed.length} report(s)`);
 
       // Pick the parsed entry that matches this record's performance number, or first

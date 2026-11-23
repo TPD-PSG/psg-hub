@@ -203,11 +203,12 @@ export async function POST(req: NextRequest) {
     }
     const { value: attachments } = await attRes.json();
 
-    const pdfMeta = attachments?.find((a: any) =>
+    // Every PDF on the email (some emails carry one report per attachment, e.g. matinee + evening)
+    const pdfMetas: { id: string; name: string }[] = (attachments ?? []).filter((a: any) =>
       a.contentType === "application/pdf" ||
       (a.contentType === "application/octet-stream" && (a.name as string)?.toLowerCase().endsWith(".pdf"))
     );
-    if (!pdfMeta) {
+    if (!pdfMetas.length) {
       results.push({ subject: msg.subject, status: "skipped_no_pdf" });
       return;
     }
@@ -222,64 +223,62 @@ export async function POST(req: NextRequest) {
     if (inFlight.has(dedupKey)) { results.push({ subject: msg.subject, status: "already_imported" }); return; }
     inFlight.add(dedupKey);
 
-    // Download the attachment content separately (handles any size)
-    const pdfBytesRes = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}/attachments/${pdfMeta.id}/$value`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!pdfBytesRes.ok) {
-      results.push({ subject: msg.subject, status: `attachment_download_error_${pdfBytesRes.status}` });
-      return;
-    }
-    const pdfBuffer = await pdfBytesRes.arrayBuffer();
-    const pdf = {
-      contentBytes: Buffer.from(pdfBuffer).toString("base64"),
-      name: pdfMeta.name,
-    };
-
-
     const productionId = matchProduction(msg.subject, productions);
     if (!productionId) {
+      inFlight.delete(dedupKey);
       results.push({ subject: msg.subject, status: "skipped_no_match" });
       return;
     }
     const production = productions.find(p => p.id === productionId);
 
-    let parsedReports: ParsedReport[];
+    // Download and read every attachment. Nothing is saved unless all of them succeed, so a
+    // failure leaves the whole email in the inbox for the next run (no half-imported emails).
+    let readPdfs: { name: string; base64: string; reports: ParsedReport[] }[];
     try {
-      parsedReports = await parseShowReportPdf(pdf.contentBytes, { subject: msg.subject });
-      console.log(`[ingest] parsed ${parsedReports.length} report(s) from message ${msg.id}`);
+      readPdfs = await Promise.all(pdfMetas.map(async meta => {
+        // Download each attachment separately (handles any size)
+        const res = await fetch(
+          `https://graph.microsoft.com/v1.0/users/${REPORTS_MAILBOX}/messages/${msg.id}/attachments/${meta.id}/$value`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!res.ok) throw new Error(`attachment_download_error_${res.status} (${meta.name})`);
+        const base64 = Buffer.from(await res.arrayBuffer()).toString("base64");
+        const reports = await parseShowReportPdf(base64, { subject: msg.subject, filename: meta.name, oneOfSeveral: pdfMetas.length > 1, receivedAt: msg.receivedDateTime });
+        return { name: meta.name, base64, reports };
+      }));
+      console.log(`[ingest] parsed ${readPdfs.reduce((n, p) => n + p.reports.length, 0)} report(s) from ${readPdfs.length} attachment(s) in message ${msg.id}`);
     } catch (err) {
-      // Leave the email in the inbox so the next run retries it
       inFlight.delete(dedupKey);
-      results.push({ subject: msg.subject, status: err instanceof ClaudeOutputError ? `parse_error: ${err.message}` : "parse_error" });
+      results.push({ subject: msg.subject, status: err instanceof ClaudeOutputError ? `parse_error: ${err.message}` : `error: ${err instanceof Error ? err.message : "parse failed"}` });
       return;
     }
 
-    // Store the PDF once (R2 if configured), shared by every report it contains
-    const stored = await saveFile("show-reports", pdf.name || `${msg.subject}.pdf`, Buffer.from(pdf.contentBytes, "base64"), "application/pdf");
-
-    // Create one DB record per report found in the PDF
-    for (const parsed of parsedReports) {
-      await prisma.showReport.create({
-        data: {
-          productionId: productionId,
-          reportDate: toDate(parsed.reportDate) ?? new Date(msg.receivedDateTime),
-          venue: parsed.venue,
-          performance: parsed.performance,
-          performanceNumber: parsed.performanceNumber,
-          attendance: parsed.attendance,
-          houseCapacity: parsed.houseCapacity,
-          runningTime: parsed.runningTime,
-          playingTime: parsed.playingTime,
-          notes: parsed.notes,
-          emailSubject: msg.subject,
-          emailFrom: msg.from?.emailAddress?.address ?? null,
-          rawPdf: stored.base64,
-          pdfKey: stored.key,
-          productionMatched: productionId !== null,
-        },
-      });
+    // Store each PDF once (R2 if configured), shared by every report it contains; one DB record per report
+    const parsedReports: ParsedReport[] = [];
+    for (const pdf of readPdfs) {
+      const stored = await saveFile("show-reports", pdf.name || `${msg.subject}.pdf`, Buffer.from(pdf.base64, "base64"), "application/pdf");
+      for (const parsed of pdf.reports) {
+        parsedReports.push(parsed);
+        await prisma.showReport.create({
+          data: {
+            productionId: productionId,
+            reportDate: toDate(parsed.reportDate) ?? new Date(msg.receivedDateTime),
+            venue: parsed.venue,
+            performance: parsed.performance,
+            performanceNumber: parsed.performanceNumber,
+            attendance: parsed.attendance,
+            houseCapacity: parsed.houseCapacity,
+            runningTime: parsed.runningTime,
+            playingTime: parsed.playingTime,
+            notes: parsed.notes,
+            emailSubject: msg.subject,
+            emailFrom: msg.from?.emailAddress?.address ?? null,
+            rawPdf: stored.base64,
+            pdfKey: stored.key,
+            productionMatched: productionId !== null,
+          },
+        });
+      }
     }
 
     // Add to dedup set so we don't re-import within the same run

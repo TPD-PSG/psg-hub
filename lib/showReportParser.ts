@@ -62,16 +62,48 @@ Act 2: HH:MM – HH:MM (duration)
 Leave out sections with nothing in them. Keep cue numbers and scene references. Be concise but complete.`;
 
 /** Parse a show-report PDF. `hint` is where it came from, e.g. the email subject or filename. */
-export async function parseShowReportPdf(base64: string, hint: { subject?: string; filename?: string }): Promise<ParsedReport[]> {
-  const source = hint.subject
-    ? `The email subject was: "${hint.subject}".`
-    : hint.filename ? `The filename is: "${hint.filename}".` : "";
+/**
+ * `oneOfSeveral`: this PDF is one of several attachments on the same email. Then performance
+ * numbers come only from this file (its contents or its name), never from the email subject, and
+ * the subject-based split doesn't apply, so two attachments can't both become report #55.
+ */
+export async function parseShowReportPdf(base64: string, hint: { subject?: string; filename?: string; oneOfSeveral?: boolean; receivedAt?: string | Date }): Promise<ParsedReport[]> {
+  const ref = hint.receivedAt ? new Date(hint.receivedAt) : new Date();
+  const source = [
+    hint.subject ? `The email subject was: "${hint.subject}".` : "",
+    hint.filename ? `${hint.oneOfSeveral ? "This PDF is one of several attached to that email; its" : "The"} filename is: "${hint.filename}".` : "",
+  ].filter(Boolean).join(" ");
   const { reports } = await extractJson<{ reports: ParsedReport[] }>({
     model: "claude-sonnet-5-5",
-    content: [pdfBlock(base64), { type: "text", text: PROMPT(source) }],
+    content: [pdfBlock(base64), { type: "text", text: PROMPT(source) + `\n\nToday is ${ref.toISOString().slice(0, 10)} (${ref.toLocaleDateString("en-GB", { weekday: "long" })}). Reports often give a date without a year: use the weekday to choose the year, and never a date more than a week after today.` }],
     schema: REPORT_SCHEMA,
   });
-  return applyHintFallbacks(reports, hint.subject ?? hint.filename ?? "");
+  let out: ParsedReport[];
+  if (hint.oneOfSeveral) {
+    // Numbers from this file's name only; venue and date can still come from the subject
+    const fromFile = applyHintFallbacks(reports, hint.filename ?? "", { split: false });
+    out = applyHintFallbacks(fromFile, hint.subject ?? "", { split: false, numbers: false });
+  } else {
+    out = applyHintFallbacks(reports, hint.subject ?? hint.filename ?? "");
+  }
+  return out.map(r => ({ ...r, reportDate: fixYear(r.reportDate, ref) }));
+}
+
+/**
+ * Reports often say "Sunday 22nd November" with no year, and the model can pick the wrong one.
+ * Move the date to whichever year (one either side) is closest to when the report arrived,
+ * without going more than a week past it.
+ */
+export function fixYear(date: string | null, ref: Date): string | null {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  const [y, m, d] = date.split("-").map(Number);
+  const limit = ref.getTime() + 7 * 864e5;
+  const candidates = [y - 1, y, y + 1]
+    .map(year => new Date(Date.UTC(year, m - 1, d)))
+    .filter(c => c.getUTCMonth() === m - 1 && c.getTime() <= limit); // drop 29 Feb in non-leap years
+  if (!candidates.length) return date;
+  const best = candidates.reduce((a, b) => (Math.abs(b.getTime() - ref.getTime()) < Math.abs(a.getTime() - ref.getTime()) ? b : a));
+  return best.toISOString().slice(0, 10);
 }
 
 // ── Fill gaps from the email subject / filename, e.g. "Show Reports 55 and 56 – 28.10.2026 York" ──
@@ -93,14 +125,14 @@ function parseDate(subject: string): string | null {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 
-export function applyHintFallbacks(reports: ParsedReport[], subject: string): ParsedReport[] {
-  const nums = parsePerformanceNumbers(subject);
+export function applyHintFallbacks(reports: ParsedReport[], subject: string, opts: { split?: boolean; numbers?: boolean } = {}): ParsedReport[] {
+  const nums = opts.numbers === false ? [] : parsePerformanceNumbers(subject);
   const venue = parseVenue(subject);
   const date = parseDate(subject);
   if (!reports.length) reports = [emptyReport()];
 
   // Combined PDF but only one report came back: split it by the numbers in the subject
-  if (nums.length > 1 && reports.length === 1 && !reports[0].performanceNumber) {
+  if (opts.split !== false && nums.length > 1 && reports.length === 1 && !reports[0].performanceNumber) {
     return nums.map(n => ({ ...reports[0], performanceNumber: n, venue: reports[0].venue ?? venue, reportDate: reports[0].reportDate ?? date }));
   }
   return reports.map((r, i) => ({

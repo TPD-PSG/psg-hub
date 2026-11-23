@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 
 export const maxDuration = 60;
 const ALLOWED_MIME = [
@@ -20,9 +20,9 @@ export const config = {
 };
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
   const fd = await req.formData();
   const file = fd.get("file") as File | null;
   const folder = (fd.get("folder") as string) || "General";

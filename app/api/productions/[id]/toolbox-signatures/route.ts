@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
   const sigs = await prisma.toolboxTalkSignature.findMany({
     where: { productionId: Number(id) },
     orderBy: { createdAt: "desc" },

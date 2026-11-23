@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
@@ -11,9 +11,9 @@ const LOGO_DIR = process.env.NODE_ENV === "production"
   : join(process.cwd(), "public", "production-logos");
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
   const productionId = Number(id);
 
   const formData = await req.formData();
@@ -37,9 +37,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
   await prisma.production.update({ where: { id: Number(id) }, data: { logoUrl: null } });
   return NextResponse.json({ ok: true });
 }

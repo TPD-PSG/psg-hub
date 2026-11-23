@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 
 const prisma = new PrismaClient();
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
   const keyDates = await prisma.productionKeyDate.findMany({
     where: { productionId: Number(id) },
     orderBy: { startDate: "asc" },
@@ -16,9 +16,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
   const body = await req.json();
   const keyDate = await prisma.productionKeyDate.create({
     data: {

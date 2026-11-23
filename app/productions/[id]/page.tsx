@@ -235,6 +235,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { data: session } = useSession();
   const isAdmin = (session?.user as any)?.role === "admin";
   const userRole = (session?.user as any)?.role ?? "member";
+  const canManageTeam = isAdmin || userRole === "member";
   const DEFAULT_HIDDEN: Record<string, string[]> = { client: ["budget", "crew", "advancing", "links"], freelancer: ["budget", "crew", "advancing", "links"] };
   const userPermsHidden = parsePerms((session?.user as any)?.permissions ?? null);
   const hiddenSections = new Set<string>(isAdmin ? [] : (userPermsHidden.hiddenSections ?? DEFAULT_HIDDEN[userRole] ?? []));
@@ -1348,7 +1349,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             {prod.team.map((m) => {
               const initials = m.user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
               return (
-                <button key={m.user.id} title={`Remove ${m.user.name}`} onClick={() => removeTeamMember(m.user.id)}
+                <button key={m.user.id} title={canManageTeam ? `Remove ${m.user.name}` : m.user.name} disabled={!canManageTeam} onClick={() => removeTeamMember(m.user.id)}
                   className="group relative w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white transition-opacity hover:opacity-70"
                   style={{ backgroundColor: "var(--psg-blue)" }}>
                   {initials}
@@ -1356,7 +1357,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                 </button>
               );
             })}
-            <div className="relative">
+            {canManageTeam && <div className="relative">
               <button onClick={() => setShowTeamPicker((o) => !o)}
                 className="w-7 h-7 rounded-full border-2 border-dashed flex items-center justify-center text-sm transition-colors hover:bg-white/10"
                 style={{ borderColor: "var(--psg-muted)", color: "var(--psg-muted)" }} title="Add team member">+</button>
@@ -1371,7 +1372,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
             {prod.team.length > 0 && (
               <span className="text-xs" style={{ color: "var(--psg-muted)" }}>
                 {prod.team.map((m) => m.user.name.split(" ")[0]).join(", ")}

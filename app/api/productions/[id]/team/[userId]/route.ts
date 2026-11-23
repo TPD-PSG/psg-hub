@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; userId: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id, userId } = await params;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
+  if (access.role !== "admin" && access.role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   await prisma.productionTeam.deleteMany({
     where: { productionId: Number(id), userId: Number(userId) },
   });

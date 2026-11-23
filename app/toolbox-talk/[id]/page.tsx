@@ -31,7 +31,7 @@ function ToolboxForm() {
   const lastPos = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    fetch(`/api/productions/${id}`)
+    fetch(`/api/productions/${id}/toolbox-info`)
       .then(r => r.json())
       .then(d => { setProd(d); setLoading(false); })
       .catch(() => setLoading(false));

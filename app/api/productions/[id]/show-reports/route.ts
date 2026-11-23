@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/auth";
+import { requireProductionAccess } from "@/lib/access";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
   const reports = await prisma.showReport.findMany({
     where: { productionId: Number(id) },
     select: {
@@ -24,8 +26,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : undefined;
+  const access = await requireProductionAccess(id);
+  if ("error" in access) return access.error;
+  const userId = access.userId;
   const body = await req.json();
   const report = await prisma.showReport.create({
     data: {

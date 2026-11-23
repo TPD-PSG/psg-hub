@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { confirmDialog } from "@/components/Dialogs";
 
 type Client = { id: number; name: string; type: string; website?: string | null; address?: string | null; notes?: string | null; billingName?: string | null; billingAddress?: string | null; billingEmail?: string | null };
 type BDTask = { id: number; description: string; dueDate: string | null; completedAt: string | null };
@@ -102,7 +103,7 @@ export default function BDPage() {
   }
 
   async function deleteOpp(id: number) {
-    if (!confirm("Delete this opportunity? This cannot be undone.")) return;
+    if (!await confirmDialog("Delete this opportunity? This cannot be undone.")) return;
     await fetch(`/api/opportunities/${id}`, { method: "DELETE" });
     if (selectedOpp?.id === id) setSelectedOpp(null);
     reload();
@@ -153,7 +154,7 @@ export default function BDPage() {
   }
 
   async function convertToProduction(opp: Opportunity) {
-    if (!confirm(`Convert "${opp.title}" to a production? This will open the new production form.`)) return;
+    if (!await confirmDialog(`Convert "${opp.title}" to a production? This will open the new production form.`)) return;
     router.push(`/productions/new?from=bd&title=${encodeURIComponent(opp.title)}`);
   }
 

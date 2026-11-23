@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { confirmDialog } from "@/components/Dialogs";
 
 type Supplier = {
   id: number; name: string; category: string;
@@ -89,7 +90,7 @@ export default function SuppliersPage() {
   }
 
   async function del(id: number) {
-    if (!confirm("Delete this supplier?")) return;
+    if (!await confirmDialog("Delete this supplier?")) return;
     await fetch(`/api/suppliers/${id}`, { method: "DELETE" });
     setSuppliers(s => s.filter(x => x.id !== id));
   }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { confirmDialog } from "@/components/Dialogs";
 
 type Ticket = {
   id: number;
@@ -92,7 +93,7 @@ export default function HelpDeskPage() {
   }
 
   async function deleteTicket(id: number) {
-    if (!confirm("Delete this ticket?")) return;
+    if (!await confirmDialog("Delete this ticket?")) return;
     await fetch(`/api/help-tickets/${id}`, { method: "DELETE" });
     load(showAll);
   }

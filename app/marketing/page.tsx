@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { confirmDialog } from "@/components/Dialogs";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ export default function MarketingPage() {
   }
 
   async function deletePost(id: number) {
-    if (!confirm("Delete this post?")) return;
+    if (!await confirmDialog("Delete this post?")) return;
     await fetch(`/api/marketing/${id}`, { method: "DELETE" });
     await loadPosts();
     if (selectedPost?.id === id) setSelectedPost(null);

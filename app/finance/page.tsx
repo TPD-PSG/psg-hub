@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 import UserAvatar from "@/components/UserAvatar";
 import { exportProductionSpendPDF } from "@/lib/exports";
+import { confirmDialog } from "@/components/Dialogs";
 
 type Invoice = {
   id: number;
@@ -219,7 +220,7 @@ function FinancePageInner() {
   }
 
   async function deleteTodo(id: number) {
-    if (!confirm("Remove this item?")) return;
+    if (!await confirmDialog("Remove this item?")) return;
     await fetch(`/api/invoice-todos/${id}`, { method: "DELETE" });
     await reloadTodos();
   }

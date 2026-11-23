@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import UserAvatar from "@/components/UserAvatar";
+import { confirmDialog, alertDialog } from "@/components/Dialogs";
 
 type MediaRef = { id: number; name: string; mime: string };
 type Author = { id: number; name: string; avatarUrl?: string | null };
@@ -113,21 +114,21 @@ export default function FunPage() {
     e.preventDefault();
     if (!title.trim()) return;
     const tooBig = files.find(f => f.size > 150 * 1024 * 1024);
-    if (tooBig) { alert(`"${tooBig.name}" is too large (${Math.round(tooBig.size / 1024 / 1024)}MB). Maximum file size is 150MB.`); return; }
+    if (tooBig) { alertDialog(`"${tooBig.name}" is too large (${Math.round(tooBig.size / 1024 / 1024)}MB). Maximum file size is 150MB.`); return; }
     setSubmitting(true);
     const fd = new FormData();
     fd.append("title", title.trim());
     fd.append("story", story.trim());
     files.forEach(f => fd.append("media", f));
     const res = await fetch("/api/fun/submissions", { method: "POST", body: fd });
-    if (!res.ok) { const data = await res.json().catch(() => ({})); alert(data.error ?? "Something went wrong"); setSubmitting(false); return; }
+    if (!res.ok) { const data = await res.json().catch(() => ({})); alertDialog(data.error ?? "Something went wrong"); setSubmitting(false); return; }
     setTitle(""); setStory(""); setFiles([]); setShowForm(false);
     setSubmitting(false);
     await load();
   }
 
   async function deleteSub(id: number) {
-    if (!confirm("Remove your submission?")) return;
+    if (!await confirmDialog("Remove your submission?")) return;
     await fetch(`/api/fun/submissions/${id}`, { method: "DELETE" });
     await load();
   }
@@ -144,13 +145,13 @@ export default function FunPage() {
   }
 
   async function rejectSub(id: number) {
-    if (!confirm("Delete this submission? This cannot be undone.")) return;
+    if (!await confirmDialog("Delete this submission? This cannot be undone.")) return;
     await fetch(`/api/fun/submissions/${id}`, { method: "DELETE" });
     await load();
   }
 
   async function sendRoundup() {
-    if (!confirm(`Send the ${fmtMonth(currentMonthYear)} roundup to everyone? This can't be undone.`)) return;
+    if (!await confirmDialog(`Send the ${fmtMonth(currentMonthYear)} roundup to everyone? This can't be undone.`)) return;
     setSending(true);
     const res = await fetch("/api/fun/roundup", {
       method: "POST",
@@ -159,7 +160,7 @@ export default function FunPage() {
     });
     const data = await res.json();
     setSending(false);
-    if (!res.ok) { alert(data.error ?? "Something went wrong"); return; }
+    if (!res.ok) { alertDialog(data.error ?? "Something went wrong"); return; }
     await load();
   }
 

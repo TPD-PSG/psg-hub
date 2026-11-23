@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import ExportMenu from "@/components/ExportMenu";
 import { exportCrewPDF, exportCrewXLSX } from "@/lib/exports";
+import { confirmDialog } from "@/components/Dialogs";
 
 type CrewMember = {
   id: number;
@@ -86,7 +87,7 @@ export default function CrewPage() {
   }
 
   async function deleteMember(id: number, name: string) {
-    if (!confirm(`Delete ${name} from the crew database?`)) return;
+    if (!await confirmDialog(`Delete ${name} from the crew database?`)) return;
     await fetch(`/api/crew/${id}`, { method: "DELETE" });
     reload();
   }

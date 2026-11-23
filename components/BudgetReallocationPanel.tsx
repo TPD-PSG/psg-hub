@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { confirmDialog } from "@/components/Dialogs";
 
 type BudgetLine = { id: number; department: string; description: string };
 type VariationItem = { id: number; budgetLineId: number; amount: number; note: string | null; budgetLine: BudgetLine };
@@ -114,7 +115,7 @@ export default function BudgetReallocationPanel({
   }
 
   async function deleteVariation(id: number) {
-    if (!confirm("Delete this reallocation request?")) return;
+    if (!await confirmDialog("Delete this reallocation request?")) return;
     await fetch(`/api/budget-reallocation/${id}`, { method: "DELETE" });
     load();
   }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
+import { confirmDialog } from "@/components/Dialogs";
 
 type UserInfo = { id: number; name: string; avatarUrl: string | null };
 type RoadmapItem = {
@@ -89,7 +90,7 @@ export default function RoadmapPage() {
   }
 
   async function deleteItem(item: RoadmapItem) {
-    if (!confirm(`Delete "${item.title}"?`)) return;
+    if (!await confirmDialog(`Delete "${item.title}"?`)) return;
     await fetch(`/api/roadmap/${item.id}`, { method: "DELETE" });
     reload();
   }

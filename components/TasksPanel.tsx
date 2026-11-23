@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import UserAvatar from "@/components/UserAvatar";
+import { confirmDialog } from "@/components/Dialogs";
 
 type User = { id: number; name: string; email: string; avatarUrl?: string | null };
 type TaskList = { id: number; name: string; position: number };
@@ -346,7 +347,7 @@ export default function TasksPanel({ productionId }: Props) {
   }
 
   async function deleteList(id: number, name: string) {
-    if (!confirm(`Delete list "${name}"? Tasks in this list will not be deleted but will be unassigned from the list.`)) return;
+    if (!await confirmDialog(`Delete list "${name}"? Tasks in this list will not be deleted but will be unassigned from the list.`)) return;
     await fetch(`/api/task-lists/${id}`, { method: "DELETE" });
     if (activeListId === String(id)) setActiveListId(NO_LIST_ID);
     await loadLists();
@@ -393,7 +394,7 @@ export default function TasksPanel({ productionId }: Props) {
   }
 
   async function deleteTask(id: number) {
-    if (!confirm("Delete this task?")) return;
+    if (!await confirmDialog("Delete this task?")) return;
     await fetch(`/api/tasks/${id}`, { method: "DELETE" });
     await reloadTasks();
   }

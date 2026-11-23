@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { confirmDialog } from "@/components/Dialogs";
 
 type Hotel = {
   id: number;
@@ -46,7 +47,7 @@ export default function HotelsPage() {
   }
 
   async function deleteHotel(id: number, name: string) {
-    if (!confirm(`Delete ${name}? This will also remove all its bookings.`)) return;
+    if (!await confirmDialog(`Delete ${name}? This will also remove all its bookings.`)) return;
     await fetch(`/api/hotels/${id}`, { method: "DELETE" });
     reload();
   }

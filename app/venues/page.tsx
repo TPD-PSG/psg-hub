@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { alertDialog } from "@/components/Dialogs";
 
 type VenueContact = { id: number; name: string; role: string | null; phone: string | null; email: string | null; notes: string | null };
 type TechSpecs = {
@@ -141,7 +142,7 @@ export default function VenuesPage() {
     if (!res.ok) {
       const { error } = await res.json().catch(() => ({ error: "Couldn't delete venue" }));
       setConfirmDelete(null);
-      window.alert(error);
+      alertDialog(error);
       return;
     }
     setSelected(null); setConfirmDelete(null); await reload();

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { confirmDialog } from "@/components/Dialogs";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -139,7 +140,7 @@ function SalesInner() {
   }
 
   async function deleteBrand(id: number) {
-    if (!confirm("Delete this brand?")) return;
+    if (!await confirmDialog("Delete this brand?")) return;
     await fetch(`/api/sales/brands/${id}`, { method: "DELETE" });
     setBrands(bs => bs.filter(b => b.id !== id));
     if (selectedBrand?.id === id) setSelectedBrand(null);

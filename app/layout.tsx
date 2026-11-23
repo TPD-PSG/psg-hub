@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
+import { DialogHost } from "@/components/Dialogs";
 import UserNav from "@/components/UserNav";
 import NotificationBell from "@/components/NotificationBell";
 import Sidebar, { MobileSidebarProvider } from "@/components/Sidebar";
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </MobileSidebarProvider>
           <SeasonalOverlay />
+          <DialogHost />
         </AuthProvider>
       </body>
     </html>

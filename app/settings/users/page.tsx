@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { confirmDialog, alertDialog } from "@/components/Dialogs";
 
 type User = { id: number; name: string; email: string; role: string; createdAt: string };
 
@@ -54,11 +55,11 @@ export default function UsersPage() {
   }
 
   async function deleteUser(u: User) {
-    if (!confirm(`Delete ${u.name}? This cannot be undone.`)) return;
+    if (!await confirmDialog(`Delete ${u.name}? This cannot be undone.`)) return;
     const res = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
     if (!res.ok) {
       const j = await res.json();
-      alert(j.error);
+      alertDialog(j.error);
       return;
     }
     reload();

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { confirmDialog } from "@/components/Dialogs";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ function PropertyPageInner() {
     setContactModal(false); reload();
   }
   async function deleteContact(id: number) {
-    if (!confirm("Delete contact?")) return;
+    if (!await confirmDialog("Delete contact?")) return;
     await fetch(`/api/property/contacts/${id}`, { method: "DELETE" }); reload();
   }
 
@@ -172,7 +173,7 @@ function PropertyPageInner() {
     setDocModal(false); reload();
   }
   async function deleteDoc(id: number) {
-    if (!confirm("Delete document?")) return;
+    if (!await confirmDialog("Delete document?")) return;
     await fetch(`/api/property/documents/${id}`, { method: "DELETE" }); reload();
   }
 
@@ -186,7 +187,7 @@ function PropertyPageInner() {
     setMaintModal(false); reload();
   }
   async function deleteMaint(id: number) {
-    if (!confirm("Delete this maintenance log?")) return;
+    if (!await confirmDialog("Delete this maintenance log?")) return;
     await fetch(`/api/property/maintenance/${id}`, { method: "DELETE" }); reload();
   }
   async function quickStatus(id: number, status: string) {
@@ -204,7 +205,7 @@ function PropertyPageInner() {
     setKeyModal(false); reload();
   }
   async function deleteKey(id: number) {
-    if (!confirm("Delete key record?")) return;
+    if (!await confirmDialog("Delete key record?")) return;
     await fetch(`/api/property/keys/${id}`, { method: "DELETE" }); reload();
   }
 
@@ -218,7 +219,7 @@ function PropertyPageInner() {
     setAlarmModal(false); reload();
   }
   async function deleteAlarm(id: number) {
-    if (!confirm("Delete alarm record?")) return;
+    if (!await confirmDialog("Delete alarm record?")) return;
     await fetch(`/api/property/alarms/${id}`, { method: "DELETE" }); reload();
   }
 

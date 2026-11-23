@@ -10,6 +10,7 @@ import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
 import { exportBudgetPDF, exportBudgetXLSX, exportSchedulePDF, exportScheduleXLSX, exportCrewPDF, exportCrewXLSX, exportAccommodationPDF, exportAccommodationXLSX, exportHaulagePDF, exportHaulageXLSX, exportTourSchedulePDF, exportTourScheduleXLSX, exportVenueStopPDF, exportContactSheetPDF, exportToolboxSignoffPDF, exportMeetingMinutesPDF } from "@/lib/exports";
 import { parsePerms } from "@/lib/permissions";
 import { CONTACT_SECTIONS_SETTING, defaultSections, parseSections } from "@/lib/contactSections";
+import { confirmDialog, alertDialog } from "@/components/Dialogs";
 
 type SpendDoc = { id: number; type: string; name: string; mime: string; invoiceDate: string | null; invoiceAmount: number | null; invoiceNumber: string | null; issuedForPayment: boolean; createdAt: string };
 type ProdDoc = { id: number; name: string; mime: string; folder: string; createdAt: string };
@@ -335,7 +336,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteNote(noteId: number) {
-    if (!confirm("Delete this note?")) return;
+    if (!await confirmDialog("Delete this note?")) return;
     await fetch(`/api/production-notes/${noteId}`, { method: "DELETE" });
     reloadNotes();
   }
@@ -425,14 +426,14 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteMeeting(mid: number) {
-    if (!confirm("Delete this meeting?")) return;
+    if (!await confirmDialog("Delete this meeting?")) return;
     await fetch(`/api/meetings/${mid}`, { method: "DELETE" });
     reloadMeetings();
   }
 
   function startRecording() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert("Your browser doesn't support live transcription. Please use Chrome."); return; }
+    if (!SpeechRecognition) { alertDialog("Your browser doesn't support live transcription. Please use Chrome."); return; }
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
@@ -454,7 +455,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   async function generateMinutes(meetingId?: number) {
     const transcript = meetingTranscript.trim();
-    if (!transcript) { alert("No transcript to generate minutes from."); return; }
+    if (!transcript) { alertDialog("No transcript to generate minutes from."); return; }
     setGeneratingMinutes(true);
     try {
       const mid = meetingId ?? editingMeeting?.id ?? 0;
@@ -499,7 +500,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteReport(rid: number) {
-    if (!confirm("Delete this show report?")) return;
+    if (!await confirmDialog("Delete this show report?")) return;
     await fetch(`/api/show-reports/${rid}`, { method: "DELETE" });
     reloadReports();
   }
@@ -644,7 +645,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteStop(stopId: number) {
-    if (!confirm("Remove this tour stop?")) return;
+    if (!await confirmDialog("Remove this tour stop?")) return;
     await fetch(`/api/tour-stops/${stopId}`, { method: "DELETE" });
     reloadTourStops();
   }
@@ -746,7 +747,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteContact(cid: number) {
-    if (!confirm("Delete this contact?")) return;
+    if (!await confirmDialog("Delete this contact?")) return;
     await fetch(`/api/production-contacts/${cid}`, { method: "DELETE" });
     reloadContacts();
   }
@@ -905,7 +906,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteEvent(eid: number) {
-    if (!confirm("Delete this event?")) return;
+    if (!await confirmDialog("Delete this event?")) return;
     await fetch(`/api/events/${eid}`, { method: "DELETE" });
     reload();
   }
@@ -924,13 +925,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteBudgetLine(lid: number) {
-    if (!confirm("Delete this budget line and all its items?")) return;
+    if (!await confirmDialog("Delete this budget line and all its items?")) return;
     await fetch(`/api/budget-lines/${lid}`, { method: "DELETE" });
     reload();
   }
 
   async function deleteDepartment(lineIds: number[]) {
-    if (!confirm(`Delete this department and all ${lineIds.length} line${lineIds.length !== 1 ? "s" : ""} within it?`)) return;
+    if (!await confirmDialog(`Delete this department and all ${lineIds.length} line${lineIds.length !== 1 ? "s" : ""} within it?`)) return;
     await Promise.all(lineIds.map(id => fetch(`/api/budget-lines/${id}`, { method: "DELETE" })));
     reload();
   }
@@ -1051,7 +1052,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteExpense(eid: number) {
-    if (!confirm("Delete this item?")) return;
+    if (!await confirmDialog("Delete this item?")) return;
     await fetch(`/api/budget-expenses/${eid}`, { method: "DELETE" });
     reload();
   }
@@ -1079,7 +1080,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deletePSGExpense(eid: number) {
-    if (!confirm("Delete this PSG expense?")) return;
+    if (!await confirmDialog("Delete this PSG expense?")) return;
     await fetch(`/api/budget-expenses/${eid}`, { method: "DELETE" });
     reload();
   }
@@ -1095,7 +1096,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteProdDoc(docId: number) {
-    if (!confirm("Delete this document?")) return;
+    if (!await confirmDialog("Delete this document?")) return;
     await fetch(`/api/production-documents/${docId}`, { method: "DELETE" });
     reload();
   }
@@ -1116,7 +1117,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteHSDoc(docId: number) {
-    if (!confirm("Delete this document?")) return;
+    if (!await confirmDialog("Delete this document?")) return;
     await fetch(`/api/hs-documents/${docId}`, { method: "DELETE" });
     reload();
   }
@@ -1133,7 +1134,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteLink(lid: number) {
-    if (!confirm("Remove this link?")) return;
+    if (!await confirmDialog("Remove this link?")) return;
     await fetch(`/api/production-links/${lid}`, { method: "DELETE" });
     reload();
   }
@@ -1176,7 +1177,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteBooking(bid: number) {
-    if (!confirm("Delete this booking?")) return;
+    if (!await confirmDialog("Delete this booking?")) return;
     await fetch(`/api/hotel-bookings/${bid}`, { method: "DELETE" });
     reload();
   }
@@ -1204,7 +1205,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function removeCrewFromProduction(pcId: number, name: string) {
-    if (!confirm(`Remove ${name} from this production?`)) return;
+    if (!await confirmDialog(`Remove ${name} from this production?`)) return;
     await fetch(`/api/production-crew/${pcId}`, { method: "DELETE" });
     reload();
   }
@@ -1217,13 +1218,13 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteProd() {
-    if (!confirm(`Permanently delete "${prod?.name}" and all its data?`)) return;
+    if (!await confirmDialog(`Permanently delete "${prod?.name}" and all its data?`)) return;
     await fetch(`/api/productions/${id}`, { method: "DELETE" });
     router.push("/");
   }
 
   async function archiveProd() {
-    if (!confirm(`Archive "${prod?.name}"? It will move to Archived Productions and become read-only.`)) return;
+    if (!await confirmDialog(`Archive "${prod?.name}"? It will move to Archived Productions and become read-only.`)) return;
     await fetch(`/api/productions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1246,7 +1247,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
   }
 
   async function deleteMovement(mid: number) {
-    if (!confirm("Delete this movement?")) return;
+    if (!await confirmDialog("Delete this movement?")) return;
     await fetch(`/api/haulage/${mid}`, { method: "DELETE" });
     reload();
   }
@@ -2280,7 +2281,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
                         </div>
                         {activeSheet.generalNotes && <div className="text-sm mt-2" style={{ color: "var(--psg-muted)" }}>{activeSheet.generalNotes}</div>}
                       </div>
-                      <button onClick={() => { if (confirm("Delete this call sheet?")) deleteSheet(activeSheet.id); }} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>
+                      <button onClick={async () => { if (await confirmDialog("Delete this call sheet?")) deleteSheet(activeSheet.id); }} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>
                     </div>
                   </div>
 
@@ -3892,7 +3893,7 @@ function ProductionPageInner({ params }: { params: Promise<{ id: string }> }) {
             </div>
             <div className="flex gap-2">
               <button onClick={async () => {
-                const backfill = confirm("Import all historical emails (including already-read ones)?\n\nOK = backfill all\nCancel = new unread only");
+                const backfill = await confirmDialog("Import all historical emails, including ones already read?\n\nOr just new unread reports.", { confirmLabel: "All emails", cancelLabel: "New only" });
                 setImportingReports(true);
                 setImportStatus(backfill ? "Checking inbox & Processed folder…" : "Checking inbox for new reports…");
                 let totalImported = 0;

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { confirmDialog } from "@/components/Dialogs";
 
 type Doc = { id: number; name: string; mime: string; createdAt: string };
 type Message = { role: "user" | "assistant"; content: string };
@@ -42,7 +43,7 @@ export default function AskPage() {
   }
 
   async function deleteDoc(id: number) {
-    if (!confirm("Remove this document from the knowledge base?")) return;
+    if (!await confirmDialog("Remove this document from the knowledge base?")) return;
     await fetch(`/api/knowledge-docs/${id}`, { method: "DELETE" });
     loadDocs();
   }

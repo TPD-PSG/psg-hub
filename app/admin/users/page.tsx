@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import UserAvatar from "@/components/UserAvatar";
+import { confirmDialog, alertDialog } from "@/components/Dialogs";
 
 const PROD_SECTIONS = [
   { key: "schedule", label: "Schedule" },
@@ -165,9 +166,9 @@ export default function AdminUsersPage() {
   }
 
   async function deleteUser(id: number) {
-    if (!confirm("Delete this user? This cannot be undone.")) return;
+    if (!await confirmDialog("Delete this user? This cannot be undone.")) return;
     const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
-    if (!res.ok) { alert((await res.json()).error); return; }
+    if (!res.ok) { alertDialog((await res.json()).error); return; }
     await reload();
   }
 

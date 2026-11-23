@@ -20,7 +20,7 @@ export const REPORT_SCHEMA = objectSchema({
     description: "One entry per performance in the PDF",
     items: objectSchema({
       reportDate: nullable("string", "YYYY-MM-DD"),
-      venue: nullable("string", "Venue name only, not the address"),
+      venue: nullable("string", "The theatre's name, e.g. 'Milton Keynes Theatre', never a street address"),
       performance: nullable("string", "Performance slot, e.g. 'Evening – 7:30pm' or 'Matinee – 2:30pm'"),
       performanceNumber: nullable("integer", "The show/performance number, e.g. 81"),
       attendance: nullable("integer", "House number / audience count"),
@@ -37,6 +37,8 @@ export const PROMPT = (hint: string) => `This PDF is one or more show reports fr
 Stage managers write these after each performance. They usually include: date, venue, performance number and slot; house number, capacity and percentage; act timings (house open, FOH clearance, act up/down, interval, playing and running time); staff on duty; and notes by department (general, sound, lighting, video, costume, movement, SM, health & safety, audience, maintenance, injury/illness, absences and covers).
 
 The PDF may hold several performances (e.g. a matinee and an evening). Return each as its own entry in "reports". Use null for anything the report doesn't state.
+
+For "venue", give the theatre's name (e.g. "Milton Keynes Theatre", "Hackney Empire"), never a street address or postcode. If the report only gives an address and you know which theatre is there, use that theatre's name; otherwise use the town.
 
 For each report's notes, write a markdown summary in exactly this format, with each heading on its own line and its content directly underneath:
 

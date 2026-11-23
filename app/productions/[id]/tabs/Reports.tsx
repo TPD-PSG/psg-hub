@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { confirmDialog } from "@/components/Dialogs";
 import { F, Btns, inp, inpStyle, pickFiles, sendJson, toggled, useList, type TabProps } from "../shared";
 import { fmtWeekdayDate } from "@/lib/format";
+import { findReportGaps } from "@/lib/reportGaps";
 
 export default function ReportsTab({ prod }: TabProps) {
   const id = String(prod.id);
@@ -19,6 +20,7 @@ export default function ReportsTab({ prod }: TabProps) {
   const [pdfUploadStatus, setPdfUploadStatus] = useState<string | null>(null);
   const BLANK_REPORT = { reportDate: "", venue: "", performance: "", attendance: "", notes: "" };
   const [reportForm, setReportForm] = useState(BLANK_REPORT);
+  const gaps = useMemo(() => findReportGaps(showReports), [showReports]);
 
   // Shows a status line, then clears it after `ms`
   function flashPdfStatus(msg: string, ms: number) { setPdfUploadStatus(msg); setTimeout(() => setPdfUploadStatus(null), ms); }
@@ -252,6 +254,19 @@ export default function ReportsTab({ prod }: TabProps) {
         </div>
       )}
 
+      {gaps.length > 0 && (
+        <div className="px-3 py-2 rounded text-xs space-y-0.5" style={{ backgroundColor: "rgba(234,179,8,0.1)", color: "#b45309", border: "1px solid rgba(234,179,8,0.3)" }}>
+          {gaps.map(g => (
+            <p key={g.label}>
+              <span className="font-semibold">{g.label}:</span>
+              {g.missing && <> no report for {g.missing}</>}
+              {g.missing && g.repeated && ";"}
+              {g.repeated && <> more than one report for {g.repeated}</>}
+            </p>
+          ))}
+        </div>
+      )}
+
       {showReports.length === 0 && !showReportForm ? (
         <div className="py-12 text-center rounded-lg border" style={{ color: "var(--psg-muted)", borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
           No show reports yet.{prod.reportEmail ? "" : " Reports sent to reports@production-solutions.group will be imported automatically."}
@@ -264,8 +279,10 @@ export default function ReportsTab({ prod }: TabProps) {
             return (
               <div key={r.id}>
                 {/* Collapsed header — always visible */}
-                <button
-                  className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-white/5 transition-colors"
+                {/* The row toggles open; Edit/Delete sit beside it, since a button can't hold buttons */}
+                <div className="px-4 py-3 flex items-center gap-2 hover:bg-white/5 transition-colors">
+                <button type="button" aria-expanded={isExpanded}
+                  className="flex-1 min-w-0 text-left flex items-center gap-2"
                   onClick={() => setExpandedReports(prev => toggled(prev, r.id))}
                 >
                   <span className="text-sm shrink-0" style={{ color: "var(--psg-muted)", marginTop: 1 }}>{isExpanded ? "▾" : "▸"}</span>
@@ -288,7 +305,8 @@ export default function ReportsTab({ prod }: TabProps) {
                     ))}
                     {!r.productionMatched && <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>Unmatched</span>}
                   </div>
-                  <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                </button>
+                  <div className="flex gap-1 shrink-0">
                     {r.rawPdf && (
                       <a href={`/api/show-reports/${r.id}/pdf`} download
                         className="text-xs px-2 py-1 rounded" style={{ color: "rgba(255,255,255,0.5)", backgroundColor: "rgba(255,255,255,0.06)" }}
@@ -299,7 +317,7 @@ export default function ReportsTab({ prod }: TabProps) {
                     <button onClick={() => deleteReport(r.id)}
                       className="text-xs px-2 py-1 rounded" style={{ color: "#f87171", backgroundColor: "rgba(239,68,68,0.1)" }}>Delete</button>
                   </div>
-                </button>
+                </div>
 
                 {/* Expanded notes */}
                 {isExpanded && (

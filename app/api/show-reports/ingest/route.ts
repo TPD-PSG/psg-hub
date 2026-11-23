@@ -172,14 +172,12 @@ export async function POST(req: NextRequest) {
       return;
     }
 
-    // During backfill, skip early if subject doesn't match any known production
-    // (avoids burning the PDF-processing budget on unrelated shows)
-    if (backfill) {
-      const earlyMatch = matchProduction(msg.subject, productions);
-      if (!earlyMatch) {
-        results.push({ subject: msg.subject, status: "skipped_no_match" });
-        return;
-      }
+    // Skip reports for shows that aren't Hub productions before downloading anything.
+    // (This used to apply only to backfill, so the scheduled import re-downloaded every
+    // unrelated PDF in the inbox on every run.)
+    if (!matchProduction(msg.subject, productions)) {
+      results.push({ subject: msg.subject, status: "skipped_no_match" });
+      return;
     }
 
     if (!msg.hasAttachments) {

@@ -4,7 +4,7 @@
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const { PrismaClient } = require("@prisma/client");
+const { createPrismaClient } = require("../lib/prisma-client");
 
 function prisma(...args) {
   const r = spawnSync("npx", ["prisma", ...args], { encoding: "utf8" });
@@ -18,7 +18,7 @@ async function baseline() {
   // Without --accept-data-loss this refuses any change that would drop data.
   if (!prisma("db", "push", "--skip-generate").ok) return false;
 
-  const db = new PrismaClient();
+  const db = createPrismaClient();
   try {
     const rows = await db.$queryRawUnsafe(
       `SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations`

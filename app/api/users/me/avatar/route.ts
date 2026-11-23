@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 // Store avatars on the persistent volume so they survive redeploys
 const AVATAR_DIR = process.env.NODE_ENV === "production"

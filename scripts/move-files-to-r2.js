@@ -3,7 +3,7 @@
 // then is the database copy cleared. Does nothing if R2 isn't configured.
 // Runs in the background on every start (see railway.json); `node scripts/move-files-to-r2.js` by hand works too.
 const crypto = require("crypto");
-const { PrismaClient } = require("@prisma/client");
+const { createPrismaClient } = require("../lib/prisma-client");
 const { storageEnabled, putObject, objectSize, makeKey } = require("../lib/storage");
 
 // table, area in R2, the base64 column, the key column, what "cleared" means for that column, how to name it
@@ -23,7 +23,7 @@ async function main() {
     console.log("[move-files] R2 isn't configured; files stay in the database.");
     return;
   }
-  const db = new PrismaClient();
+  const db = createPrismaClient();
   let moved = 0, bytes = 0, failed = 0;
   try {
     for (const t of TABLES) {

@@ -3,7 +3,7 @@
 import { createRequire } from "module";
 import crypto from "crypto";
 const require = createRequire(process.cwd() + "/package.json");
-const { PrismaClient } = require("@prisma/client");
+const { createPrismaClient } = require("./lib/prisma-client.js");
 const { hash } = require("bcryptjs");
 
 export const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
@@ -13,7 +13,7 @@ if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(BASE)) {
 }
 
 export async function run(name, body) {
-  const db = new PrismaClient();
+  const db = createPrismaClient();
   const pw = crypto.randomBytes(12).toString("hex");
   const users = [
     { email: "test-freelancer@example.test", role: "freelancer", perms: null, team: [1] },

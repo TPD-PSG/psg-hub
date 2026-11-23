@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { requireProductionAccess } from "@/lib/access";
 import { missingDates, toDate } from "@/lib/parse";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { toDate } from "@/lib/parse";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 export async function PUT(req: Request, {
  params }: { params: Promise<{ id: string }> }) {

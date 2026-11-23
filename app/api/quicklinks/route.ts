@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-const prisma = new PrismaClient();
 
 export async function GET() {
   const links = await prisma.quickLink.findMany({ orderBy: { order: "asc" } });

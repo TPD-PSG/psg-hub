@@ -62,10 +62,11 @@ export const proxy = auth((req) => {
   }
 
   // Routes that guard themselves: invite links (token), cron jobs (shared secret),
-  // Night Run venue sync (bearer token, checked in lib/night-run-sync.ts)
+  // Night Run and x-over venue sync (bearer tokens, checked in lib/night-run-sync.ts and lib/xover-sync.ts)
   const selfGuarded =
     pathname.startsWith("/invite/") ||
     pathname.startsWith("/api/integrations/night-run/") ||
+    pathname.startsWith("/api/integrations/x-over/") ||
     pathname.startsWith("/api/invites/") ||
     pathname === "/api/notify/daily" ||
     pathname === "/api/backup";

@@ -8,16 +8,17 @@ import { prisma } from "@/lib/prisma";
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest();
 
-// Constant-time token check. Hashing first makes both sides the same length, so
-// timingSafeEqual never throws and the comparison time doesn't depend on the guess.
-export function tokenOk(req: NextRequest): boolean {
-  const expected = process.env.NIGHT_RUN_SYNC_TOKEN ?? "";
+// Constant-time token check against the token in env `envKey`. Hashing first makes both sides the
+// same length, so timingSafeEqual never throws and the comparison time doesn't depend on the guess.
+export function tokenOkFor(req: NextRequest, envKey: string): boolean {
+  const expected = process.env[envKey] ?? "";
   if (expected.length < 32) return false; // not configured (or too short to be safe): refuse everyone
   const header = req.headers.get("authorization") ?? "";
   const m = /^Bearer\s+(.+)$/i.exec(header);
   const given = m ? m[1].trim() : "";
   return crypto.timingSafeEqual(sha(given), sha(expected)) && given.length > 0;
 }
+export const tokenOk = (req: NextRequest) => tokenOkFor(req, "NIGHT_RUN_SYNC_TOKEN");
 
 // ---------- rate limit ----------
 
@@ -26,8 +27,6 @@ export function tokenOk(req: NextRequest): boolean {
 const WINDOW_MS = 60 * 1000;
 const MAX_HITS = 600;
 const MAX_BAD_AUTH = 20;
-const hits = new Map<string, number[]>();
-const badAuth = new Map<string, number[]>();
 
 function bump(map: Map<string, number[]>, ip: string, max: number): boolean {
   const now = Date.now();
@@ -40,19 +39,29 @@ function bump(map: Map<string, number[]>, ip: string, max: number): boolean {
 
 const clientIp = (req: NextRequest) => req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() || "unknown";
 
-// Runs before every handler: rate limit, then the token. Returns a response to send, or null to carry on.
-export function guard(req: NextRequest): NextResponse | null {
-  const ip = clientIp(req);
-  const recentBad = (badAuth.get(ip) ?? []).filter(t => Date.now() - t < WINDOW_MS).length;
-  if (recentBad >= MAX_BAD_AUTH || bump(hits, ip, MAX_HITS)) {
-    return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": "60" } });
-  }
-  if (!tokenOk(req)) {
-    bump(badAuth, ip, MAX_BAD_AUTH);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
+/**
+ * A guard for one sync partner: rate limit, then the bearer token in env `envKey`. Each partner has its
+ * own counters. The guard returns a response to send, or null to carry on.
+ */
+export function makeGuard(envKey: string) {
+  const hits = new Map<string, number[]>();
+  const badAuth = new Map<string, number[]>();
+  return function guard(req: NextRequest): NextResponse | null {
+    const ip = clientIp(req);
+    const recentBad = (badAuth.get(ip) ?? []).filter(t => Date.now() - t < WINDOW_MS).length;
+    if (recentBad >= MAX_BAD_AUTH || bump(hits, ip, MAX_HITS)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": "60" } });
+    }
+    if (!tokenOkFor(req, envKey)) {
+      bump(badAuth, ip, MAX_BAD_AUTH);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return null;
+  };
 }
+
+// Runs before every Night Run handler.
+export const guard = makeGuard("NIGHT_RUN_SYNC_TOKEN");
 
 export const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
 
@@ -71,7 +80,7 @@ export async function readJson(req: NextRequest): Promise<{ ok: true; body: Reco
 export class InputError extends Error {}
 
 // Optional plain-text field: missing/null/"" → null; anything but a string is rejected.
-function text(body: Record<string, unknown>, key: string, max: number): string | null {
+export function text(body: Record<string, unknown>, key: string, max: number): string | null {
   const v = body[key];
   if (v === undefined || v === null) return null;
   if (typeof v !== "string") throw new InputError(`${key} must be a string`);

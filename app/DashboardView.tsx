@@ -473,6 +473,9 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
                 <CompactTile href="/hotels" icon="🏨" title="Hotels" sub="Hotel directory" />
               </>
             )}
+            {(role === "admin" || role === "member") && (
+              <CompactTile href="/jobs" icon="🧾" title="Jobs" sub="Days, costs and margin per job" />
+            )}
             {/* Haulage across productions is staff-only, like its API */}
             {canAccess(perms, "productions", role) && (role === "admin" || role === "member") && (
               <CompactTile href="/haulage" icon="🚚" title="Haulage" sub="Movements across all productions" />

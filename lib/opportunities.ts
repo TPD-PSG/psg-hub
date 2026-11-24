@@ -9,6 +9,7 @@ export const OPPORTUNITY_INCLUDE = {
   entity: { select: { id: true, name: true } },
   owner: { select: { id: true, name: true } },
   production: { select: { id: true, name: true } },
+  job: { select: { id: true, number: true } },
   activities: { orderBy: { at: "desc" }, take: 1, select: { at: true } },
 } satisfies Prisma.OpportunityInclude;
 

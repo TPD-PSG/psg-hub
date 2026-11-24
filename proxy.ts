@@ -16,6 +16,8 @@ const RULES: Rule[] = [
   { prefixes: ["/api/bd-tasks", "/api/opportunities"], write: ["bd"] },
   // Quotes and jobs: BD work, PSG staff only (the routes check staff too)
   { prefixes: ["/api/quotes", "/api/quote-templates"], write: ["bd"], staff: true },
+  // Jobs: any PSG staff can see them and log their own days; money is limited in the routes
+  { prefixes: ["/api/jobs"], write: ["productions", "bd", "finance"], staff: true },
   { prefixes: ["/api/clients"], write: ["bd"], read: ["bd", "productions"] },
   // Entities: read by BD, productions and finance; the routes themselves only let admins write
   { prefixes: ["/api/entities"], write: ["bd"], read: ["bd", "productions", "finance"] },

@@ -26,6 +26,7 @@ export type Opportunity = {
   ownerUserId: number | null; owner: { id: number; name: string } | null;
   probability: number | null; followUpDate: string | null; leadSource: string | null; competitor: string | null;
   stageChangedAt: string | null; productionId: number | null; production: { id: number; name: string } | null;
+  job?: { id: number; number: string } | null;
   lastActivityAt: string | null;
 };
 export type EntityOption = { id: number; name: string; archived: boolean };
@@ -93,6 +94,15 @@ export default function BDView({ initial }: { initial: BDInitial }) {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return alertDialog(body.error ?? "Couldn't start a quote");
     router.push(`/bd/quotes/${body.id}`);
+  }
+
+  // Won deal → job (work that isn't a production; PM jobs open with the production)
+  async function convertToJob(opp: Opportunity) {
+    if (!await confirmDialog(`Open a job for "${opp.title}"? Use "→ Production" instead for production management work.`)) return;
+    const res = await fetch(`/api/opportunities/${opp.id}/job`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(body.error ?? "Couldn't open the job");
+    router.push(`/jobs/${body.id}`);
   }
 
   // Won deal → production
@@ -648,6 +658,16 @@ export default function BDView({ initial }: { initial: BDInitial }) {
             {selectedOpp.stage === "won" && !selectedOpp.production && (
               <button onClick={() => convertToProduction(selectedOpp)} className="flex-1 text-white py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "#10b981" }}>
                 → Production
+              </button>
+            )}
+            {selectedOpp.stage === "won" && !selectedOpp.production && !selectedOpp.job && (
+              <button onClick={() => convertToJob(selectedOpp)} className="border py-2 px-3 rounded text-sm hover:bg-white/5" style={{ borderColor: "#10b981", color: "#10b981" }}>
+                → Job
+              </button>
+            )}
+            {selectedOpp.job && !selectedOpp.production && (
+              <button onClick={() => router.push(`/jobs/${selectedOpp.job!.id}`)} className="flex-1 text-white py-2 rounded text-sm font-medium hover:opacity-90" style={{ backgroundColor: "#10b981" }}>
+                Open job {selectedOpp.job.number}
               </button>
             )}
             {selectedOpp.production && (

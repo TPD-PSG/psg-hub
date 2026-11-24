@@ -17,10 +17,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.password) data.passwordHash = await hash(body.password, 12);
   if (body.permissions !== undefined) data.permissions = JSON.stringify(body.permissions);
   if (body.color !== undefined) data.color = body.color || null;
+  // Internal cost per day for job costing (admins only, like the rest of this route)
+  if (body.costDayRate !== undefined) {
+    const r = body.costDayRate === "" || body.costDayRate === null ? null : Number(body.costDayRate);
+    if (r !== null && (!Number.isFinite(r) || r < 0)) return NextResponse.json({ error: "Day rate must be an amount" }, { status: 400 });
+    data.costDayRate = r;
+  }
   const user = await prisma.user.update({
     where: { id: Number(id) },
     data,
-    select: { id: true, name: true, email: true, role: true, permissions: true, color: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, permissions: true, color: true, costDayRate: true, createdAt: true },
   });
   return NextResponse.json(user);
 }

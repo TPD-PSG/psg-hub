@@ -41,7 +41,7 @@ const MODULES = [
 type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[] };
 export type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
-  color?: string | null; permissions: string | null; createdAt: string;
+  color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null;
 };
 export type Production = { id: number; name: string; status: string };
 
@@ -56,7 +56,7 @@ function parsePerms(raw: string | null): Permissions {
   try { return JSON.parse(raw); } catch { return defaultPerms(); }
 }
 
-const BLANK = { name: "", email: "", password: "", role: "member", color: "" };
+const BLANK = { name: "", email: "", password: "", role: "member", color: "", costDayRate: "" };
 
 const MEMBER_COLORS = ["#f59e0b","#10b981","#3b82f6","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16","#f97316","#14b8a6"];
 
@@ -104,7 +104,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
 
   async function openEdit(u: User) {
     setEditUser(u);
-    setForm({ name: u.name, email: u.email, password: "", role: u.role, color: u.color ?? "" });
+    setForm({ name: u.name, email: u.email, password: "", role: u.role, color: u.color ?? "", costDayRate: u.costDayRate != null ? String(u.costDayRate) : "" });
     setPerms(parsePerms(u.permissions));
     setError("");
     setShowForm(true);
@@ -309,6 +309,15 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                     )}
                   </div>
                 </div>
+                {(form.role === "admin" || form.role === "member") && (
+                  <div>
+                    <label htmlFor="user-day-rate" className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Cost per day (£, for job costing)</label>
+                    <input id="user-day-rate" type="number" min={0} step="any" className="w-40 rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" }}
+                      value={form.costDayRate} onChange={e => setForm(f => ({ ...f, costDayRate: e.target.value }))} placeholder="Not set" />
+                    <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>What a day of this person costs PSG. Days logged on jobs are costed at it; changing it doesn&apos;t change days already logged.</p>
+                  </div>
+                )}
               </div>
 
               {form.role !== "admin" && (

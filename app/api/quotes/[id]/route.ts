@@ -37,6 +37,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     lineOps = { lines: { deleteMany: {}, create: parsed.lines.map((l, i) => ({ ...l, sortOrder: i })) } };
   }
+  // An accepted quote on a deal that already has a job becomes that job's quote
+  if (fields.status === "accepted") {
+    const q = await prisma.quote.findUnique({ where: { id }, select: { jobId: true, opportunity: { select: { job: { select: { id: true } } } } } });
+    if (!q?.jobId && q?.opportunity?.job) fields.jobId = q.opportunity.job.id;
+  }
   await prisma.quote.update({ where: { id }, data: { ...fields, ...lineOps } });
   return NextResponse.json(await load(id));
 }

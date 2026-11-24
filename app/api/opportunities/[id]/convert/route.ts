@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { parseStages } from "@/lib/feeStages";
+import { newNumber } from "@/lib/quoteData";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -45,6 +46,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Linking inside the transaction: if another request linked this deal first, this fails and rolls back
     const linked = await tx.opportunity.updateMany({ where: { id, productionId: null }, data: { productionId: p.id } });
     if (!linked.count) throw new Error("already linked");
+    // The PM job for costing: same client and company, linked to the deal, production and its quotes
+    const existingJob = await tx.job.findUnique({ where: { opportunityId: id }, select: { id: true } });
+    const job = existingJob
+      ? await tx.job.update({ where: { id: existingJob.id }, data: { productionId: p.id } })
+      : await tx.job.create({ data: { number: await newNumber("J"), title: p.name, jobType: "pm", entityId: deal.entityId, clientId: deal.clientId, opportunityId: id, productionId: p.id, startDate: day(body.startDate), endDate: day(body.endDate) } });
+    await tx.quote.updateMany({ where: { opportunityId: id, jobId: null }, data: { jobId: job.id } });
     await tx.bDActivity.create({ data: { opportunityId: id, kind: "stage", text: `Became the production "${p.name}"`, userId } });
     return p;
   }).catch((err: Error) => (err.message === "already linked" ? null : Promise.reject(err)));

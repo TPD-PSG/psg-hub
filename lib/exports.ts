@@ -14,15 +14,27 @@ export async function saveXlsx(wb: ExcelJS.Workbook, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+// Header row in navy, Arial throughout, columns sized to their contents, header frozen with
+// filters, and money columns (by header name) in £.
+const MONEY_HEADER = /cost|rate|fee|amount|price|spent|budget|£/i;
 function addSheet(wb: ExcelJS.Workbook, name: string, rows: (string | number | boolean | null | undefined)[][]) {
   const ws = wb.addWorksheet(name);
   for (const row of rows) ws.addRow(row);
-  if (rows.length > 0) {
-    const header = ws.getRow(1);
-    header.font = { bold: true };
-    header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0A1941" } };
-    header.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  }
+  if (rows.length === 0) return;
+  const header = rows[0];
+  ws.eachRow(row => row.eachCell(c => { c.font = { name: "Arial", size: 10 }; c.alignment = { vertical: "top" }; }));
+  ws.getRow(1).eachCell(c => {
+    c.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0A1941" } };
+  });
+  header.forEach((h, i) => {
+    const col = ws.getColumn(i + 1);
+    const longest = Math.max(...rows.map(r => String(r[i] ?? "").split("\n").reduce((m, l) => Math.max(m, l.length), 0)));
+    col.width = Math.min(50, Math.max(10, longest + 2));
+    if (MONEY_HEADER.test(String(h ?? ""))) col.eachCell((c, rowNo) => { if (rowNo > 1 && typeof c.value === "number") c.numFmt = '£#,##0.00;[Red]-£#,##0.00'; });
+  });
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+  if (rows.length > 1) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length, column: header.length } };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

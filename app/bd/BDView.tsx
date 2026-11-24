@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { confirmDialog } from "@/components/Dialogs";
-import { fmtDate as fmtDateShared } from "@/lib/format";
+import { fmtDate as fmtDateShared, fmtDateTime } from "@/lib/format";
+import { STAGES, ACTIVITY_KINDS, LEAD_SOURCES, weightPct, weightedValue, stuckReason, isOpen } from "@/lib/bdPipeline";
 const fmtDate = (s: string | null) => (s ? fmtDateShared(s) : null);
 
 export type Client = { id: number; name: string; type: string; website?: string | null; address?: string | null; notes?: string | null; billingName?: string | null; billingAddress?: string | null; billingEmail?: string | null };
@@ -13,21 +14,24 @@ export type Opportunity = {
   value: number | null; clientId: number | null; client: Client | null;
   description: string | null; closeDate: string | null; lostReason: string | null; notes: string | null;
   tasks: BDTask[]; createdAt: string; updatedAt: string;
+  entityId: number | null; entity: { id: number; name: string } | null;
+  ownerUserId: number | null; owner: { id: number; name: string } | null;
+  probability: number | null; followUpDate: string | null; leadSource: string | null; competitor: string | null;
+  stageChangedAt: string | null; productionId: number | null; production: { id: number; name: string } | null;
+  lastActivityAt: string | null;
 };
-
-const STAGES = [
-  { key: "lead",        label: "Lead",        color: "#6b7280" },
-  { key: "qualified",   label: "Qualified",   color: "#3b82f6" },
-  { key: "proposal",    label: "Proposal",    color: "#8b5cf6" },
-  { key: "negotiating", label: "Negotiating", color: "#f59e0b" },
-  { key: "won",         label: "Won",         color: "#10b981" },
-  { key: "lost",        label: "Lost",        color: "#ef4444" },
-];
+export type EntityOption = { id: number; name: string; archived: boolean };
+export type UserOption = { id: number; name: string; role?: string };
+type Activity = { id: number; kind: string; text: string; at: string; user: { id: number; name: string } | null };
 
 const OPP_TYPES = ["production","event","scenic","rental","acquisition","f&b","other"];
 const CLIENT_TYPES = ["promoter","venue","council","broadcaster","corporate","other"];
 
-const BLANK_OPP = { title: "", type: "production", stage: "lead", value: "", clientId: "", description: "", closeDate: "", notes: "" };
+const BLANK_OPP = {
+  title: "", type: "production", stage: "lead", value: "", clientId: "", description: "", closeDate: "", notes: "",
+  entityId: "", ownerUserId: "", probability: "", followUpDate: "", leadSource: "", competitor: "", lostReason: "",
+};
+const BLANK_ACTIVITY = { kind: "note", text: "", followUpDate: "" };
 const BLANK_TASK = { description: "", dueDate: "" };
 const BLANK_CLIENT = { name: "", type: "promoter", website: "", address: "", notes: "", billingName: "", billingAddress: "", billingEmail: "" };
 const BLANK_CONTACT = { name: "", role: "", email: "", phone: "" };
@@ -44,15 +48,25 @@ function isOverdue(s: string | null) {
   return new Date(s) < new Date();
 }
 
-export type BDInitial = { opps: Opportunity[]; clients: Client[] } | null;
+export type BDInitial = { opps: Opportunity[]; clients: Client[]; entities: EntityOption[]; users: UserOption[] } | null;
 
 // Opportunities and clients arrive with the page (loaded on the server by page.tsx)
 export default function BDView({ initial }: { initial: BDInitial }) {
   const router = useRouter();
   const [opps, setOpps] = useState<Opportunity[]>(initial?.opps ?? []);
   const [clients, setClients] = useState<Client[]>(initial?.clients ?? []);
+  const [entities, setEntities] = useState<EntityOption[]>(initial?.entities ?? []);
+  const [users, setUsers] = useState<UserOption[]>(initial?.users ?? []);
   const [view, setView] = useState<"pipeline" | "list">("pipeline");
   const [filterStage, setFilterStage] = useState("all");
+  const [filterEntity, setFilterEntity] = useState("all");
+  const [filterOwner, setFilterOwner] = useState("all");
+  const [attentionOnly, setAttentionOnly] = useState(false);
+
+  // Activity log for the open deal
+  const [activities, setActivities] = useState<Activity[] | null>(null);
+  const [activityForm, setActivityForm] = useState(BLANK_ACTIVITY);
+  const [savingActivity, setSavingActivity] = useState(false);
 
   // Opportunity form
   const [showOppForm, setShowOppForm] = useState(false);
@@ -78,12 +92,16 @@ export default function BDView({ initial }: { initial: BDInitial }) {
   useEffect(() => { if (!initial) reload(); }, []);
 
   async function reload() {
-    const [o, c] = await Promise.all([
+    const [o, c, en, us] = await Promise.all([
       fetch("/api/opportunities").then(r => r.json()),
       fetch("/api/clients").then(r => r.json()),
+      fetch("/api/entities").then(r => r.json()).catch(() => null),
+      fetch("/api/users").then(r => r.json()).catch(() => null),
     ]);
     if (Array.isArray(o)) setOpps(o);
     if (Array.isArray(c)) setClients(c);
+    if (Array.isArray(en)) setEntities(en);
+    if (Array.isArray(us)) setUsers(us);
     if (selectedOpp) {
       const fresh = (Array.isArray(o) ? o : []).find((x: Opportunity) => x.id === selectedOpp.id);
       if (fresh) setSelectedOpp(fresh);
@@ -93,6 +111,7 @@ export default function BDView({ initial }: { initial: BDInitial }) {
   async function saveOpp(e: React.FormEvent) {
     e.preventDefault();
     const payload = { ...oppForm, value: oppForm.value || null, clientId: oppForm.clientId || null };
+    delete (payload as { id?: number }).id;
     if (oppForm.id) {
       await fetch(`/api/opportunities/${oppForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     } else {
@@ -112,7 +131,34 @@ export default function BDView({ initial }: { initial: BDInitial }) {
   }
 
   async function moveStage(opp: Opportunity, stage: string) {
-    await fetch(`/api/opportunities/${opp.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...opp, stage }) });
+    await fetch(`/api/opportunities/${opp.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage }) });
+    reload();
+    loadActivities(opp.id);
+  }
+
+  async function loadActivities(id: number) {
+    const d = await fetch(`/api/opportunities/${id}/activities`).then(r => r.json()).catch(() => null);
+    if (Array.isArray(d)) setActivities(d);
+  }
+
+  function openOpp(opp: Opportunity) {
+    setSelectedOpp(opp);
+    setActivities(null);
+    setActivityForm({ ...BLANK_ACTIVITY, followUpDate: opp.followUpDate ? opp.followUpDate.slice(0, 10) : "" });
+    loadActivities(opp.id);
+  }
+
+  async function addActivity(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedOpp || !activityForm.text.trim()) return;
+    setSavingActivity(true);
+    await fetch(`/api/opportunities/${selectedOpp.id}/activities`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(activityForm),
+    });
+    setSavingActivity(false);
+    setActivityForm(f => ({ ...BLANK_ACTIVITY, followUpDate: f.followUpDate }));
+    loadActivities(selectedOpp.id);
     reload();
   }
 
@@ -166,16 +212,30 @@ export default function BDView({ initial }: { initial: BDInitial }) {
       value: opp.value?.toString() ?? "", clientId: opp.clientId?.toString() ?? "",
       description: opp.description ?? "", closeDate: opp.closeDate ? opp.closeDate.slice(0, 10) : "",
       notes: opp.notes ?? "",
+      entityId: opp.entityId?.toString() ?? "", ownerUserId: opp.ownerUserId?.toString() ?? "",
+      probability: opp.probability?.toString() ?? "", followUpDate: opp.followUpDate ? opp.followUpDate.slice(0, 10) : "",
+      leadSource: opp.leadSource ?? "", competitor: opp.competitor ?? "", lostReason: opp.lostReason ?? "",
     });
     setEditOpp(opp);
     setShowOppForm(true);
   }
 
   const stageMap = Object.fromEntries(STAGES.map(s => [s.key, s]));
-  const visibleOpps = filterStage === "all" ? opps : opps.filter(o => o.stage === filterStage);
-  const activeOpps = opps.filter(o => o.stage !== "won" && o.stage !== "lost");
+  const now = new Date();
+  const stuck = (o: Opportunity) => stuckReason(o, now);
+  // Entity, owner and "needs attention" filters apply to both views; the stage filter to the list
+  const filtered = opps.filter(o =>
+    (filterEntity === "all" || (filterEntity === "none" ? !o.entityId : String(o.entityId) === filterEntity)) &&
+    (filterOwner === "all" || (filterOwner === "none" ? !o.ownerUserId : String(o.ownerUserId) === filterOwner)) &&
+    (!attentionOnly || !!stuck(o)));
+  const visibleOpps = filterStage === "all" ? filtered : filtered.filter(o => o.stage === filterStage);
+  const activeOpps = filtered.filter(o => isOpen(o.stage));
   const totalPipeline = activeOpps.reduce((s, o) => s + (o.value ?? 0), 0);
-  const wonValue = opps.filter(o => o.stage === "won").reduce((s, o) => s + (o.value ?? 0), 0);
+  const weightedPipeline = activeOpps.reduce((s, o) => s + weightedValue(o), 0);
+  const wonValue = filtered.filter(o => o.stage === "won").reduce((s, o) => s + (o.value ?? 0), 0);
+  const stuckCount = opps.filter(o => stuck(o)).length;
+  const activeEntities = entities.filter(e => !e.archived);
+  const staff = users.filter(u => !u.role || u.role === "admin" || u.role === "member");
 
   return (
     <div className="space-y-6">
@@ -184,7 +244,7 @@ export default function BDView({ initial }: { initial: BDInitial }) {
         <div>
           <h1 className="text-2xl font-bold text-white">Business Development</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>
-            {activeOpps.length} active · {fmtValue(totalPipeline) ?? "£0"} pipeline · {fmtValue(wonValue) ?? "£0"} won
+            {activeOpps.length} active · {fmtValue(totalPipeline) ?? "£0"} pipeline ({fmtValue(weightedPipeline) ?? "£0"} weighted) · {fmtValue(wonValue) ?? "£0"} won
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -206,6 +266,22 @@ export default function BDView({ initial }: { initial: BDInitial }) {
             </button>
           ))}
         </div>
+        {activeEntities.length > 0 && (
+          <select aria-label="Entity" className="rounded px-2 py-1.5 text-sm border" style={inpStyle} value={filterEntity} onChange={e => setFilterEntity(e.target.value)}>
+            <option value="all">All entities</option>
+            {activeEntities.map(en => <option key={en.id} value={en.id}>{en.name}</option>)}
+            <option value="none">No entity set</option>
+          </select>
+        )}
+        <select aria-label="Owner" className="rounded px-2 py-1.5 text-sm border" style={inpStyle} value={filterOwner} onChange={e => setFilterOwner(e.target.value)}>
+          <option value="all">Everyone&apos;s deals</option>
+          {staff.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          <option value="none">No owner</option>
+        </select>
+        <button type="button" onClick={() => setAttentionOnly(v => !v)} className="px-3 py-1.5 rounded text-sm border transition-colors"
+          style={{ borderColor: attentionOnly ? "#f59e0b" : "var(--psg-card-border)", backgroundColor: attentionOnly ? "rgba(245,158,11,0.15)" : "transparent", color: stuckCount ? "#fbbf24" : "var(--psg-muted)" }}>
+          Needs attention ({stuckCount})
+        </button>
         {view === "list" && (
           <div className="flex gap-1 flex-wrap">
             <button onClick={() => setFilterStage("all")} className="px-3 py-1 rounded text-xs transition-colors" style={{ backgroundColor: filterStage === "all" ? "rgba(255,255,255,0.1)" : "transparent", color: "var(--psg-muted)" }}>All</button>
@@ -222,18 +298,24 @@ export default function BDView({ initial }: { initial: BDInitial }) {
       {view === "pipeline" && (
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
           {STAGES.map(stage => {
-            const cols = opps.filter(o => o.stage === stage.key);
+            const cols = filtered.filter(o => o.stage === stage.key);
+            const colWeighted = cols.reduce((sum, o) => sum + weightedValue(o), 0);
             return (
               <div key={stage.key} className="rounded-lg border" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", borderTop: `3px solid ${stage.color}` }}>
                 <div className="px-3 py-2 flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: stage.color }}>{stage.label}</span>
-                  <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{cols.length}</span>
+                  <span className="text-xs" style={{ color: "var(--psg-muted)" }} title={isOpen(stage.key) ? `${stage.weight}% of each deal's value counts, unless the deal sets its own` : undefined}>
+                    {cols.length}{isOpen(stage.key) && colWeighted > 0 ? ` · ${fmtValue(colWeighted)}` : ""}
+                  </span>
                 </div>
                 <div className="px-3 pb-3 space-y-2">
                   {cols.map(opp => (
-                    <button key={opp.id} onClick={() => setSelectedOpp(opp)} className="w-full text-left rounded-lg p-3 border transition-colors hover:border-white/20" style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" }}>
+                    <button key={opp.id} onClick={() => openOpp(opp)} className="w-full text-left rounded-lg p-3 border transition-colors hover:border-white/20" style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: stuck(opp) ? "rgba(245,158,11,0.6)" : "var(--psg-card-border)" }}>
                       <div className="text-sm font-medium text-white mb-1 leading-tight">{opp.title}</div>
                       {opp.client && <div className="text-xs mb-1" style={{ color: "var(--psg-muted)" }}>{opp.client.name}</div>}
+                      {(opp.entity || opp.owner) && (
+                        <div className="text-xs mb-1" style={{ color: "var(--psg-muted)" }}>{[opp.entity?.name, opp.owner?.name].filter(Boolean).join(" · ")}</div>
+                      )}
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs capitalize" style={{ color: "var(--psg-muted)" }}>{opp.type}</span>
                         {opp.value && <span className="text-xs font-medium" style={{ color: stage.color }}>{fmtValue(opp.value)}</span>}
@@ -242,6 +324,10 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                         <div className="text-xs mt-1" style={{ color: isOverdue(opp.closeDate) && opp.stage !== "won" && opp.stage !== "lost" ? "#ef4444" : "var(--psg-muted)" }}>
                           {isOverdue(opp.closeDate) && opp.stage !== "won" && opp.stage !== "lost" ? "⚠ " : ""}Close {fmtDate(opp.closeDate)}
                         </div>
+                      )}
+                      {stuck(opp) && <div className="text-xs mt-1" style={{ color: "#fbbf24" }}>⚠ {stuck(opp)}</div>}
+                      {!stuck(opp) && opp.followUpDate && isOpen(opp.stage) && (
+                        <div className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>Follow up {fmtDate(opp.followUpDate)}</div>
                       )}
                       {opp.tasks.filter(t => !t.completedAt).length > 0 && (
                         <div className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>
@@ -266,8 +352,10 @@ export default function BDView({ initial }: { initial: BDInitial }) {
               <tr style={{ borderBottom: "1px solid var(--psg-card-border)", backgroundColor: "rgba(255,255,255,0.03)" }}>
                 <th className="px-4 py-3 text-left font-medium text-white">Opportunity</th>
                 <th className="px-4 py-3 text-left font-medium text-white">Client</th>
+                <th className="px-4 py-3 text-left font-medium text-white">Entity · owner</th>
                 <th className="px-4 py-3 text-left font-medium text-white">Stage</th>
                 <th className="px-4 py-3 text-left font-medium text-white">Value</th>
+                <th className="px-4 py-3 text-left font-medium text-white">Follow-up</th>
                 <th className="px-4 py-3 text-left font-medium text-white">Close</th>
                 <th className="px-4 py-3 text-left font-medium text-white">Tasks</th>
                 <th className="px-4 py-3" />
@@ -277,16 +365,23 @@ export default function BDView({ initial }: { initial: BDInitial }) {
               {visibleOpps.map(opp => {
                 const s = stageMap[opp.stage];
                 return (
-                  <tr key={opp.id} onClick={() => setSelectedOpp(opp)} className="border-t hover:bg-white/5 transition-colors cursor-pointer group" style={{ borderColor: "var(--psg-card-border)" }}>
+                  <tr key={opp.id} onClick={() => openOpp(opp)} className="border-t hover:bg-white/5 transition-colors cursor-pointer group" style={{ borderColor: "var(--psg-card-border)" }}>
                     <td className="px-4 py-3">
                       <div className="font-medium text-white">{opp.title}</div>
                       <div className="text-xs capitalize" style={{ color: "var(--psg-muted)" }}>{opp.type}</div>
                     </td>
                     <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{opp.client?.name ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{opp.entity?.name ?? "—"}<br />{opp.owner?.name ?? "No owner"}</td>
                     <td className="px-4 py-3">
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: s?.color + "22", color: s?.color }}>{s?.label}</span>
                     </td>
-                    <td className="px-4 py-3 font-medium text-white">{fmtValue(opp.value) ?? "—"}</td>
+                    <td className="px-4 py-3 font-medium text-white">
+                      {fmtValue(opp.value) ?? "—"}
+                      {opp.value && isOpen(opp.stage) ? <div className="text-xs font-normal" style={{ color: "var(--psg-muted)" }}>{fmtValue(weightedValue(opp))} at {weightPct(opp)}%</div> : null}
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: stuck(opp) ? "#fbbf24" : "var(--psg-muted)" }}>
+                      {stuck(opp) ?? (isOpen(opp.stage) ? fmtDate(opp.followUpDate) ?? "—" : "—")}
+                    </td>
                     <td className="px-4 py-3 text-sm" style={{ color: isOverdue(opp.closeDate) && opp.stage !== "won" && opp.stage !== "lost" ? "#ef4444" : "var(--psg-muted)" }}>
                       {fmtDate(opp.closeDate) ?? "—"}
                     </td>
@@ -303,7 +398,7 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                 );
               })}
               {visibleOpps.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No opportunities yet</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: "var(--psg-muted)" }}>No opportunities yet</td></tr>
               )}
             </tbody>
           </table>
@@ -315,7 +410,7 @@ export default function BDView({ initial }: { initial: BDInitial }) {
         <div className="fixed inset-y-0 right-0 w-full max-w-md border-l shadow-2xl flex flex-col z-40" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
           <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
             <h2 className="font-semibold text-white truncate pr-4">{selectedOpp.title}</h2>
-            <button onClick={() => setSelectedOpp(null)} className="text-xl leading-none shrink-0 hover:text-white" style={{ color: "var(--psg-muted)" }}>×</button>
+            <button onClick={() => { setSelectedOpp(null); setActivities(null); }} className="text-xl leading-none shrink-0 hover:text-white" style={{ color: "var(--psg-muted)" }}>×</button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
@@ -349,6 +444,32 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                 <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Type</div>
                 <div className="text-sm text-white capitalize">{selectedOpp.type}</div>
               </div>
+              <div>
+                <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Entity</div>
+                <div className="text-sm text-white">{selectedOpp.entity?.name ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Owner</div>
+                <div className="text-sm text-white">{selectedOpp.owner?.name ?? "—"}</div>
+              </div>
+              {selectedOpp.value && isOpen(selectedOpp.stage) ? (
+                <div>
+                  <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Weighted</div>
+                  <div className="text-sm text-white">{fmtValue(weightedValue(selectedOpp))} <span className="text-xs" style={{ color: "var(--psg-muted)" }}>at {weightPct(selectedOpp)}%{selectedOpp.probability == null ? " (stage default)" : ""}</span></div>
+                </div>
+              ) : null}
+              {selectedOpp.leadSource && (
+                <div>
+                  <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Lead source</div>
+                  <div className="text-sm text-white">{selectedOpp.leadSource}</div>
+                </div>
+              )}
+              {selectedOpp.competitor && (
+                <div>
+                  <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Competitor</div>
+                  <div className="text-sm text-white">{selectedOpp.competitor}</div>
+                </div>
+              )}
               {selectedOpp.closeDate && (
                 <div>
                   <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Close date</div>
@@ -358,6 +479,13 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                 </div>
               )}
             </div>
+
+            {selectedOpp.lostReason && (selectedOpp.stage === "won" || selectedOpp.stage === "lost") && (
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: "var(--psg-muted)" }}>{selectedOpp.stage === "won" ? "Why we won" : "Why we lost"}</div>
+                <p className="text-sm" style={{ color: "var(--psg-muted)" }}>{selectedOpp.lostReason}</p>
+              </div>
+            )}
 
             {selectedOpp.description && (
               <div>
@@ -372,6 +500,40 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                 <p className="text-sm" style={{ color: "var(--psg-muted)" }}>{selectedOpp.notes}</p>
               </div>
             )}
+
+            {/* Activity log, with the next follow-up date */}
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: "var(--psg-muted)" }}>Activity</div>
+              {isOpen(selectedOpp.stage) && stuck(selectedOpp) && (
+                <p className="text-xs mb-2" style={{ color: "#fbbf24" }}>⚠ {stuck(selectedOpp)}. Log what&apos;s happened and set the next follow-up.</p>
+              )}
+              <form onSubmit={addActivity} className="mb-3 space-y-2 rounded-lg p-3 border" style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" }}>
+                <div className="flex gap-2">
+                  <select aria-label="Kind" className={inp} style={{ ...inpStyle, width: "auto" }} value={activityForm.kind} onChange={e => setActivityForm(f => ({ ...f, kind: e.target.value }))}>
+                    {ACTIVITY_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+                  </select>
+                  <input aria-label="What happened" placeholder="What happened?" className={inp} style={inpStyle} value={activityForm.text} onChange={e => setActivityForm(f => ({ ...f, text: e.target.value }))} />
+                </div>
+                <div className="flex gap-2 items-center">
+                  <label className="text-xs shrink-0" style={{ color: "var(--psg-muted)" }} htmlFor="bd-next-follow-up">Next follow-up</label>
+                  <input id="bd-next-follow-up" type="date" className={inp} style={inpStyle} value={activityForm.followUpDate} onChange={e => setActivityForm(f => ({ ...f, followUpDate: e.target.value }))} />
+                  <button type="submit" disabled={savingActivity || !activityForm.text.trim()} className="text-white px-3 py-2 rounded text-sm font-medium hover:opacity-90 shrink-0 disabled:opacity-40" style={{ backgroundColor: "var(--psg-blue)" }}>Log</button>
+                </div>
+              </form>
+              <div className="space-y-2">
+                {activities === null && <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Loading…</p>}
+                {activities?.length === 0 && <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Nothing logged yet</p>}
+                {activities?.map(a => (
+                  <div key={a.id} className="text-sm">
+                    <div style={{ color: a.kind === "stage" ? "var(--psg-muted)" : "white" }}>
+                      {a.kind !== "stage" && a.kind !== "note" && <span className="text-xs uppercase tracking-wider mr-1.5" style={{ color: "var(--psg-muted)" }}>{a.kind}</span>}
+                      {a.text}
+                    </div>
+                    <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{a.user?.name ?? "Someone"} · {fmtDateTime(a.at)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* Tasks */}
             <div>
@@ -466,6 +628,51 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                     {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Entity</label>
+                    <select className={inp} style={inpStyle} value={oppForm.entityId} onChange={e => setOppForm(f => ({ ...f, entityId: e.target.value }))}>
+                      <option value="">— None —</option>
+                      {entities.filter(en => !en.archived || String(en.id) === oppForm.entityId).map(en => <option key={en.id} value={en.id}>{en.name}</option>)}
+                    </select>
+                    {entities.length === 0 && <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>Admins add entities in Hub Settings</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Owner</label>
+                    <select className={inp} style={inpStyle} value={oppForm.ownerUserId} onChange={e => setOppForm(f => ({ ...f, ownerUserId: e.target.value }))}>
+                      <option value="">{editOpp ? "— None —" : "Me"}</option>
+                      {staff.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Chance of winning (%)</label>
+                    <input type="number" min={0} max={100} className={inp} style={inpStyle} value={oppForm.probability} onChange={e => setOppForm(f => ({ ...f, probability: e.target.value }))}
+                      placeholder={`${STAGES.find(st => st.key === oppForm.stage)?.weight ?? 0} (stage default)`} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Next follow-up</label>
+                    <input type="date" className={inp} style={inpStyle} value={oppForm.followUpDate} onChange={e => setOppForm(f => ({ ...f, followUpDate: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Lead source</label>
+                    <input list="bd-lead-sources" className={inp} style={inpStyle} value={oppForm.leadSource} onChange={e => setOppForm(f => ({ ...f, leadSource: e.target.value }))} placeholder="e.g. Referral" />
+                    <datalist id="bd-lead-sources">{LEAD_SOURCES.map(l => <option key={l} value={l} />)}</datalist>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Competitor</label>
+                    <input className={inp} style={inpStyle} value={oppForm.competitor} onChange={e => setOppForm(f => ({ ...f, competitor: e.target.value }))} placeholder="Who else is bidding" />
+                  </div>
+                </div>
+                {(oppForm.stage === "won" || oppForm.stage === "lost") && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>{oppForm.stage === "won" ? "Why we won" : "Why we lost"}</label>
+                    <textarea rows={2} className={inp} style={inpStyle} value={oppForm.lostReason} onChange={e => setOppForm(f => ({ ...f, lostReason: e.target.value }))} />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Description</label>
                   <textarea rows={2} className={inp} style={inpStyle} value={oppForm.description} onChange={e => setOppForm(f => ({ ...f, description: e.target.value }))} />

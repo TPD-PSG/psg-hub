@@ -3,14 +3,16 @@
 import { serverApi } from "@/lib/serverApi";
 import type { JobStatus } from "@/lib/job-status";
 import type { Attention } from "@/lib/importAttention";
+import type { EntityRow } from "@/lib/entities";
 import SettingsView, { type QuickLink } from "./SettingsView";
 
 export default async function AdminSettingsPage() {
-  const [settings, links, status] = await Promise.all([
+  const [settings, links, status, entities] = await Promise.all([
     serverApi<Record<string, string>>("/api/settings"),
     serverApi<QuickLink[]>("/api/quicklinks"),
     serverApi<{ jobs: JobStatus[]; attention: Attention | null }>("/api/admin/status"),
+    serverApi<EntityRow[]>("/api/entities"),
   ]);
   const ok = settings && typeof settings === "object" && !Array.isArray(settings) && Array.isArray(links);
-  return <SettingsView initial={ok ? { settings, links, jobs: Array.isArray(status?.jobs) ? status.jobs : null, attention: status?.attention ?? null } : null} />;
+  return <SettingsView initial={ok ? { settings, links, jobs: Array.isArray(status?.jobs) ? status.jobs : null, attention: status?.attention ?? null, entities: Array.isArray(entities) ? entities : null } : null} />;
 }

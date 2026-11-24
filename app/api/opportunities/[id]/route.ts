@@ -1,30 +1,34 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { stageLabel } from "@/lib/bdPipeline";
+import { OPPORTUNITY_INCLUDE, opportunityData, shapeOpportunity } from "@/lib/opportunities";
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = (session.user as any).role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const { id } = await params;
-  const data = await req.json();
+  const userId = Number((session.user as any).id) || null;
+  const id = parseInt((await params).id);
+  const existing = await prisma.opportunity.findUnique({ where: { id }, select: { stage: true } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const data = opportunityData(await req.json());
+
+  // A stage change is stamped and logged, so "how long has it sat here" and the history are known
+  const stageChanged = typeof data.stage === "string" && data.stage !== existing.stage;
   const opp = await prisma.opportunity.update({
-    where: { id: parseInt(id) },
+    where: { id },
     data: {
-      title: data.title,
-      type: data.type,
-      stage: data.stage,
-      value: data.value !== undefined ? (data.value ? parseFloat(data.value) : null) : undefined,
-      clientId: data.clientId !== undefined ? (data.clientId ? parseInt(data.clientId) : null) : undefined,
-      description: data.description ?? null,
-      closeDate: data.closeDate ? new Date(data.closeDate) : null,
-      lostReason: data.lostReason ?? null,
-      notes: data.notes ?? null,
+      ...data,
+      ...(stageChanged ? {
+        stageChangedAt: new Date(),
+        activities: { create: { kind: "stage", text: `${stageLabel(existing.stage)} → ${stageLabel(data.stage as string)}`, userId } },
+      } : {}),
     },
-    include: { client: true, tasks: true },
+    include: OPPORTUNITY_INCLUDE,
   });
-  return NextResponse.json(opp);
+  return NextResponse.json(shapeOpportunity(opp));
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {

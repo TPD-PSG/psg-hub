@@ -37,23 +37,26 @@ model User {
   variationsApproved  BudgetVariation[]   @relation("VariationApprover")
   productionNotes     ProductionNote[]
   meetings            Meeting[]
+  opportunitiesOwned  Opportunity[]       @relation("OpportunityOwner")
+  bdActivities        BDActivity[]        @relation("BDActivityUser")
+  targetClients       Client[]            @relation("ClientTargetOwner")
 }
 
 model Production {
-  id                  Int       @id @default(autoincrement())
+  id                  Int          @id @default(autoincrement())
   name                String
   logoUrl             String?
   type                String
   venue               String? // freetext fallback / override
   venueId             Int?
-  venueRef            Venue?    @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  isTour              Boolean   @default(false)
+  venueRef            Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  isTour              Boolean      @default(false)
   startDate           DateTime?
   endDate             DateTime?
-  status              String    @default("planning")
-  announcementStatus  String    @default("not_announced")
-  internalStatus      String    @default("pencil") // pencil | confirmed
-  archived            Boolean   @default(false)
+  status              String       @default("planning")
+  announcementStatus  String       @default("not_announced")
+  internalStatus      String       @default("pencil") // pencil | confirmed
+  archived            Boolean      @default(false)
   archivedAt          DateTime?
   productionManager   String? // free-text proj lead(s), e.g. "Toby / Tom"
   color               String?
@@ -62,13 +65,18 @@ model Production {
   reportEmail         String?
   sharepointUrl       String?
   haulageBudgetLineId Int?
-  advancingStatus     String    @default("triage")
+  advancingStatus     String       @default("triage")
   contraEstimate      Float?
   contraActual        Float?
   bdClientId          Int?
-  bdClient            Client?   @relation("ProductionBDClient", fields: [bdClientId], references: [id], onDelete: SetNull)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  bdClient            Client?      @relation("ProductionBDClient", fields: [bdClientId], references: [id], onDelete: SetNull)
+  entityId            Int?
+  entity              Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  pmFee               Float? // PM fee for this show; FeeStage rows split it into payments
+  feeStages           FeeStage[]
+  fromOpportunity     Opportunity? @relation("OpportunityProduction")
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   events               Event[]
   keyDates             ProductionKeyDate[]
@@ -336,6 +344,10 @@ model Client {
   billingName    String?
   billingAddress String?
   billingEmail   String?
+  targetAccount  Boolean       @default(false) // an account we're actively going after
+  targetOwnerId  Int?
+  targetOwner    User?         @relation("ClientTargetOwner", fields: [targetOwnerId], references: [id], onDelete: SetNull)
+  targetSource   String? // e.g. "Ammonite"
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   contacts       Contact[]
@@ -366,11 +378,81 @@ model Opportunity {
   client      Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   description String?
   closeDate   DateTime?
-  lostReason  String?
+  lostReason  String? // win or loss reason
   notes       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   tasks       BDTask[]
+
+  // BD pipeline & revenue
+  entityId       Int?
+  entity         Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  ownerUserId    Int?
+  owner          User?        @relation("OpportunityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  probability    Int? // % this deal counts in the weighted pipeline; null = the stage's default
+  followUpDate   DateTime?
+  leadSource     String?
+  competitor     String?
+  stageChangedAt DateTime? // null = never changed since created (use createdAt)
+  productionId   Int?         @unique // the production a won deal became
+  production     Production?  @relation("OpportunityProduction", fields: [productionId], references: [id], onDelete: SetNull)
+  activities     BDActivity[]
+
+  @@index([entityId])
+  @@index([ownerUserId])
+}
+
+// A company in the group (deals, productions and revenue targets belong to one). Admins manage them.
+model Entity {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  archived      Boolean         @default(false)
+  sortOrder     Int             @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  opportunities Opportunity[]
+  productions   Production[]
+  targets       RevenueTarget[]
+}
+
+// An entity's revenue target for a calendar year
+model RevenueTarget {
+  id       Int    @id @default(autoincrement())
+  entityId Int
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  year     Int
+  amount   Float
+
+  @@unique([entityId, year])
+}
+
+// What happened on a deal: notes, calls, emails, meetings, and stage changes (logged automatically)
+model BDActivity {
+  id            Int         @id @default(autoincrement())
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  userId        Int?
+  user          User?       @relation("BDActivityUser", fields: [userId], references: [id], onDelete: SetNull)
+  kind          String      @default("note") // note | call | email | meeting | stage
+  text          String
+  at            DateTime    @default(now())
+
+  @@index([opportunityId, at])
+}
+
+// A production's PM fee, split into payment stages (deposit, fit-up, opening by default)
+model FeeStage {
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  label        String
+  amount       Float
+  dueDate      DateTime?
+  invoicedAt   DateTime?
+  paidAt       DateTime?
+  sortOrder    Int        @default(0)
+
+  @@index([productionId])
 }
 
 model BDTask {

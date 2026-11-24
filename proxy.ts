@@ -15,6 +15,8 @@ const RULES: Rule[] = [
   { prefixes: PRODUCTION_AREAS, write: ["productions"] },
   { prefixes: ["/api/bd-tasks", "/api/opportunities"], write: ["bd"] },
   { prefixes: ["/api/clients"], write: ["bd"], read: ["bd", "productions"] },
+  // Entities: read by BD, productions and finance; the routes themselves only let admins write
+  { prefixes: ["/api/entities"], write: ["bd"], read: ["bd", "productions", "finance"] },
   { prefixes: ["/api/invoices", "/api/invoice-todos", "/api/finance", "/api/expenses"], write: ["finance"] },
   { prefixes: ["/api/extract-invoice", "/api/spend-documents"], write: ["finance", "productions"] },
   { prefixes: ["/api/sales"], write: ["sales"] },

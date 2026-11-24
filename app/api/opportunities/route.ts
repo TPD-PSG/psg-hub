@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { OPPORTUNITY_INCLUDE, opportunityData, shapeOpportunity } from "@/lib/opportunities";
 
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const opportunities = await prisma.opportunity.findMany({
-    include: { client: true, tasks: { orderBy: { dueDate: "asc" } } },
-    orderBy: { updatedAt: "desc" },
-  });
-  return NextResponse.json(opportunities);
+  const opportunities = await prisma.opportunity.findMany({ include: OPPORTUNITY_INCLUDE, orderBy: { updatedAt: "desc" } });
+  return NextResponse.json(opportunities.map(shapeOpportunity));
 }
 
 export async function POST(req: Request) {
@@ -17,19 +15,19 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = (session.user as any).role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const data = await req.json();
+  const userId = Number((session.user as any).id) || null;
+  const data = opportunityData(await req.json());
+  if (!data.title) return NextResponse.json({ error: "Title required" }, { status: 400 });
   const opp = await prisma.opportunity.create({
     data: {
-      title: data.title,
-      type: data.type,
-      stage: data.stage ?? "lead",
-      value: data.value ? parseFloat(data.value) : null,
-      clientId: data.clientId ? parseInt(data.clientId) : null,
-      description: data.description || null,
-      closeDate: data.closeDate ? new Date(data.closeDate) : null,
-      notes: data.notes || null,
+      type: "production",
+      stage: "lead",
+      ...data,
+      ownerUserId: (data.ownerUserId as number | null | undefined) ?? userId, // whoever adds a deal owns it unless they pick someone
+      title: data.title as string,
+      activities: { create: { kind: "stage", text: "Deal added", userId } },
     },
-    include: { client: true, tasks: true },
+    include: OPPORTUNITY_INCLUDE,
   });
-  return NextResponse.json(opp, { status: 201 });
+  return NextResponse.json(shapeOpportunity(opp), { status: 201 });
 }

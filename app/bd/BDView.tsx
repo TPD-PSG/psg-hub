@@ -82,6 +82,19 @@ export default function BDView({ initial }: { initial: BDInitial }) {
   const [activityForm, setActivityForm] = useState(BLANK_ACTIVITY);
   const [savingActivity, setSavingActivity] = useState(false);
 
+  // Quotes for the open deal
+  const [dealQuotes, setDealQuotes] = useState<{ id: number; number: string; status: string; totals: { net: number } }[] | null>(null);
+  async function loadQuotes(id: number) {
+    const d = await fetch(`/api/quotes?opportunityId=${id}`).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    setDealQuotes(Array.isArray(d) ? d : []);
+  }
+  async function newQuote(opp: Opportunity) {
+    const res = await fetch("/api/quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunityId: opp.id }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(body.error ?? "Couldn't start a quote");
+    router.push(`/bd/quotes/${body.id}`);
+  }
+
   // Won deal → production
   const [convert, setConvert] = useState<{ opp: Opportunity; form: ConvertForm; saving: boolean } | null>(null);
 
@@ -163,6 +176,8 @@ export default function BDView({ initial }: { initial: BDInitial }) {
     setActivities(null);
     setActivityForm({ ...BLANK_ACTIVITY, followUpDate: opp.followUpDate ? opp.followUpDate.slice(0, 10) : "" });
     loadActivities(opp.id);
+    setDealQuotes(null);
+    loadQuotes(opp.id);
   }
 
   async function addActivity(e: React.FormEvent) {
@@ -537,6 +552,26 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                 <p className="text-sm" style={{ color: "var(--psg-muted)" }}>{selectedOpp.notes}</p>
               </div>
             )}
+
+            {/* Quotes for this deal */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>Quotes</div>
+                <button type="button" onClick={() => newQuote(selectedOpp)} className="text-xs text-blue-400">+ Quote</button>
+              </div>
+              {dealQuotes === null ? <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Loading…</p>
+                : dealQuotes.length === 0 ? <p className="text-xs" style={{ color: "var(--psg-muted)" }}>No quotes yet</p>
+                : (
+                  <ul className="space-y-1">
+                    {dealQuotes.map(dq => (
+                      <li key={dq.id} className="flex justify-between text-sm">
+                        <Link href={`/bd/quotes/${dq.id}`} className="text-blue-300 hover:underline">{dq.number}</Link>
+                        <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{dq.status} · {fmtValue(dq.totals.net) ?? "£0"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+            </div>
 
             {/* Activity log, with the next follow-up date */}
             <div>

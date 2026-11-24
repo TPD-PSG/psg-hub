@@ -59,7 +59,7 @@ export function pdfText(s: string): string {
   });
 }
 /** Makes doc.text and doc.splitTextToSize clean their text first. */
-function pdfSafe(doc: jsPDF): jsPDF {
+export function pdfSafe(doc: jsPDF): jsPDF {
   const text = doc.text.bind(doc);
   const split = doc.splitTextToSize.bind(doc);
   const clean = (t: unknown): unknown => (Array.isArray(t) ? t.map(clean) : typeof t === "string" ? pdfText(t) : t);
@@ -118,7 +118,7 @@ export async function fetchLogoAsset(url?: string): Promise<LogoAsset> {
 
 // The PSG logo is dark on a see-through background, so it sits on a white panel (as in the app)
 // rather than vanishing into the navy header bar.
-function drawPsgLogo(doc: jsPDF, logo: NonNullable<LogoAsset>, x: number, y: number, w: number, h: number) {
+export function drawPsgLogo(doc: jsPDF, logo: NonNullable<LogoAsset>, x: number, y: number, w: number, h: number) {
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(x - 1, y - 1, w + 2, h + 2, 1, 1, "F");
   doc.addImage(logo.dataUrl, "PNG", x, y, w, h, undefined, "FAST");

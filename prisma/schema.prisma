@@ -17,6 +17,7 @@ model User {
   permissions  String? // JSON: { modules: string[], allProductions: boolean }
   avatarUrl    String?
   color        String? // hex colour for schedule grid badge
+  costDayRate  Float? // internal cost per day, for job costing (admins set it)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -38,6 +39,9 @@ model User {
   productionNotes     ProductionNote[]
   meetings            Meeting[]
   opportunitiesOwned  Opportunity[]       @relation("OpportunityOwner")
+  quotesCreated       Quote[]             @relation("QuoteCreatedBy")
+  jobCostsCreated     JobCost[]           @relation("JobCostCreatedBy")
+  timeEntries         TimeEntry[]         @relation("TimeEntryUser")
   bdActivities        BDActivity[]        @relation("BDActivityUser")
   targetClients       Client[]            @relation("ClientTargetOwner")
 }
@@ -75,6 +79,7 @@ model Production {
   pmFee               Float? // PM fee for this show; FeeStage rows split it into payments
   feeStages           FeeStage[]
   fromOpportunity     Opportunity? @relation("OpportunityProduction")
+  job                 Job?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -353,6 +358,8 @@ model Client {
   contacts       Contact[]
   opportunities  Opportunity[]
   productions    Production[]  @relation("ProductionBDClient")
+  quotes         Quote[]
+  jobs           Job[]
 }
 
 model Contact {
@@ -397,6 +404,8 @@ model Opportunity {
   productionId   Int?         @unique // the production a won deal became
   production     Production?  @relation("OpportunityProduction", fields: [productionId], references: [id], onDelete: SetNull)
   activities     BDActivity[]
+  quotes         Quote[]
+  job            Job?
 
   @@index([entityId])
   @@index([ownerUserId])
@@ -404,15 +413,18 @@ model Opportunity {
 
 // A company in the group (deals, productions and revenue targets belong to one). Admins manage them.
 model Entity {
-  id            Int             @id @default(autoincrement())
-  name          String          @unique
-  archived      Boolean         @default(false)
-  sortOrder     Int             @default(0)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  opportunities Opportunity[]
-  productions   Production[]
-  targets       RevenueTarget[]
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  archived       Boolean         @default(false)
+  sortOrder      Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  opportunities  Opportunity[]
+  productions    Production[]
+  targets        RevenueTarget[]
+  quotes         Quote[]
+  quoteTemplates QuoteTemplate[]
+  jobs           Job[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1128,4 +1140,127 @@ model UserInvite {
   expiresAt     DateTime
   usedAt        DateTime?
   createdAt     DateTime  @default(now())
+}
+
+// ── Quotes & job costing ────────────────────────────────────────────────────────
+
+// A priced quote for a piece of work. Lines carry our cost and the sell price, so margin is
+// known before it goes out. Accepted quotes become the job's price.
+model Quote {
+  id            Int          @id @default(autoincrement())
+  number        String       @unique // Q-2026-001
+  title         String
+  jobType       String       @default("pm") // pm | workshop | haulage | other
+  status        String       @default("draft") // draft | sent | accepted | declined
+  entityId      Int?
+  entity        Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  clientId      Int?
+  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  opportunityId Int?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  jobId         Int?
+  job           Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  vatRate       Float        @default(20)
+  validUntil    DateTime?
+  terms         String? // shown on the PDF
+  internalNotes String? // never on the PDF
+  sentAt        DateTime?
+  decidedAt     DateTime?
+  createdById   Int?
+  createdBy     User?        @relation("QuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  lines         QuoteLine[]
+
+  @@index([opportunityId])
+  @@index([jobId])
+}
+
+model QuoteLine {
+  id          Int     @id @default(autoincrement())
+  quoteId     Int
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  section     String? // e.g. Pre-production, Fit-up, Running
+  description String
+  quantity    Float   @default(1)
+  unit        String? // day, week, each…
+  unitCost    Float   @default(0) // what it costs us
+  unitPrice   Float   @default(0) // what we charge
+  sortOrder   Int     @default(0)
+
+  @@index([quoteId])
+}
+
+// A reusable starting point for quotes (lines as JSON). Saved from any quote.
+model QuoteTemplate {
+  id        Int      @id @default(autoincrement())
+  name      String
+  jobType   String   @default("pm")
+  entityId  Int?
+  entity    Entity?  @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  lines     String // JSON: [{ section, description, quantity, unit, unitCost, unitPrice }]
+  terms     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A piece of work we're doing: a PM job (linked to its production), a Workshop build, a Night
+// Run move… Costs and staff time are logged against it; its price comes from the accepted quote.
+model Job {
+  id            Int          @id @default(autoincrement())
+  number        String       @unique // J-2026-001
+  title         String
+  jobType       String       @default("pm")
+  status        String       @default("active") // active | complete | cancelled
+  entityId      Int?
+  entity        Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  clientId      Int?
+  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  opportunityId Int?         @unique
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  productionId  Int?         @unique
+  production    Production?  @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  price         Float? // agreed price if there's no accepted quote
+  startDate     DateTime?
+  endDate       DateTime?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  quotes        Quote[]
+  costs         JobCost[]
+  time          TimeEntry[]
+}
+
+model JobCost {
+  id          Int      @id @default(autoincrement())
+  jobId       Int
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  date        DateTime
+  description String
+  supplier    String?
+  category    String? // materials, hire, transport, subcontract, other
+  amount      Float // net of VAT
+  createdById Int?
+  createdBy   User?    @relation("JobCostCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([jobId])
+}
+
+// Days a person spent on a job, costed at their day rate at the time (so later rate changes
+// don't rewrite past jobs' margins)
+model TimeEntry {
+  id        Int      @id @default(autoincrement())
+  jobId     Int
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation("TimeEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  days      Float // 0.5 steps
+  dayRate   Float? // the person's cost rate when logged
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([jobId])
+  @@index([userId, date])
 }

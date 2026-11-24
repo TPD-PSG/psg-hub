@@ -61,7 +61,7 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
   },
   "/bd": {
     title: "Business Dev",
-    items: [{ label: "Pipeline", href: "/bd" }],
+    items: [{ label: "Pipeline", href: "/bd" }, { label: "Quotes", href: "/bd/quotes" }],
   },
   "/finance": {
     title: "Finance",

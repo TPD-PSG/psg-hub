@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import ExportMenu from "@/components/ExportMenu";
 import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
-import { exportBudgetPDF, exportBudgetXLSX } from "@/lib/budgetExport";
+import { useSession } from "next-auth/react";
+import { exportBudgetPDF, exportBudgetXLSX, exportClientBudgetPDF } from "@/lib/budgetExport";
 import { buildBudgetReport, type ReportVariation } from "@/lib/budgetReport";
 import { confirmDialog } from "@/components/Dialogs";
 import { F, Modal, Btns, inp, inpStyle, fmt, fmtDate, fmtShortDate, sendJson, useList, toggled, type BudgetLine, type Expense, type HaulageMovement, type TabProps, type TourStop } from "../shared";
@@ -44,6 +45,8 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
   const [psgExpenseForm, setPSGExpenseForm] = useState<typeof BLANK_PSG_EXPENSE & { id?: number }>(BLANK_PSG_EXPENSE);
   const [psgReceiptFile, setPsgReceiptFile] = useState<File | null>(null);
   const [budgetForm, setBudgetForm] = useState(BLANK_BUDGET_LINE);
+  const [clientReport, setClientReport] = useState<{ note: string; busy: boolean } | null>(null);
+  const { data: session } = useSession();
 
   // Restore this production's saved department order, dropping departments that no longer exist
   useEffect(() => {
@@ -148,14 +151,33 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
     return { movements: l.movements as HaulageMovement[], est: l.pm, com: l.net, spt: l.gross };
   };
 
-  async function runExport(kind: "pdf" | "xlsx") {
-    let variations: ReportVariation[] = [];
+  async function loadVariations(): Promise<ReportVariation[]> {
     try {
       const res = await fetch(`/api/budget-reallocation?productionId=${prod.id}`);
-      if (res.ok) variations = await res.json();
+      if (res.ok) return await res.json();
     } catch {}
+    return [];
+  }
+
+  async function runExport(kind: "pdf" | "xlsx") {
+    const variations = await loadVariations();
     if (kind === "pdf") await exportBudgetPDF(prod.name, report, variations, prod.logoUrl);
     else await exportBudgetXLSX(prod.name, report, variations);
+  }
+
+  async function runClientReport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!clientReport) return;
+    setClientReport({ ...clientReport, busy: true });
+    try {
+      await exportClientBudgetPDF({
+        productionName: prod.name, report, variations: await loadVariations(),
+        rechargeables: prod.haulageMovements, note: clientReport.note, preparedBy: session?.user?.name ?? null,
+      }, prod.logoUrl);
+      setClientReport(null);
+    } catch {
+      setClientReport(c => c && { ...c, busy: false });
+    }
   }
 
   return (
@@ -193,6 +215,7 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
             <ExportMenu actions={[
               { label: "Export PDF", onClick: () => void runExport("pdf") },
               { label: "Export Excel", onClick: () => void runExport("xlsx") },
+              { label: "Client report (PDF)…", onClick: () => setClientReport({ note: "", busy: false }) },
             ]} />
             <button onClick={() => setShowBudgetForm(true)} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
               + Add Department
@@ -608,6 +631,21 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
           </div>
         )}
       </div>
+      {clientReport && (
+        <Modal title="Client budget report" onClose={() => setClientReport(null)}>
+          <form onSubmit={runClientReport} className="space-y-3">
+            <p className="text-sm" style={{ color: "var(--psg-muted)" }}>
+              A PDF for the client: totals by department and budget line, approved and pending variations, and rechargeables still to be invoiced. Suppliers, POs and individual items aren&apos;t included.
+            </p>
+            <F label="Covering note (optional)">
+              <textarea rows={5} className={inp} style={inpStyle} value={clientReport.note} maxLength={2000}
+                onChange={(e) => setClientReport(c => c && { ...c, note: e.target.value })}
+                placeholder="e.g. Scenery is over following the agreed change to the truck pack; we expect to recover this from the paint call." />
+            </F>
+            <Btns onCancel={() => setClientReport(null)} label={clientReport.busy ? "Creating…" : "Create PDF"} />
+          </form>
+        </Modal>
+      )}
       {showBudgetForm && (
         <Modal title={editBudgetLine ? "Edit Budget Line" : "Add Budget Department"} onClose={closeBudgetForm}>
           <form onSubmit={saveBudgetLine} className="space-y-3">

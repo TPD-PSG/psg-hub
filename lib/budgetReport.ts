@@ -41,6 +41,7 @@ export type ReportMovement = {
   estimatedCost: number | null;
   actualCost: number | null;
   rechargeable: boolean;
+  invoicedToClient?: boolean;
   budgetLineId: number | null;
 };
 export type ReportTourStop = {

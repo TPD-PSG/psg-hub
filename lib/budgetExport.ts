@@ -8,7 +8,7 @@ import { fmtDate } from "@/lib/format";
 import { autoTable, basePDF, addFooters, fetchLogoAsset, saveXlsx, type LogoAsset } from "@/lib/exports";
 import {
   VARIATION_STATUSES, VARIATION_TYPES,
-  type BudgetReport, type Figures, type ReportExpense, type ReportVariation,
+  type BudgetReport, type Figures, type ReportExpense, type ReportMovement, type ReportVariation,
 } from "@/lib/budgetReport";
 
 const NAVY: [number, number, number] = [10, 25, 65];
@@ -183,6 +183,133 @@ export function buildBudgetPDF(
 export async function exportBudgetPDF(productionName: string, report: BudgetReport, variations: ReportVariation[], productionLogoUrl?: string | null) {
   const [logo, prodLogo] = await Promise.all([fetchLogoAsset(), productionLogoUrl ? fetchLogoAsset(productionLogoUrl) : Promise.resolve(null)]);
   buildBudgetPDF(productionName, report, variations, logo, prodLogo ?? undefined).save(`budget-${slug(productionName)}.pdf`);
+}
+
+// ── Client report (PDF) ──────────────────────────────────────────────────────
+// For sending to the client: totals by department and budget line (no suppliers, POs or
+// individual items), approved and pending variations, rechargeables still to invoice, and an
+// optional covering note. Drafts and rejected variations stay internal.
+
+export type ClientReportInput = {
+  productionName: string;
+  report: BudgetReport;
+  variations: ReportVariation[];
+  rechargeables: ReportMovement[];
+  note?: string;
+  preparedBy?: string | null;
+};
+
+export function buildClientBudgetPDF(input: ClientReportInput, logo?: LogoAsset, prodLogo?: LogoAsset, exportedAt = new Date()): jsPDF {
+  const { productionName, report, variations, note, preparedBy } = input;
+  const subtitle = [`Budget report · ${fmtDate(exportedAt.toISOString())}`, preparedBy ? `Prepared by ${preparedBy}` : null].filter(Boolean).join(" · ");
+  const doc = basePDF(`Budget report — ${productionName}`, subtitle, logo, prodLogo);
+  const margin = { left: 10, right: 10 };
+  const last = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  const R = (content: string) => ({ content, styles: { halign: "right" as const } });
+  const V = (n: number) => ({ content: gbp(n), neg: n < 0, styles: { halign: "right" as const } });
+  const redIfNegative = (d: CellHookData) => { if ((d.cell.raw as { neg?: boolean } | undefined)?.neg) d.cell.styles.textColor = RED; };
+  const heading = (text: string, y: number, room = 40) => {
+    if (y > 200 - room) { doc.addPage(); y = 15; }
+    doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(...NAVY);
+    doc.text(text, 10, y);
+    doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal");
+    return y + 3;
+  };
+  const t = report.totals;
+  let y = 32;
+
+  if (note?.trim()) {
+    doc.setFontSize(10);
+    const lines = doc.splitTextToSize(note.trim(), 277) as string[];
+    doc.text(lines, 10, y + 2);
+    y += 2 + lines.length * 4.6 + 4;
+  }
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Allocation", "PM Budget", "Net Cost", "Gross Cost", "Variance (Allocation - Net)", "% used"]],
+    body: [[gbp(t.allocation), gbp(t.pm), gbp(t.net), gbp(t.gross), { content: gbp(t.variance), neg: t.variance < 0 }, pctUsed(t)]] as never,
+    styles: { fontSize: 10, cellPadding: 3 }, headStyles: { fillColor: NAVY },
+    didParseCell: redIfNegative, margin,
+  });
+
+  // Departments with their budget lines beneath
+  y = heading("Budget by department and line", last() + 9);
+  const body: unknown[][] = [];
+  for (const d of report.departments) {
+    body.push([{ content: d.name, styles: { fontStyle: "bold" } }, R(gbp(d.allocation)), R(money(d.pm)), R(money(d.net)), R(money(d.gross)), V(d.variance), R(pctUsed(d))].map(c => typeof c === "object" ? { ...c, styles: { ...(c as { styles?: object }).styles, fontStyle: "bold", fillColor: [236, 239, 247] } } : c));
+    for (const l of d.lines)
+      body.push([`    ${l.description}`, R(gbp(l.allocation)), R(money(l.pm)), R(money(l.net)), R(money(l.gross)), V(l.variance), R(pctUsed(l))]);
+  }
+  if (report.unlinkedHaulage.movements.length)
+    body.push(["Haulage (not linked to a budget line)", R("–"), R(money(report.unlinkedHaulage.pm)), R(money(report.unlinkedHaulage.net)), R("–"), R("–"), R("–")]);
+  if (report.contra.stops.length)
+    body.push(["Venue contra", R("–"), R(money(report.contra.pm)), R(money(report.contra.net)), R("–"), R("–"), R("–")]);
+  autoTable(doc, {
+    startY: y,
+    head: [["Department / line", R("Allocation"), R("PM Budget"), R("Net Cost"), R("Gross Cost"), R("Variance"), R("% used")]] as never,
+    body: body as never,
+    foot: [["TOTAL", R(gbp(t.allocation)), R(gbp(t.pm)), R(gbp(t.net)), R(gbp(t.gross)), V(t.variance), R(pctUsed(t))]] as never,
+    styles: { fontSize: 9, cellPadding: 2.2 }, headStyles: { fillColor: NAVY },
+    footStyles: { fillColor: [230, 233, 242], textColor: NAVY, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
+    columnStyles: { 0: { cellWidth: 95 } },
+    didParseCell: redIfNegative, margin,
+  });
+  y = last() + 10;
+
+  const variationTable = (title: string, list: ReportVariation[], approved: boolean) => {
+    if (!list.length) return;
+    y = heading(title, y);
+    autoTable(doc, {
+      startY: y,
+      head: [["Date", "Title", "Type", "Lines affected", R("Change"), approved ? "Approved by" : "Requested by", "Client ref"]] as never,
+      body: list.map(v => {
+        const total = variationTotal(v);
+        return [
+          fmtDate((approved ? v.approvedAt : null) ?? v.requestedAt, ""), v.title + (v.justification ? `\n${v.justification}` : ""), VARIATION_TYPES[v.type] ?? v.type,
+          v.items.map(i => `${i.budgetLine.department} — ${i.budgetLine.description}: ${i.amount >= 0 ? "+" : ""}${gbp(i.amount)}`).join("\n"),
+          { content: Math.abs(total) < 0.005 ? "No net change" : `${total > 0 ? "+" : ""}${gbp(total)}`, neg: total < 0, styles: { halign: "right" } },
+          (approved ? v.approvedBy?.name : v.requestedBy?.name) ?? "", v.clientRef ?? "",
+        ];
+      }) as never,
+      styles: { fontSize: 8, cellPadding: 1.8 }, headStyles: { fillColor: NAVY },
+      columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 60 }, 3: { cellWidth: 85 } },
+      didParseCell: redIfNegative, margin,
+    });
+    y = last() + 8;
+  };
+  variationTable("Approved budget variations", variations.filter(v => v.status === "approved"), true);
+  variationTable("Variations awaiting your approval", variations.filter(v => v.status === "pending_approval"), false);
+
+  const toInvoice = input.rechargeables.filter(m => m.rechargeable && !m.invoicedToClient);
+  if (toInvoice.length) {
+    y = heading("Rechargeables to be invoiced", y);
+    const cost = (m: ReportMovement) => m.actualCost ?? m.estimatedCost ?? 0;
+    autoTable(doc, {
+      startY: y,
+      head: [["Date", "Haulage company", "Route", "Cargo", R("Amount")]] as never,
+      body: toInvoice.map(m => [fmtDate(m.departureAt, ""), m.haulageCompany, `${m.fromLocation} to ${m.toLocation}`, m.cargo ?? "",
+        R(`${gbp(cost(m))}${m.actualCost == null ? " (est.)" : ""}`)]) as never,
+      foot: [["", "Total", "", "", R(gbp(toInvoice.reduce((s, m) => s + cost(m), 0)))]] as never,
+      styles: { fontSize: 8, cellPadding: 1.8 }, headStyles: { fillColor: NAVY },
+      footStyles: { fillColor: [240, 242, 248], textColor: NAVY, fontStyle: "bold" }, margin,
+    });
+    y = last() + 8;
+  }
+
+  if (y > 185) { doc.addPage(); y = 15; }
+  doc.setFontSize(7.5); doc.setTextColor(110, 110, 120);
+  doc.text("PM Budget = estimated cost · Net Cost = committed · Gross Cost = spent · Variance = Allocation - Net Cost (red = over budget). Approved variations are included in the allocations.", 10, y + 2);
+  doc.setTextColor(0, 0, 0);
+
+  addFooters(doc);
+  return doc;
+}
+
+export async function exportClientBudgetPDF(input: ClientReportInput, productionLogoUrl?: string | null) {
+  const [logo, prodLogo] = await Promise.all([fetchLogoAsset(), productionLogoUrl ? fetchLogoAsset(productionLogoUrl) : Promise.resolve(null)]);
+  buildClientBudgetPDF(input, logo, prodLogo ?? undefined).save(`budget-report-${slug(input.productionName)}-${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
 // ── Excel ────────────────────────────────────────────────────────────────────

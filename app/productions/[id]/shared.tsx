@@ -106,6 +106,7 @@ export type HaulageMovement = {
   estimatedCost: number | null;
   actualCost: number | null;
   rechargeable: boolean;
+  invoicedToClient?: boolean;
   budgetLineId: number | null;
 };
 export type TeamMember = { user: { id: number; name: string; email: string; role: string } };

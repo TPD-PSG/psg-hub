@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ExportMenu from "@/components/ExportMenu";
 import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
+import PmFeePanel from "@/components/PmFeePanel";
 import { useSession } from "next-auth/react";
 import { exportBudgetPDF, exportBudgetXLSX, exportClientBudgetPDF } from "@/lib/budgetExport";
 import { buildBudgetReport, type ReportVariation } from "@/lib/budgetReport";
@@ -182,6 +183,8 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
 
   return (
     <>
+      {/* PSG's fee for this show: staff only (the panel also checks with the API) */}
+      {(isAdmin || userRole === "member") && <PmFeePanel productionId={prod.id} startDate={prod.startDate} />}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Allocation", value: totalBudgeted, color: "text-white" },

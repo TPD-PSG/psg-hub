@@ -4,6 +4,7 @@
 // last ran and whether it worked, so a job that silently stops gets noticed.
 import { useCallback, useEffect, useState } from "react";
 import type { JobStatus, JobState } from "@/lib/job-status";
+import type { Attention, AttentionReason } from "@/lib/importAttention";
 import { fmtDateTime } from "@/lib/format";
 
 const STATE: Record<JobState, { label: string; color: string; bg: string }> = {
@@ -22,16 +23,23 @@ function ago(iso: string): string {
   return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
 }
 
+const REASON: Record<AttentionReason, { label: string; color: string; bg: string }> = {
+  no_match:   { label: "No show match", color: "#fbbf24", bg: "rgba(251,191,36,0.12)" },
+  no_pdf:     { label: "No PDF",        color: "var(--psg-muted)", bg: "rgba(255,255,255,0.06)" },
+  unreadable: { label: "Couldn't read", color: "#f87171", bg: "rgba(239,68,68,0.12)" },
+};
+
 const every = (h: number) => (h >= 24 ? "daily" : h <= 1 ? "every few minutes" : "hourly");
 
-export default function SystemStatus({ initialJobs = null }: { initialJobs?: JobStatus[] | null }) {
+export default function SystemStatus({ initialJobs = null, initialAttention = null }: { initialJobs?: JobStatus[] | null; initialAttention?: Attention | null }) {
   const [jobs, setJobs] = useState<JobStatus[] | null>(initialJobs);
+  const [attention, setAttention] = useState<Attention | null>(initialAttention);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/admin/status")
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(d => { setJobs(d.jobs); setError(null); })
+      .then(d => { setJobs(d.jobs); setAttention(d.attention ?? null); setError(null); })
       .catch(e => setError(e.message));
   }, []);
 
@@ -76,6 +84,39 @@ export default function SystemStatus({ initialJobs = null }: { initialJobs?: Job
             );
           })}
         </ul>
+      )}
+      {attention && (
+        <details className="rounded-lg border" style={{ borderColor: "var(--psg-card-border)" }} open={attention.items.some(i => i.reason !== "no_match")}>
+          <summary className="px-3 py-2 cursor-pointer text-sm text-white select-none">
+            Report emails not imported ({attention.items.length})
+            <span className="text-xs ml-2" style={{ color: "var(--psg-muted)" }}>as of {ago(attention.at)}</span>
+          </summary>
+          <div className="px-3 pb-3 space-y-2">
+            <p className="text-xs" style={{ color: "var(--psg-muted)" }}>
+              Unread emails in the reports inbox that the import left alone. &ldquo;No show match&rdquo; means the subject doesn&apos;t
+              contain the name of a Hub production: fine for shows we don&apos;t run, but if it&apos;s one of ours, check the
+              production&apos;s name matches how the company writes it. Reading an email in Outlook takes it off this list.
+            </p>
+            {attention.items.length === 0 && <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Nothing waiting.</p>}
+            <ul className="divide-y" style={{ borderColor: "var(--psg-card-border)" }}>
+              {attention.items.map((i, n) => {
+                const r = REASON[i.reason];
+                return (
+                  <li key={n} className="py-2 flex items-start gap-3" style={{ borderColor: "var(--psg-card-border)" }}>
+                    <span className="text-xs px-2 py-0.5 rounded-full shrink-0 mt-0.5" style={{ color: r.color, backgroundColor: r.bg, minWidth: "6.5rem", textAlign: "center" }}>{r.label}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white break-words">{i.subject}</p>
+                      <p className="text-xs mt-0.5 break-words" style={{ color: "var(--psg-muted)" }}>
+                        {[i.from, i.receivedAt ? fmtDateTime(i.receivedAt) : null].filter(Boolean).join(" · ")}
+                        {i.detail ? ` — ${i.detail}` : ""}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </details>
       )}
     </div>
   );

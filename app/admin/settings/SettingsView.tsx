@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import SeasonalOverlay from "@/components/SeasonalOverlay";
 import SystemStatus from "@/components/SystemStatus";
 import type { JobStatus } from "@/lib/job-status";
+import type { Attention } from "@/lib/importAttention";
 
 export type QuickLink = { id: number; label: string; url: string; icon: string; order: number };
 type SeasonMode = "auto" | "off" | "christmas" | "halloween" | "spring" | "bonfire" | "newyear";
@@ -23,7 +24,7 @@ const SEASON_OPTIONS: { value: SeasonMode; label: string; desc: string }[] = [
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
 
-export type SettingsInitial = { settings: Record<string, string>; links: QuickLink[]; jobs: JobStatus[] | null } | null;
+export type SettingsInitial = { settings: Record<string, string>; links: QuickLink[]; jobs: JobStatus[] | null; attention: Attention | null } | null;
 
 export default function SettingsView({ initial }: { initial: SettingsInitial }) {
   const st = initial?.settings;
@@ -111,7 +112,7 @@ export default function SettingsView({ initial }: { initial: SettingsInitial }) 
     <div className="max-w-2xl space-y-8">
       <h1 className="text-2xl font-bold text-white">Hub Settings</h1>
 
-      <SystemStatus initialJobs={initial?.jobs ?? null} />
+      <SystemStatus initialJobs={initial?.jobs ?? null} initialAttention={initial?.attention ?? null} />
 
       {/* News banner */}
       <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>

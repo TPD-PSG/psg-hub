@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { INTERNAL_SETTING_PREFIXES } from "@/lib/importAttention";
 
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const settings = await prisma.setting.findMany();
+  // Internal keys (job status, alerts, the import's email list) are served elsewhere, admins only
+  const settings = (await prisma.setting.findMany()).filter(s => !INTERNAL_SETTING_PREFIXES.some(p => s.key.startsWith(p)));
   const map: Record<string, string> = {};
   for (const s of settings) map[s.key] = s.value;
   return NextResponse.json(map);

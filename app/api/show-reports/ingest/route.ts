@@ -7,6 +7,7 @@ import { parseShowReportPdf, type ParsedReport } from "@/lib/showReportParser";
 import { ClaudeOutputError } from "@/lib/claude";
 import { toDate } from "@/lib/parse";
 import { saveFile, removeFile } from "@/lib/storage";
+import { attentionFrom, saveAttention } from "@/lib/importAttention";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -160,7 +161,9 @@ async function runIngest(req: NextRequest): Promise<Response> {
   }
 
   const processedFolderId = await getOrCreateProcessedFolder(token);
-  const results: { subject: string; status: string; reportId?: number; production?: string; parsed?: ParsedReport[] }[] = [];
+  const results: { subject: string; from?: string | null; receivedAt?: string | null; status: string; reportId?: number; production?: string; parsed?: ParsedReport[] }[] = [];
+  // Who sent it and when, so emails that need attention can be listed in Hub Settings
+  const about = (msg: any) => ({ subject: msg?.subject, from: msg?.from?.emailAddress?.address ?? null, receivedAt: msg?.receivedDateTime ?? null });
   // Railway ends requests at 60s. Stop starting new PDFs after 40s and parse a few at once;
   // anything left is reported as "deferred" and picked up by the next call.
   const started = Date.now();
@@ -173,7 +176,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
     const dedupKey = `${msg.subject}||${msg.from?.emailAddress?.address ?? ""}`;
 
     if (importedKeys.has(dedupKey)) {
-      results.push({ subject: msg.subject, status: "already_imported" });
+      results.push({ ...about(msg), status: "already_imported" });
       return;
     }
 
@@ -182,13 +185,13 @@ async function runIngest(req: NextRequest): Promise<Response> {
     // unrelated PDF in the inbox on every run.)
     const matched = matchProduction(msg.subject, productions);
     if (!matched) {
-      results.push({ subject: msg.subject, status: "skipped_no_match" });
+      results.push({ ...about(msg), status: "skipped_no_match" });
       return;
     }
     // Matched against every production (so "Jack and the Beanstalk DRAG" isn't mistaken for
     // "Jack and the Beanstalk"), then limited to the requested ones
     if (only && !only.has(matched)) {
-      results.push({ subject: msg.subject, status: "skipped_other_production" });
+      results.push({ ...about(msg), status: "skipped_other_production" });
       return;
     }
 
@@ -200,7 +203,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
           body: JSON.stringify({ isRead: true }),
         });
       }
-      results.push({ subject: msg.subject, status: "skipped_no_attachment" });
+      results.push({ ...about(msg), status: "skipped_no_attachment" });
       return;
     }
 
@@ -210,7 +213,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!attRes.ok) {
-      results.push({ subject: msg.subject, status: `attachment_error_${attRes.status}` });
+      results.push({ ...about(msg), status: `attachment_error_${attRes.status}` });
       return;
     }
     const { value: attachments } = await attRes.json();
@@ -221,24 +224,24 @@ async function runIngest(req: NextRequest): Promise<Response> {
       (a.contentType === "application/octet-stream" && (a.name as string)?.toLowerCase().endsWith(".pdf"))
     );
     if (!pdfMetas.length) {
-      results.push({ subject: msg.subject, status: "skipped_no_pdf" });
+      results.push({ ...about(msg), status: "skipped_no_pdf" });
       return;
     }
 
     // Out of time for this request: leave it for the next batch (don't download what we won't parse)
     if (Date.now() - started > TIME_BUDGET_MS) {
       deferred++;
-      results.push({ subject: msg.subject, status: "deferred" });
+      results.push({ ...about(msg), status: "deferred" });
       return;
     }
     // Claim it so a parallel worker doesn't import a duplicate email twice
-    if (inFlight.has(dedupKey)) { results.push({ subject: msg.subject, status: "already_imported" }); return; }
+    if (inFlight.has(dedupKey)) { results.push({ ...about(msg), status: "already_imported" }); return; }
     inFlight.add(dedupKey);
 
     const productionId = matchProduction(msg.subject, productions);
     if (!productionId) {
       inFlight.delete(dedupKey);
-      results.push({ subject: msg.subject, status: "skipped_no_match" });
+      results.push({ ...about(msg), status: "skipped_no_match" });
       return;
     }
     const production = productions.find(p => p.id === productionId);
@@ -261,7 +264,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
       console.log(`[ingest] parsed ${readPdfs.reduce((n, p) => n + p.reports.length, 0)} report(s) from ${readPdfs.length} attachment(s) in message ${msg.id}`);
     } catch (err) {
       inFlight.delete(dedupKey);
-      results.push({ subject: msg.subject, status: err instanceof ClaudeOutputError ? `parse_error: ${err.message}` : `error: ${err instanceof Error ? err.message : "parse failed"}` });
+      results.push({ ...about(msg), status: err instanceof ClaudeOutputError ? `parse_error: ${err.message}` : `error: ${err instanceof Error ? err.message : "parse failed"}` });
       return;
     }
 
@@ -307,7 +310,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
       // Another import got there first: drop the PDFs this run uploaded
       for (const { stored } of storedPdfs) await removeFile(stored.key);
       inFlight.delete(dedupKey);
-      results.push({ subject: msg.subject, status: "already_imported" });
+      results.push({ ...about(msg), status: "already_imported" });
       return;
     }
 
@@ -326,7 +329,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
     }
 
     results.push({
-      subject: msg.subject,
+      ...about(msg),
       status: productionId ? "imported" : "imported_unmatched",
       production: production?.name,
       ...(debug ? { parsed: parsedReports } : {}),
@@ -342,7 +345,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
       } catch (err) {
         // One bad email shouldn't stop the rest of the batch
         console.error(`[ingest] message ${msg?.id} failed:`, err instanceof Error ? err.message : err);
-        results.push({ subject: msg?.subject, status: "error" });
+        results.push({ ...about(msg), status: "error" });
       }
     }
   }));
@@ -364,5 +367,11 @@ export async function POST(req: NextRequest) {
   const body = await res.clone().json().catch(() => ({}));
   const { ok, summary } = summariseImport(res, body);
   await recordRun(prisma, "report-import", ok, summary);
+  // Only a full scheduled-style run (not a backfill or one show's re-import) gives the whole
+  // picture of what's left unread, so only those replace the "needs attention" list
+  const url = new URL(req.url);
+  if (res.ok && !body?.graphErrors && Array.isArray(body?.results) && url.searchParams.get("backfill") !== "true" && !url.searchParams.get("productionIds")) {
+    await saveAttention(prisma, attentionFrom(body.results)).catch(err => console.error("[ingest] couldn't save attention list:", err));
+  }
   return res;
 }

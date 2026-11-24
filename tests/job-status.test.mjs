@@ -6,7 +6,7 @@ const { recordRun, readJobStatus, alertAdmins } = createRequire(import.meta.url)
 // callers (no secret / not signed in) don't count as runs. Never calls the real email import.
 export default () => run("job-status", async ({ db, users, login, anon, results }) => {
   const ok = (c, l) => results.push(`${c ? "PASS" : "FAIL"}  ${l}`);
-  const jobKeys = { OR: [{ key: { startsWith: "job:" } }, { key: { startsWith: "job-alert:" } }] };
+  const jobKeys = { OR: [{ key: { startsWith: "job:" } }, { key: { startsWith: "job-alert:" } }, { key: { startsWith: "report-import:" } }] };
   const saved = await db.setting.findMany({ where: jobKeys });
   const firstNew = ((await db.notification.aggregate({ _max: { id: true } }))._max.id ?? 0) + 1;
   const alerts = async () => db.notification.findMany({ where: { id: { gte: firstNew }, link: "/admin/settings", userId: users[3].id }, orderBy: { id: "asc" } });
@@ -49,6 +49,25 @@ export default () => run("job-status", async ({ db, users, login, anon, results 
     ok(a.status === 200 && body.jobs?.length === 4 && body.jobs.some(j => j.job === "report-import" && j.state === "ok"), "admin sees all four jobs");
     ok((await memberApi("/api/admin/status")).status === 403, "member can't see status");
     ok((await anon("/api/admin/status")).status !== 200, "signed-out can't see status");
+
+    // Report emails the import couldn't use: admins see them in the status; nobody gets them
+    // (or the job statuses) from /api/settings, which every signed-in user can read
+    const attention = { at: new Date().toISOString(), items: [
+      { subject: "Show Report 12 - Some Other Show", from: "sm@example.test", receivedAt: new Date().toISOString(), reason: "no_match" },
+      { subject: "Show Report 3 - Garbled", from: "dsm@example.test", receivedAt: new Date().toISOString(), reason: "unreadable", detail: "no performance found" },
+    ] };
+    await db.setting.create({ data: { key: "report-import:attention", value: JSON.stringify(attention) } });
+    const st = await (await admin("/api/admin/status")).json();
+    ok(st.attention?.items?.length === 2 && st.attention.items[0].from === "sm@example.test", "admin status includes report emails not imported");
+    const freeApi = await login(users[0].email);
+    const leaks = [];
+    for (const [who, api] of [["admin", admin], ["freelancer", freeApi]]) {
+      const keys = Object.keys(await (await api("/api/settings")).json());
+      if (keys.some(k => /^(job:|job-alert:|report-import:)/.test(k))) leaks.push(who);
+    }
+    ok(leaks.length === 0, `/api/settings hides internal keys from everyone${leaks.length ? ` (leaked to ${leaks.join(", ")})` : ""}`);
+    const page = await (await admin("/admin/settings", { headers: { accept: "text/html" } })).text();
+    ok(page.includes("Some Other Show") && page.includes("Report emails not imported"), "Hub Settings lists the emails in the first HTML");
   } finally {
     await db.setting.deleteMany({ where: jobKeys });
     await db.notification.deleteMany({ where: { id: { gte: firstNew }, link: "/admin/settings" } });

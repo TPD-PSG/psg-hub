@@ -140,6 +140,7 @@ export type Production = {
   contraEstimate: number | null;
   contraActual: number | null;
   bdClientId: number | null;
+  entityId?: number | null;
   bdClient: { id: number; name: string; type: string; address: string | null; website: string | null; billingName: string | null; billingAddress: string | null; billingEmail: string | null } | null;
   events: Event[];
   budgetLines: BudgetLine[];

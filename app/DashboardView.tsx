@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import EntityOverview from "@/components/EntityOverview";
+import type { EntityOverviewRow, Visibility } from "@/lib/entityOverview";
 import Link from "next/link";
 import { parsePerms, canAccess } from "@/lib/permissions";
 import { fmtDay as fmtDate } from "@/lib/format";
@@ -242,6 +244,7 @@ export type DashboardData = {
   news: string | null; opportunities: Opportunity[]; invoices: Invoice[];
   expenses: { id: number; status: string; netAmount: number; vatAmount: number }[];
   salesBrands: SalesBrand[]; salesTasksCount: number; calEvents: CalEvent[];
+  entityOverview?: { see: Visibility; rows: EntityOverviewRow[] } | null; // staff only
   complete: boolean; // false if any source failed on the server; the browser then loads them itself
 };
 
@@ -431,6 +434,14 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
           )}
         </div>
       </div>
+
+      {/* One row per company (senior team view) */}
+      {initial.entityOverview && (
+        <>
+          <SectionHeading title="Companies" />
+          <EntityOverview data={initial.entityOverview} isAdmin={role === "admin"} />
+        </>
+      )}
 
       {/* Tile grid with section headings */}
       {/* ME */}

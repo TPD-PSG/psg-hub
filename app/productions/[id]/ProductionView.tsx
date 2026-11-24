@@ -37,6 +37,7 @@ function formFromProd(data: Production) {
     startDate: data.startDate ? data.startDate.slice(0, 10) : "",
     endDate: data.endDate ? data.endDate.slice(0, 10) : "",
     status: data.status, announcementStatus: data.announcementStatus ?? "not_announced", internalStatus: data.internalStatus ?? "pencil", productionManager: data.productionManager ?? "", color: data.color ?? "", notes: data.notes ?? "", reportEmail: data.reportEmail ?? "", sharepointUrl: data.sharepointUrl ?? "", bdClientId: data.bdClientId ? String(data.bdClientId) : "",
+    entityId: data.entityId ? String(data.entityId) : "",
   };
 }
 
@@ -90,6 +91,8 @@ function ProductionPageInner({ id, initialProd }: { id: string; initialProd: Pro
   const [prodForm, setProdForm] = useState(() => formFromProd(initialProd));
   const [allBdClients, setAllBdClients] = useState<{ id: number; name: string; type: string }[]>([]);
   useEffect(() => { fetch("/api/clients").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllBdClients(d); }); }, []);
+  const [allEntities, setAllEntities] = useState<{ id: number; name: string; archived: boolean }[]>([]);
+  useEffect(() => { fetch("/api/entities").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllEntities(d); }).catch(() => {}); }, []);
 
   async function reload() {
     const res = await fetch(`/api/productions/${id}`);
@@ -277,6 +280,12 @@ function ProductionPageInner({ id, initialProd }: { id: string; initialProd: Pro
               </F>
             </div>
             <F label="Proj Lead / Production Manager"><input className={inp} style={inpStyle} value={prodForm.productionManager} onChange={(e) => setProdForm((f) => ({ ...f, productionManager: e.target.value }))} placeholder="e.g. Toby / Tom" /></F>
+            <F label="Company (entity)">
+              <select className={inp} style={inpStyle} value={prodForm.entityId} onChange={e => setProdForm(f => ({ ...f, entityId: e.target.value }))}>
+                <option value="">— none —</option>
+                {allEntities.filter(en => !en.archived || String(en.id) === prodForm.entityId).map(en => <option key={en.id} value={en.id}>{en.name}</option>)}
+              </select>
+            </F>
             <F label="Client (from BD)">
               <select className={inp} style={inpStyle} value={prodForm.bdClientId} onChange={e => setProdForm(f => ({ ...f, bdClientId: e.target.value }))}>
                 <option value="">— none —</option>

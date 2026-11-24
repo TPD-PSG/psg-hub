@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { serverApi } from "@/lib/serverApi";
 import DashboardView, { type DashboardData } from "./DashboardView";
+import type { EntityOverviewRow, Visibility } from "@/lib/entityOverview";
 
 const list = <T,>(v: unknown) => (Array.isArray(v) ? (v as T[]) : []);
 
@@ -13,7 +14,8 @@ export default async function HomePage() {
   if (!user?.id) redirect("/login");
   const viewer = { id: Number(user.id), name: user.name ?? "", role: user.role ?? "member", permissions: user.permissions ?? null };
 
-  const [tasks, allTasks, productions, property, quickLinks, settings, opportunities, invoices, expenses, salesBrands, salesTasks, calEvents] = await Promise.all([
+  const staff = viewer.role === "admin" || viewer.role === "member";
+  const [tasks, allTasks, productions, property, quickLinks, settings, opportunities, invoices, expenses, salesBrands, salesTasks, calEvents, entityOverview] = await Promise.all([
     serverApi(`/api/tasks?assigneeId=${viewer.id}`),
     viewer.role === "admin" ? serverApi("/api/tasks") : Promise.resolve([]),
     serverApi("/api/productions"),
@@ -26,6 +28,7 @@ export default async function HomePage() {
     serverApi("/api/sales/brands"),
     serverApi("/api/sales/tasks"),
     serverApi("/api/calendar"),
+    staff ? serverApi<{ see: Visibility; rows: EntityOverviewRow[] }>("/api/dashboard/entities") : Promise.resolve(null),
   ]);
 
   const initial: DashboardData = {
@@ -35,6 +38,7 @@ export default async function HomePage() {
     salesBrands: list(salesBrands),
     salesTasksCount: list<{ completedAt: string | null }>(salesTasks).filter(t => !t.completedAt).length,
     calEvents: list(calEvents),
+    entityOverview: entityOverview && Array.isArray(entityOverview.rows) ? entityOverview : null,
     // Sources a user's modules block (e.g. finance for a freelancer) come back null too; only treat
     // the always-available ones as a sign the server couldn't reach its own API
     complete: tasks !== null && productions !== null && quickLinks !== null && settings !== null && calEvents !== null,

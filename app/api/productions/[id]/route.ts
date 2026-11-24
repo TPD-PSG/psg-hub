@@ -38,6 +38,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       sharepointUrl: body.sharepointUrl || null,
       haulageBudgetLineId: body.haulageBudgetLineId ? Number(body.haulageBudgetLineId) : null,
       bdClientId: body.bdClientId ? Number(body.bdClientId) : null,
+      // Only when the form sends it, so older callers don't clear it
+      ...("entityId" in body ? { entityId: body.entityId ? Number(body.entityId) : null } : {}),
     },
   });
   return NextResponse.json(production);

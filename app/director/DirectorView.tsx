@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import RevenueForecast from "@/components/RevenueForecast";
+import type { Forecast } from "@/lib/forecast";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -56,7 +58,7 @@ const ANN_LABELS: Record<string, string> = {
 export type DirectorInitial = { productions: Production[]; invoices: Invoice[]; opportunities: Opportunity[]; tasks: Task[]; tickets: HelpTicket[]; expenses: Expense[] } | null;
 
 // Admin overview; everything arrives with the page (loaded on the server by page.tsx)
-export default function DirectorView({ initial }: { initial: DirectorInitial }) {
+export default function DirectorView({ initial, forecast }: { initial: DirectorInitial; forecast?: Forecast | null }) {
   const { data: session } = useSession();
   const role = (session?.user as any)?.role ?? "member";
   const router = useRouter();
@@ -122,6 +124,9 @@ export default function DirectorView({ initial }: { initial: DirectorInitial }) 
           {now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </p>
       </div>
+
+      {/* Revenue forecast: confirmed + weighted pipeline vs target, by entity */}
+      <RevenueForecast initial={forecast ?? null} />
 
       {/* Finance KPIs */}
       <SectionHeader title="Finance" href="/finance" />

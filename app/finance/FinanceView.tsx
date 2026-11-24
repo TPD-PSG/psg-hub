@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 import UserAvatar from "@/components/UserAvatar";
-import { exportProductionSpendPDF } from "@/lib/exports";
+import { exportProductionSpendPDF, exportProductionSpendXLSX } from "@/lib/exports";
+import ExportMenu from "@/components/ExportMenu";
 import { confirmDialog } from "@/components/Dialogs";
 import { fmtDate, fmtMoney as fmt } from "@/lib/format";
 
@@ -673,24 +674,21 @@ function FinancePageInner({ initial }: { initial: FinanceInitial }) {
               <div className="text-sm" style={{ color: "var(--psg-muted)" }}>
                 Total: <span className="text-white font-medium">{fmt(totalPSG + totalHaulage + totalProdExp)}</span>
               </div>
-              <button
-                onClick={async () => {
+              <ExportMenu actions={(["pdf", "xlsx"] as const).map(kind => ({
+                label: kind === "pdf" ? "Export PDF" : "Export Excel",
+                onClick: () => {
                   const filterLabel = [
                     prodSpendFilter.productionId !== "all" ? allProductions.find(p => String(p.id) === prodSpendFilter.productionId)?.name : "All Productions",
                     prodSpendFilter.uninvoicedOnly ? "Not yet invoiced" : null,
                   ].filter(Boolean).join(" · ");
-                  await exportProductionSpendPDF(
+                  void (kind === "pdf" ? exportProductionSpendPDF : exportProductionSpendXLSX)(
                     filteredExpenses.map(e => ({ production: e.budgetLine.production.name, department: e.budgetLine.department, description: e.description, supplier: e.supplier, spent: e.spent, paymentDue: e.paymentDue, invoicedToClient: e.invoicedToClient })),
                     filteredMovements.map(m => ({ production: m.production.name, haulageCompany: m.haulageCompany, route: `${m.fromLocation} → ${m.toLocation}`, cargo: m.cargo, departureAt: m.departureAt, actualCost: m.actualCost, estimatedCost: m.estimatedCost, invoicedToClient: m.invoicedToClient })),
                     filteredProdExp.map(e => ({ production: e.productionLink?.name ?? "—", category: e.category, description: e.description, supplier: e.supplier, submittedBy: e.submittedByUser?.name ?? null, date: e.date, netAmount: e.netAmount, vatAmount: e.vatAmount, status: e.status, invoicedToClient: e.invoicedToClient })),
-                    filterLabel ?? "All",
+                    filterLabel || "All",
                   );
-                }}
-                className="shrink-0 text-xs px-3 py-1.5 rounded border hover:bg-white/5 transition-colors"
-                style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}
-              >
-                Export PDF
-              </button>
+                },
+              }))} />
             </div>
 
             {/* PSG Expenses table */}

@@ -1,12 +1,11 @@
-// Budget PDF and Excel exports. (The PDF's built-in font has no arrows or minus signs, so
-// PDF text sticks to plain characters.) Figures come from lib/budgetReport.ts, the same calculation the
+// Budget PDF and Excel exports. Figures come from lib/budgetReport.ts, the same calculation the
 // Budget tab uses, so an export always matches the screen. The build* functions don't touch the
 // browser (they can run in Node for checking); the export* functions add logos and download.
 import type jsPDF from "jspdf";
-import autoTable, { type CellHookData } from "jspdf-autotable";
+import type { CellHookData } from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { fmtDate } from "@/lib/format";
-import { basePDF, addFooters, fetchLogoAsset, saveXlsx, type LogoAsset } from "@/lib/exports";
+import { autoTable, basePDF, addFooters, fetchLogoAsset, saveXlsx, type LogoAsset } from "@/lib/exports";
 import {
   VARIATION_STATUSES, VARIATION_TYPES,
   type BudgetReport, type Figures, type ReportExpense, type ReportVariation,

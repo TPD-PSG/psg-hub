@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import rawAutoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 
@@ -27,11 +27,51 @@ function addSheet(wb: ExcelJS.Workbook, name: string, rows: (string | number | b
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// jsPDF's built-in fonts only cover the Windows-1252 character set; anything else (arrows,
+// ticks, minus signs, emoji) comes out as spaced-out garbage. So all PDF text passes through
+// pdfText: common symbols get plain stand-ins, accents are dropped where needed (ł → l),
+// emoji vanish, and anything else unprintable becomes "?".
+const CP1252_EXTRA = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
+const PDF_SWAPS: Record<string, string> = {
+  "→": "->", "←": "<-", "↔": "<->", "✓": "Yes", "✔": "Yes", "✗": "No", "✘": "No",
+  "−": "-", "Ł": "L", "ł": "l", "Đ": "D", "đ": "d", "≤": "<=", "≥": ">=", "≠": "!=", "‑": "-",
+};
+const printable = (ch: string) => ch <= "\xff" || CP1252_EXTRA.includes(ch);
+export function pdfText(s: string): string {
+  return s.normalize("NFC").replace(/[^\x00-\xff]/gu, ch => {
+    if (PDF_SWAPS[ch] != null) return PDF_SWAPS[ch];
+    if (CP1252_EXTRA.includes(ch)) return ch;
+    if (/\p{Extended_Pictographic}|[\u200d\ufe0f]/u.test(ch)) return ""; // emoji just drop out
+    const bare = ch.normalize("NFD").replace(/\p{M}/gu, ""); // ź → z, ă → a
+    return bare && [...bare].every(printable) ? bare : "?";
+  });
+}
+/** Makes doc.text and doc.splitTextToSize clean their text first. */
+function pdfSafe(doc: jsPDF): jsPDF {
+  const text = doc.text.bind(doc);
+  const split = doc.splitTextToSize.bind(doc);
+  const clean = (t: unknown): unknown => (Array.isArray(t) ? t.map(clean) : typeof t === "string" ? pdfText(t) : t);
+  doc.text = ((t: unknown, ...rest: unknown[]) => (text as (...a: unknown[]) => jsPDF)(clean(t), ...rest)) as typeof doc.text;
+  doc.splitTextToSize = ((t: unknown, ...rest: unknown[]) => (split as (...a: unknown[]) => string[])(clean(t), ...rest)) as typeof doc.splitTextToSize;
+  return doc;
+}
+/** autoTable, with every cell's text cleaned for the PDF font. */
+export const autoTable: typeof rawAutoTable = (doc, options) =>
+  rawAutoTable(doc, {
+    ...options,
+    didParseCell: data => {
+      data.cell.text = data.cell.text.map(t => (typeof t === "string" ? pdfText(t) : t));
+      options.didParseCell?.(data);
+    },
+  });
+
 function fmtGBP(n: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 }
 
 export type LogoAsset = { dataUrl: string; w: number; h: number } | null;
+
+const LOGO_MAX_PX = 600;
 
 export async function fetchLogoAsset(url?: string): Promise<LogoAsset> {
   try {
@@ -42,20 +82,38 @@ export async function fetchLogoAsset(url?: string): Promise<LogoAsset> {
       reader.onloadend = () => resolve(reader.result as string);
       reader.readAsDataURL(blob);
     });
-    const { w, h } = await new Promise<{ w: number; h: number }>((resolve) => {
-      const img = new window.Image();
-      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-      img.onerror = () => resolve({ w: 1, h: 1 });
-      img.src = dataUrl;
+    const img = await new Promise<HTMLImageElement | null>((resolve) => {
+      const i = new window.Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => resolve(null);
+      i.src = dataUrl;
     });
-    return { dataUrl, w, h };
+    if (!img) return { dataUrl, w: 1, h: 1 };
+    const w = img.naturalWidth, h = img.naturalHeight;
+    // Logos print at most ~40mm wide. PDFs store images uncompressed, so a full-size logo
+    // (the PSG one is 2500px) made every export ~16 MB; 600px is plenty for print.
+    const scale = Math.min(1, LOGO_MAX_PX / Math.max(w, h));
+    if (scale === 1) return { dataUrl, w, h };
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return { dataUrl: canvas.toDataURL("image/png"), w: canvas.width, h: canvas.height };
   } catch {
     return null;
   }
 }
 
+// The PSG logo is dark on a see-through background, so it sits on a white panel (as in the app)
+// rather than vanishing into the navy header bar.
+function drawPsgLogo(doc: jsPDF, logo: NonNullable<LogoAsset>, x: number, y: number, w: number, h: number) {
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(x - 1, y - 1, w + 2, h + 2, 1, 1, "F");
+  doc.addImage(logo.dataUrl, "PNG", x, y, w, h, undefined, "FAST");
+}
+
 export function basePDF(title: string, subtitle?: string, logo?: LogoAsset, prodLogo?: LogoAsset): jsPDF {
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const doc = pdfSafe(new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" }));
   doc.setFillColor(10, 25, 65);
   doc.rect(0, 0, 297, 20, "F");
 
@@ -68,8 +126,8 @@ export function basePDF(title: string, subtitle?: string, logo?: LogoAsset, prod
     let lw = lh * aspect;
     if (lw > maxW) { lw = maxW; lh = lw / aspect; }
     const ly = 2 + (maxH - lh) / 2;
-    doc.addImage(logo.dataUrl, "PNG", 4, ly, lw, lh);
-    textX = 4 + lw + 3;
+    drawPsgLogo(doc, logo, 4, ly, lw, lh);
+    textX = 4 + lw + 4;
   }
 
   // Production logo — right side of header, before the title text
@@ -83,7 +141,7 @@ export function basePDF(title: string, subtitle?: string, logo?: LogoAsset, prod
     if (lw > maxW) { lw = maxW; lh = lw / aspect; }
     const lx = 297 - 10 - lw;
     const ly = 3 + (maxH - lh) / 2;
-    doc.addImage(prodLogo.dataUrl, "PNG", lx, ly, lw, lh);
+    doc.addImage(prodLogo.dataUrl, "PNG", lx, ly, lw, lh, undefined, "FAST");
     titleX = lx - 3;
   }
 
@@ -390,8 +448,8 @@ export async function exportToolboxSignoffPDF(productionName: string, sigs: Tool
     s.position ?? "—",
     fmtDate(s.signeeDate + "T12:00:00"),
     s.venueName ?? (venueName ?? "—"),
-    s.agreedBriefing ? "✓" : "✗",
-    s.agreedSafety ? "✓" : "✗",
+    s.agreedBriefing ? "Yes" : "No",
+    s.agreedSafety ? "Yes" : "No",
     fmtDateTime(s.createdAt),
   ]);
 
@@ -479,7 +537,7 @@ export async function exportMeetingMinutesPDF(
   const dateStr = dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const timeStr = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = pdfSafe(new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }));
   const W = 210;
 
   // ── Header bar ──────────────────────────────────────────────────────────────
@@ -492,8 +550,8 @@ export async function exportMeetingMinutesPDF(
     const aspect = logo.w / logo.h;
     let lh = maxH; let lw = lh * aspect;
     if (lw > maxW) { lw = maxW; lh = lw / aspect; }
-    doc.addImage(logo.dataUrl, "PNG", 4, 2 + (maxH - lh) / 2, lw, lh);
-    textX = 4 + lw + 3;
+    drawPsgLogo(doc, logo, 4, 2 + (maxH - lh) / 2, lw, lh);
+    textX = 4 + lw + 4;
   }
 
   let titleX = W - 10;
@@ -503,7 +561,7 @@ export async function exportMeetingMinutesPDF(
     let lh = maxH; let lw = lh * aspect;
     if (lw > maxW) { lw = maxW; lh = lw / aspect; }
     const lx = W - 10 - lw;
-    doc.addImage(prodLogo.dataUrl, "PNG", lx, 3 + (maxH - lh) / 2, lw, lh);
+    doc.addImage(prodLogo.dataUrl, "PNG", lx, 3 + (maxH - lh) / 2, lw, lh, undefined, "FAST");
     titleX = lx - 3;
   }
 
@@ -613,7 +671,7 @@ export async function exportProductionSpendPDF(
       body: psgExpenses.map(e => [
         e.production, e.department, e.description, e.supplier ?? "—",
         fmtGBP(e.spent), e.paymentDue ? fmtDate(e.paymentDue) : "—",
-        e.invoicedToClient ? "✓" : "—",
+        e.invoicedToClient ? "Yes" : "—",
       ]),
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: navy, textColor: [255, 255, 255] },
@@ -641,7 +699,7 @@ export async function exportProductionSpendPDF(
         `${m.route}`, m.cargo ?? "—",
         fmtDate(m.departureAt),
         fmtGBPLocal(m.estimatedCost), fmtGBPLocal(m.actualCost),
-        m.invoicedToClient ? "✓" : "—",
+        m.invoicedToClient ? "Yes" : "—",
       ]),
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: navy, textColor: [255, 255, 255] },
@@ -668,7 +726,7 @@ export async function exportProductionSpendPDF(
         e.production, e.category, e.description, e.supplier ?? "—",
         e.submittedBy ?? "—", e.date ? fmtDate(e.date) : "—",
         fmtGBP(e.netAmount), fmtGBP(e.netAmount + e.vatAmount),
-        e.status, e.invoicedToClient ? "✓" : "—",
+        e.status, e.invoicedToClient ? "Yes" : "—",
       ]),
       styles: { fontSize: 7.5, cellPadding: 2 },
       headStyles: { fillColor: navy, textColor: [255, 255, 255] },
@@ -679,4 +737,61 @@ export async function exportProductionSpendPDF(
 
   addFooters(doc);
   doc.save(`production-spend-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+/** Same rows as the PDF: one sheet per kind of spend, with totals, £ formats and real dates. */
+export async function exportProductionSpendXLSX(
+  psgExpenses: PSGExpenseRow[],
+  haulageMovements: HaulageRow[],
+  prodExpenses: ProdExpRow[],
+  filterLabel: string,
+) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "PSG Hub";
+  wb.calcProperties.fullCalcOnLoad = true;
+  const GBP = '£#,##0.00;[Red]-£#,##0.00;"–"';
+  const day = (s: string | null) => (s ? new Date(s) : null);
+  const yes = (b: boolean) => (b ? "Yes" : "");
+
+  function sheet(name: string, header: string[], rows: (string | number | Date | null)[][], widths: number[], moneyCols: number[], dateCols: number[]) {
+    const ws = wb.addWorksheet(name);
+    ws.addRow([`Production expenses — ${filterLabel}`]);
+    ws.addRow([`Exported ${fmtDate(new Date().toISOString())} from PSG Hub`]);
+    ws.addRow([]);
+    ws.addRow(header);
+    rows.forEach(r => ws.addRow(r));
+    const first = 5, last = 4 + rows.length;
+    const total = ws.addRow(header.map((_, i) =>
+      i === 0 ? "TOTAL" : moneyCols.includes(i + 1) && rows.length ? { formula: `SUM(${ws.getColumn(i + 1).letter}${first}:${ws.getColumn(i + 1).letter}${last})`, result: rows.reduce((s, r) => s + (Number(r[i]) || 0), 0) } : null,
+    ));
+    widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    ws.eachRow(row => row.eachCell(c => { c.font = { name: "Arial", size: 10 }; }));
+    moneyCols.forEach(c => { ws.getColumn(c).numFmt = GBP; });
+    dateCols.forEach(c => { ws.getColumn(c).numFmt = "d mmm yyyy"; });
+    ws.getRow(4).eachCell(c => {
+      c.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0A1941" } };
+    });
+    total.eachCell(c => { c.font = { name: "Arial", size: 10, bold: true }; c.border = { top: { style: "thin" } }; });
+    ws.getCell("A1").font = { name: "Arial", size: 13, bold: true, color: { argb: "FF0A1941" } };
+    ws.getCell("A2").font = { name: "Arial", size: 9, color: { argb: "FF666666" } };
+    ws.views = [{ state: "frozen", ySplit: 4 }];
+    if (rows.length) ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: last, column: header.length } };
+  }
+
+  if (psgExpenses.length)
+    sheet("PSG expenses", ["Production", "Department", "Description", "Supplier", "Spent", "Payment due", "Invoiced to client"],
+      psgExpenses.map(e => [e.production, e.department, e.description, e.supplier ?? "", e.spent, day(e.paymentDue), yes(e.invoicedToClient)]),
+      [26, 20, 36, 22, 13, 13, 12], [5], [6]);
+  if (haulageMovements.length)
+    sheet("Rechargeable haulage", ["Production", "Haulage company", "Route", "Cargo", "Departure", "Estimated cost", "Actual cost", "Charge (actual, else estimate)", "Invoiced to client"],
+      haulageMovements.map(m => [m.production, m.haulageCompany, m.route, m.cargo ?? "", day(m.departureAt), m.estimatedCost, m.actualCost, m.actualCost ?? m.estimatedCost ?? 0, yes(m.invoicedToClient)]),
+      [26, 22, 34, 20, 13, 14, 14, 16, 12], [6, 7, 8], [5]);
+  if (prodExpenses.length)
+    sheet("Production expenses", ["Production", "Category", "Description", "Supplier", "Submitted by", "Date", "Net", "VAT", "Total inc VAT", "Status", "Invoiced to client"],
+      prodExpenses.map(e => [e.production, e.category, e.description, e.supplier ?? "", e.submittedBy ?? "", day(e.date), e.netAmount, e.vatAmount, e.netAmount + e.vatAmount, e.status, yes(e.invoicedToClient)]),
+      [26, 18, 36, 22, 18, 13, 13, 12, 14, 12, 12], [7, 8, 9], [6]);
+  if (!wb.worksheets.length) wb.addWorksheet("No expenses").addRow(["Nothing matches the current filters."]);
+
+  await saveXlsx(wb, `production-spend-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

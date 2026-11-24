@@ -456,7 +456,15 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
               <CompactTile href="/venues" icon="🏛️" title="Venues" sub="Venue directory" />
             )}
             {canAccess(perms, "productions", role) && (
-              <CompactTile href="/calendar" icon="📅" title="Calendar" sub="Key dates across all productions" />
+              <>
+                <CompactTile href="/calendar" icon="📅" title="Calendar" sub="Key dates across all productions" />
+                <CompactTile href="/schedule" icon="🗓️" title="Schedule" sub="Day by day, across all productions" />
+                <CompactTile href="/hotels" icon="🏨" title="Hotels" sub="Hotel directory" />
+              </>
+            )}
+            {/* Haulage across productions is staff-only, like its API */}
+            {canAccess(perms, "productions", role) && (role === "admin" || role === "member") && (
+              <CompactTile href="/haulage" icon="🚚" title="Haulage" sub="Movements across all productions" />
             )}
           </div>
         </>

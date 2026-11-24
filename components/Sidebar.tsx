@@ -39,6 +39,18 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
     title: "Calendar",
     items: [{ label: "Calendar", href: "/calendar" }],
   },
+  "/schedule": {
+    title: "Schedule",
+    items: [{ label: "All Productions", href: "/schedule" }],
+  },
+  "/haulage": {
+    title: "Haulage",
+    items: [{ label: "All Movements", href: "/haulage" }],
+  },
+  "/hotels": {
+    title: "Hotels",
+    items: [{ label: "Hotel Directory", href: "/hotels" }],
+  },
   "/venues": {
     title: "Venues",
     items: [{ label: "All Venues", href: "/venues" }],

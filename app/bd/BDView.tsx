@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { confirmDialog } from "@/components/Dialogs";
 import { fmtDate as fmtDateShared, fmtDateTime } from "@/lib/format";
 import { STAGES, ACTIVITY_KINDS, LEAD_SOURCES, weightPct, weightedValue, stuckReason, isOpen } from "@/lib/bdPipeline";
@@ -9,7 +10,12 @@ import { splitFee, type FeeStageInput } from "@/lib/feeStages";
 import { alertDialog } from "@/components/Dialogs";
 const fmtDate = (s: string | null) => (s ? fmtDateShared(s) : null);
 
-export type Client = { id: number; name: string; type: string; website?: string | null; address?: string | null; notes?: string | null; billingName?: string | null; billingAddress?: string | null; billingEmail?: string | null };
+export type Client = {
+  id: number; name: string; type: string; website?: string | null; address?: string | null; notes?: string | null;
+  billingName?: string | null; billingAddress?: string | null; billingEmail?: string | null;
+  targetAccount?: boolean; targetOwner?: { id: number; name: string } | null; targetSource?: string | null;
+  opportunities?: { id: number; stage: string }[];
+};
 type BDTask = { id: number; description: string; dueDate: string | null; completedAt: string | null };
 export type Opportunity = {
   id: number; title: string; type: string; stage: string;
@@ -69,6 +75,7 @@ export default function BDView({ initial }: { initial: BDInitial }) {
   const [filterEntity, setFilterEntity] = useState("all");
   const [filterOwner, setFilterOwner] = useState("all");
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [targetsOnly, setTargetsOnly] = useState(false);
 
   // Activity log for the open deal
   const [activities, setActivities] = useState<Activity[] | null>(null);
@@ -816,21 +823,36 @@ export default function BDView({ initial }: { initial: BDInitial }) {
       {/* Clients list */}
       {clients.length > 0 && (
         <div className="rounded-lg border" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
-          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--psg-card-border)" }}>
+          <div className="px-4 py-3 border-b flex items-center justify-between gap-3 flex-wrap" style={{ borderColor: "var(--psg-card-border)" }}>
             <span className="text-sm font-semibold text-white">Clients ({clients.length})</span>
+            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--psg-muted)" }}>
+              <input type="checkbox" checked={targetsOnly} onChange={e => setTargetsOnly(e.target.checked)} />
+              Target accounts only ({clients.filter(c => c.targetAccount).length})
+            </label>
           </div>
           <div className="divide-y" style={{ borderColor: "var(--psg-card-border)" }}>
-            {clients.map(c => (
+            {/* Target accounts first, then the rest alphabetically */}
+            {[...clients].filter(c => !targetsOnly || c.targetAccount).sort((a, b) => Number(!!b.targetAccount) - Number(!!a.targetAccount) || a.name.localeCompare(b.name)).map(c => {
+              const openDeals = (c.opportunities ?? []).filter(o => isOpen(o.stage)).length;
+              return (
               <div key={c.id} className="px-4 py-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-white">{c.name}</div>
-                  <div className="text-xs capitalize" style={{ color: "var(--psg-muted)" }}>{c.type}</div>
+                  <Link href={`/bd/clients/${c.id}`} className="text-sm font-medium text-white hover:underline">{c.targetAccount && <span title="Target account" style={{ color: "#5b8def" }}>★ </span>}{c.name}</Link>
+                  <div className="text-xs capitalize" style={{ color: "var(--psg-muted)" }}>
+                    {c.type}{c.opportunities ? ` · ${openDeals} open deal${openDeals === 1 ? "" : "s"}` : ""}
+                  </div>
+                  {c.targetAccount && (
+                    <div className="text-xs" style={{ color: openDeals ? "var(--psg-muted)" : "#fbbf24" }}>
+                      Target · {c.targetOwner?.name ?? "no owner"}{c.targetSource ? ` · ${c.targetSource}` : ""}{openDeals ? "" : " · no open deal"}
+                    </div>
+                  )}
                   {c.billingName && <div className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Bill to: {c.billingName}</div>}
                   {c.billingEmail && <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{c.billingEmail}</div>}
                 </div>
                 <button onClick={() => { setEditingClient(c); setEditClientForm({ name: c.name, type: c.type, website: c.website ?? "", address: c.address ?? "", notes: c.notes ?? "", billingName: c.billingName ?? "", billingAddress: c.billingAddress ?? "", billingEmail: c.billingEmail ?? "" }); }} className="text-xs px-2 py-1 rounded border shrink-0 hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Edit</button>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

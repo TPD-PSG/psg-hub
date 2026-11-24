@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import UserAvatar from "@/components/UserAvatar";
 import { confirmDialog } from "@/components/Dialogs";
 
-type User = { id: number; name: string; email: string; avatarUrl?: string | null };
+export type User = { id: number; name: string; email: string; avatarUrl?: string | null };
 type TaskList = { id: number; name: string; position: number };
-type Task = {
+export type Task = {
   id: number;
   title: string;
   description: string | null;
@@ -263,7 +263,8 @@ function TaskCard({
   );
 }
 
-type Props = { productionId?: number };
+// `initial` (My Tasks page only): the user's tasks and the user list, loaded with the page
+type Props = { productionId?: number; initial?: { tasks: Task[]; users: User[] } | null };
 
 const BLANK: InlineForm = {
   title: "", description: "", assigneeUserId: "", assigneeName: "",
@@ -271,11 +272,12 @@ const BLANK: InlineForm = {
   requiresSignoff: false, signoffUserId: "", moveToListId: "",
 };
 
-export default function TasksPanel({ productionId }: Props) {
+export default function TasksPanel({ productionId, initial }: Props) {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [activeListId, setActiveListId] = useState<string>(NO_LIST_ID);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [tasks, setTasks] = useState<Task[]>(initial?.tasks ?? []);
+  const [users, setUsers] = useState<User[]>(initial?.users ?? []);
+  const arrivedWithPage = useRef(!!initial && productionId === undefined);
   const [statusFilter, setStatusFilter] = useState("active");
 
   // New-task form (modal — only for creating, not editing)
@@ -291,11 +293,12 @@ export default function TasksPanel({ productionId }: Props) {
 
   useEffect(() => {
     if (productionId !== undefined) loadLists();
-    loadUsers();
+    if (!arrivedWithPage.current) loadUsers();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productionId]);
 
   useEffect(() => {
+    if (arrivedWithPage.current) { arrivedWithPage.current = false; return; }
     reloadTasks();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productionId, activeListId]);

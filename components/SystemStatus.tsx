@@ -24,8 +24,8 @@ function ago(iso: string): string {
 
 const every = (h: number) => (h >= 24 ? "daily" : h <= 1 ? "every few minutes" : "hourly");
 
-export default function SystemStatus() {
-  const [jobs, setJobs] = useState<JobStatus[] | null>(null);
+export default function SystemStatus({ initialJobs = null }: { initialJobs?: JobStatus[] | null }) {
+  const [jobs, setJobs] = useState<JobStatus[] | null>(initialJobs);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -36,10 +36,10 @@ export default function SystemStatus() {
   }, []);
 
   useEffect(() => {
-    load();
+    if (!initialJobs) load(); // otherwise it arrived with the page
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, initialJobs]);
 
   const problems = jobs?.filter(j => j.state === "late" || j.state === "failing").length ?? 0;
 

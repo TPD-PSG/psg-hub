@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ExportMenu from "@/components/ExportMenu";
 import BudgetReallocationPanel from "@/components/BudgetReallocationPanel";
-import { exportBudgetPDF, exportBudgetXLSX } from "@/lib/exports";
+import { exportBudgetPDF, exportBudgetXLSX } from "@/lib/budgetExport";
+import { buildBudgetReport, type ReportVariation } from "@/lib/budgetReport";
 import { confirmDialog } from "@/components/Dialogs";
 import { F, Modal, Btns, inp, inpStyle, fmt, fmtDate, fmtShortDate, sendJson, useList, toggled, type BudgetLine, type Expense, type HaulageMovement, type TabProps, type TourStop } from "../shared";
 import BudgetSpendModal, { PHASES } from "./BudgetSpendModal";
@@ -132,53 +133,31 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
     reload();
   }
 
-  // ── Totals ── (PM budget = estimated, net cost = committed, gross cost = spent)
-  const estCost = (m: HaulageMovement) => m.estimatedCost ?? 0;
-  const actCost = (m: HaulageMovement) => m.actualCost ?? 0;
-  const contraEstimateTotal = sum(tourStops, t => t.contraEstimate ?? 0);
-  const contraActualTotal = sum(tourStops, t => t.contraActual ?? 0);
-  const unlinkedHaulageMovements = prod.haulageMovements.filter((m) => !m.budgetLineId);
-  const haulageEstimated = sum(unlinkedHaulageMovements, estCost);
-  const haulageActual = sum(unlinkedHaulageMovements, actCost);
-  const allHaulageEstimated = sum(prod.haulageMovements, estCost);
-  const allHaulageActual = sum(prod.haulageMovements, actCost);
-  const totalEstimated = sum(prod.budgetLines, l => sum(l.expenses, x => x.estimated)) + contraEstimateTotal + allHaulageEstimated;
-  const totalCommitted = sum(prod.budgetLines, l => sum(l.expenses, x => x.committed)) + contraActualTotal + allHaulageActual;
-  const totalSpent = sum(prod.budgetLines, l => sum(l.expenses, x => x.spent));
-  const totalBudgeted = sum(prod.budgetLines, l => l.budgeted);
+  // ── Totals ── (PM budget = estimated, net cost = committed, gross cost = spent).
+  // Worked out in lib/budgetReport.ts, which the exports use too, so they always match.
+  const report = useMemo(
+    () => buildBudgetReport(prod.budgetLines, prod.haulageMovements, tourStops, budgetDeptOrder),
+    [prod.budgetLines, prod.haulageMovements, tourStops, budgetDeptOrder],
+  );
+  const { allocation: totalBudgeted, pm: totalEstimated, net: totalCommitted, gross: totalSpent } = report.totals;
+  const { pm: haulageEstimated, net: haulageActual } = report.unlinkedHaulage;
+  const { pm: contraEstimateTotal, net: contraActualTotal } = report.contra;
   const rechargeables = prod.haulageMovements.filter((m) => m.rechargeable);
+  const lineTotals = (line: BudgetLine) => {
+    const l = report.lineById.get(line.id)!;
+    return { movements: l.movements as HaulageMovement[], est: l.pm, com: l.net, spt: l.gross };
+  };
 
-  // One budget line's figures, including haulage movements linked to it
-  function lineTotals(line: BudgetLine) {
-    const movements = prod.haulageMovements.filter((m) => m.budgetLineId === line.id);
-    return {
-      movements,
-      est: sum(line.expenses, x => x.estimated) + sum(movements, estCost),
-      com: sum(line.expenses, x => x.committed) + sum(movements, actCost),
-      spt: sum(line.expenses, x => x.spent),
-    };
+  async function runExport(kind: "pdf" | "xlsx") {
+    let variations: ReportVariation[] = [];
+    try {
+      const res = await fetch(`/api/budget-reallocation?productionId=${prod.id}`);
+      if (res.ok) variations = await res.json();
+    } catch {}
+    if (kind === "pdf") await exportBudgetPDF(prod.name, report, variations, prod.logoUrl);
+    else await exportBudgetXLSX(prod.name, report, variations);
   }
 
-  // Department summary for budget overview
-  const deptSummary = prod.budgetLines.reduce((acc, l) => {
-    if (!acc[l.department]) acc[l.department] = { budgeted: 0, estimated: 0, committed: 0, spent: 0 };
-    acc[l.department].budgeted += l.budgeted;
-    l.expenses.forEach((x) => {
-      acc[l.department].estimated += x.estimated;
-      acc[l.department].committed += x.committed;
-      acc[l.department].spent += x.spent;
-    });
-    return acc;
-  }, {} as Record<string, { budgeted: number; estimated: number; committed: number; spent: number }>);
-  // Roll each linked movement's costs into its budget line's department
-  prod.haulageMovements.forEach((m) => {
-    if (!m.budgetLineId) return;
-    const line = prod.budgetLines.find((l) => l.id === m.budgetLineId);
-    if (line && deptSummary[line.department]) {
-      deptSummary[line.department].estimated += m.estimatedCost ?? 0;
-      deptSummary[line.department].committed += m.actualCost ?? 0;
-    }
-  });
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -212,8 +191,8 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
           </div>
           <div className="flex gap-2">
             <ExportMenu actions={[
-              { label: "Export PDF", onClick: () => exportBudgetPDF(prod.name, prod.budgetLines, prod.logoUrl) },
-              { label: "Export Excel", onClick: () => void exportBudgetXLSX(prod.name, prod.budgetLines) },
+              { label: "Export PDF", onClick: () => void runExport("pdf") },
+              { label: "Export Excel", onClick: () => void runExport("xlsx") },
             ]} />
             <button onClick={() => setShowBudgetForm(true)} className="text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: "var(--psg-blue)" }}>
               + Add Department
@@ -236,7 +215,7 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(deptSummary).map(([dept, s]) => (
+                {report.departments.map(({ name: dept, allocation, pm, net, gross }) => ({ dept, s: { budgeted: allocation, estimated: pm, committed: net, spent: gross } })).map(({ dept, s }) => (
                   <tr key={dept} className="border-t hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)" }}>
                     <td className="px-4 py-2.5 text-white">{dept}</td>
                     <td className="px-4 py-2.5 text-right" style={{ color: "var(--psg-muted)" }}>{fmt(s.budgeted)}</td>
@@ -254,6 +233,16 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
                     <td className="px-4 py-2.5 text-right text-white/40 text-xs">—</td>
                     <td className="px-4 py-2.5 text-right text-yellow-300/70 text-xs">{haulageEstimated > 0 ? fmt(haulageEstimated) : "—"}</td>
                     <td className="px-4 py-2.5 text-right text-orange-300/70 text-xs">{haulageActual > 0 ? fmt(haulageActual) : "—"}</td>
+                    <td className="px-4 py-2.5 text-right text-green-400/70 text-xs">—</td>
+                    <td className="px-4 py-2.5 text-right text-white/40 text-xs">—</td>
+                  </tr>
+                )}
+                {(contraEstimateTotal > 0 || contraActualTotal > 0) && (
+                  <tr className="border-t" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(59,130,246,0.04)" }}>
+                    <td className="px-4 py-2.5 text-white/70 text-xs italic">Venue contra</td>
+                    <td className="px-4 py-2.5 text-right text-white/40 text-xs">—</td>
+                    <td className="px-4 py-2.5 text-right text-yellow-300/70 text-xs">{contraEstimateTotal > 0 ? fmt(contraEstimateTotal) : "—"}</td>
+                    <td className="px-4 py-2.5 text-right text-orange-300/70 text-xs">{contraActualTotal > 0 ? fmt(contraActualTotal) : "—"}</td>
                     <td className="px-4 py-2.5 text-right text-green-400/70 text-xs">—</td>
                     <td className="px-4 py-2.5 text-right text-white/40 text-xs">—</td>
                   </tr>
@@ -612,7 +601,7 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
               <tfoot>
                 <tr style={{ borderTop: "2px solid rgba(251,146,60,0.3)", backgroundColor: "rgba(251,146,60,0.06)" }}>
                   <td colSpan={4} className="px-4 py-2.5 text-xs font-semibold text-orange-400">Total to invoice</td>
-                  <td className="px-4 py-2.5 text-right font-bold text-orange-400">{fmt(sum(rechargeables, actCost))}</td>
+                  <td className="px-4 py-2.5 text-right font-bold text-orange-400">{fmt(sum(rechargeables, m => m.actualCost ?? 0))}</td>
                 </tr>
               </tfoot>
             </table>

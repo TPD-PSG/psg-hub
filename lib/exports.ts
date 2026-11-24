@@ -3,7 +3,7 @@ import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 
-async function saveXlsx(wb: ExcelJS.Workbook, filename: string) {
+export async function saveXlsx(wb: ExcelJS.Workbook, filename: string) {
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
@@ -31,9 +31,9 @@ function fmtGBP(n: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 }
 
-type LogoAsset = { dataUrl: string; w: number; h: number } | null;
+export type LogoAsset = { dataUrl: string; w: number; h: number } | null;
 
-async function fetchLogoAsset(url?: string): Promise<LogoAsset> {
+export async function fetchLogoAsset(url?: string): Promise<LogoAsset> {
   try {
     const res = await fetch(url ?? "/psg-logo.png");
     const blob = await res.blob();
@@ -54,7 +54,7 @@ async function fetchLogoAsset(url?: string): Promise<LogoAsset> {
   }
 }
 
-function basePDF(title: string, subtitle?: string, logo?: LogoAsset, prodLogo?: LogoAsset): jsPDF {
+export function basePDF(title: string, subtitle?: string, logo?: LogoAsset, prodLogo?: LogoAsset): jsPDF {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   doc.setFillColor(10, 25, 65);
   doc.rect(0, 0, 297, 20, "F");
@@ -103,7 +103,7 @@ function basePDF(title: string, subtitle?: string, logo?: LogoAsset, prodLogo?: 
   return doc;
 }
 
-function addFooters(doc: jsPDF, landscape = true) {
+export function addFooters(doc: jsPDF, landscape = true) {
   const pageW = landscape ? 297 : 210;
   const pageH = landscape ? 210 : 297;
   const pageCount = (doc as any).internal.getNumberOfPages();
@@ -116,88 +116,7 @@ function addFooters(doc: jsPDF, landscape = true) {
   }
 }
 
-// ── Budget ───────────────────────────────────────────────────────────────────
-
-type Expense = { phase: string; description: string; estimated: number; committed: number; spent: number; supplier: string | null; poNumber: string | null; paymentDue: string | null; issuedForPayment: boolean; vatExempt: boolean; notes: string | null };
-type BudgetLine = { department: string; description: string; budgeted: number; expenses: Expense[] };
-
-export async function exportBudgetPDF(productionName: string, lines: BudgetLine[], productionLogoUrl?: string | null) {
-  const [logo, prodLogo] = await Promise.all([fetchLogoAsset(), productionLogoUrl ? fetchLogoAsset(productionLogoUrl) : Promise.resolve(null)]);
-  const doc = basePDF(`Budget — ${productionName}`, `Exported ${fmtDate(new Date().toISOString())}`, logo, prodLogo ?? undefined);
-  let y = 32;
-
-  const totEst = lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0);
-  const totCom = lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0);
-  const totSpt = lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.spent, 0), 0);
-  const totBud = lines.reduce((s, l) => s + l.budgeted, 0);
-
-  // Summary row
-  autoTable(doc, {
-    startY: y,
-    head: [["Allocation", "Estimated", "Committed", "Spent"]],
-    body: [[fmtGBP(totBud), fmtGBP(totEst), fmtGBP(totCom), fmtGBP(totSpt)]],
-    styles: { fontSize: 10, cellPadding: 3 },
-    headStyles: { fillColor: [10, 25, 65] },
-    margin: { left: 10, right: 10 },
-  });
-
-  y = (doc as any).lastAutoTable.finalY + 8;
-
-  // Department breakdown
-  for (const line of lines) {
-    if (y > 185) { doc.addPage(); y = 15; }
-    autoTable(doc, {
-      startY: y,
-      head: [[{ content: `${line.department} — ${line.description}  (Allocation: ${fmtGBP(line.budgeted)})`, colSpan: 7, styles: { fillColor: [30, 50, 100], textColor: 255 } }],
-        ["Phase", "Description", "Supplier", "PO", "Estimated", "Committed", "Spent"]],
-      body: line.expenses.length
-        ? line.expenses.map((x) => [x.phase, x.description, x.supplier ?? "", x.poNumber ?? "", fmtGBP(x.estimated), fmtGBP(x.committed), fmtGBP(x.spent)])
-        : [["", "No items", "", "", "", "", ""]],
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [10, 25, 65] },
-      columnStyles: { 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" } },
-      margin: { left: 10, right: 10 },
-    });
-    y = (doc as any).lastAutoTable.finalY + 4;
-  }
-
-  addFooters(doc);
-  doc.save(`budget-${productionName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
-}
-
-export async function exportBudgetXLSX(productionName: string, lines: BudgetLine[]) {
-  const wb = new ExcelJS.Workbook();
-
-  addSheet(wb, "Summary", [
-    ["Department", "Description", "Allocation", "Estimated", "Committed", "Spent"],
-    ...lines.map((l) => [
-      l.department, l.description, l.budgeted,
-      l.expenses.reduce((s, x) => s + x.estimated, 0),
-      l.expenses.reduce((s, x) => s + x.committed, 0),
-      l.expenses.reduce((s, x) => s + x.spent, 0),
-    ]),
-    ["", "TOTAL",
-      lines.reduce((s, l) => s + l.budgeted, 0),
-      lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.estimated, 0), 0),
-      lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.committed, 0), 0),
-      lines.reduce((s, l) => s + l.expenses.reduce((e, x) => e + x.spent, 0), 0),
-    ],
-  ]);
-
-  addSheet(wb, "Detail", [
-    ["Department", "Line", "Phase", "Description", "Supplier", "PO Number", "Payment Due", "Estimated", "Committed", "Spent", "Issued", "VAT Exempt", "Notes"],
-    ...lines.flatMap((l) =>
-      l.expenses.map((x) => [
-        l.department, l.description, x.phase, x.description, x.supplier ?? "", x.poNumber ?? "",
-        x.paymentDue ? fmtDate(x.paymentDue) : "",
-        x.estimated, x.committed, x.spent,
-        x.issuedForPayment ? "Yes" : "No", x.vatExempt ? "Yes" : "No", x.notes ?? "",
-      ])
-    ),
-  ]);
-
-  await saveXlsx(wb, `budget-${productionName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
-}
+// The budget exports live in lib/budgetExport.ts.
 
 // ── Schedule ─────────────────────────────────────────────────────────────────
 

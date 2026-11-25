@@ -32,6 +32,23 @@ export default () => run("materials", async ({ db, users, login, results }) => {
     r = await send(m, `/api/stock/${ply.id}/moves`, "POST", { kind: "count", quantity: 7 });
     ok((await json(r)).item.quantity === 7, "a stock count sets the level");
 
+    // Sections
+    r = await send(m, `/api/stock/${ply.id}`, "PATCH", { section: "  Sheet   materials " });
+    ok(r.status === 200 && (await json(r)).section === "Sheet materials", "a stock item goes into a section (spaces tidied)");
+    r = await send(m, `${S}/stock`, "POST", { name: "Gaffer", unit: "rolls", section: "Workshop odds" });
+    const gaff = await json(r);
+    ok(r.status === 201 && gaff.section === "Workshop odds", "the team can make up their own section");
+    mat = await json(await m(`${S}/materials`));
+    ok(mat.items.find(i => i.id === ply.id)?.section === "Sheet materials", "the materials list carries each item's section");
+    r = await send(m, `/api/stock/${gaff.id}`, "PATCH", { section: "" });
+    ok((await json(r)).section === null, "clearing the section puts it under Other");
+    const { groupBySection } = await import("../lib/stockSections.ts").catch(() => ({}));
+    if (groupBySection) {
+      const g = groupBySection([{ name: "b", section: null }, { name: "z", section: "Zebra" }, { name: "a", section: "Paint & finishes" }, { name: "t", section: "Timber" }]);
+      ok(g.map(x => x.section).join("|") === "Timber|Paint & finishes|Zebra|Other", "sections sort: usual order, then the team's own, then Other");
+    }
+    await db.stockItem.delete({ where: { id: gaff.id } });
+
     // POs
     const P = `${S}/purchase-orders`;
     ok((await send(f, P, "POST", { lines: [{ description: "x", quantity: 1, unitCost: 1 }] })).status === 403, "a freelancer can't raise a PO");

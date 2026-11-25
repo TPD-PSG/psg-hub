@@ -9,11 +9,12 @@ import type { SpaceTheme } from "@/lib/spaces";
 import { PO_STATUS } from "@/lib/poStatus";
 import { downloadPoPDF } from "@/lib/poPdf";
 import { fmtDate } from "@/lib/format";
+import { STOCK_SECTIONS, NO_SECTION, groupBySection } from "@/lib/stockSections";
 import { caps, card, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader } from "@/lib/twsUi";
 
 type Opt = { id: number; name: string };
 type Item = {
-  id: number; name: string; unit: string; quantity: number; reorderLevel: number | null; unitCost: number | null; location: string | null; low: boolean;
+  id: number; name: string; unit: string; quantity: number; reorderLevel: number | null; unitCost: number | null; location: string | null; section: string | null; low: boolean;
   supplier: Opt | null; supplierId: number | null;
   moves: { id: number; change: number; kind: string; note: string | null; createdAt: string; job: { id: number; title: string } | null; user: { name: string } | null }[];
 };
@@ -50,7 +51,8 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
   const [openPo, setOpenPo] = useState<number | null>(null);
   const [backReason, setBackReason] = useState<Record<number, string>>({});
   const [limitEdit, setLimitEdit] = useState<string | null>(null);
-  const [itemForm, setItemForm] = useState<null | { id?: number; name: string; unit: string; quantity: string; reorderLevel: string; unitCost: string; supplierId: string; location: string }>(null);
+  const [itemForm, setItemForm] = useState<null | { id?: number; name: string; unit: string; quantity: string; reorderLevel: string; unitCost: string; supplierId: string; location: string; section: string }>(null);
+  const [section, setSection] = useState("all");
   const [move, setMove] = useState<null | { itemId: number; kind: "book_out" | "return" | "count"; quantity: string; jobId: string; note: string }>(null);
   const startItem = start.itemId ? items.find(i => i.id === start.itemId) : null;
   const [poForm, setPoForm] = useState<null | { id?: number; supplierId: string; supplierName: string; jobId: string; notes: string; lines: Line[] }>(start.open ? {
@@ -79,6 +81,7 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
     const ok = id ? await call(`/api/stock/${id}`, "PATCH", { ...f, quantity: undefined }) : await call(`/api/spaces/${space.slug}/stock`, "POST", f);
     if (ok) { setItemForm(null); reload(); }
   }
+  const newItem = (sec: string) => setItemForm({ name: "", unit: "sheets", quantity: "", reorderLevel: "", unitCost: "", supplierId: "", location: "", section: sec });
   async function saveMove(e: React.FormEvent) {
     e.preventDefault();
     if (!move) return;
@@ -118,6 +121,10 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
   const editPo = (po: PO) => setPoForm({ id: po.id, supplierId: po.supplierId ? String(po.supplierId) : "", supplierName: po.supplierName ?? "", jobId: po.job ? String(po.job.id) : "", notes: po.notes ?? "", lines: po.lines.map(l => ({ ...l, unit: l.unit ?? "" })) });
 
   const low = items.filter(i => i.low);
+  const groups = groupBySection(items);
+  const sectionNames = [...new Set([...STOCK_SECTIONS, ...items.map(i => i.section).filter((x): x is string => !!x)])];
+  const sec = groups.length > 1 && groups.some(g => g.section === section) ? section : "all"; // a section that's emptied falls back to All
+  const shownGroups = groups.filter(g => sec === "all" || g.section === sec);
   const shown = pos.filter(p => filter === "all" ? true : filter === "open" ? !["delivered", "cancelled"].includes(p.status) : p.status === filter);
   const supplierOf = (p: PO) => p.supplier?.name ?? p.supplierName ?? "No supplier yet";
   const setLine = (i: number, patch: Partial<Line>) => setPoForm(f => f && { ...f, lines: f.lines.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
@@ -133,7 +140,7 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
           </div>
           <div className="flex gap-3 flex-wrap">
             <button type="button" onClick={() => setPoForm({ supplierId: "", supplierName: "", jobId: "", notes: "", lines: [blankLine()] })} style={btnSolid}>+ Raise PO</button>
-            <button type="button" onClick={() => setItemForm({ name: "", unit: "sheets", quantity: "", reorderLevel: "", unitCost: "", supplierId: "", location: "" })} style={btnLine}>+ Stock item</button>
+            <button type="button" onClick={() => newItem(section === "all" || section === NO_SECTION ? "" : section)} style={btnLine}>+ Stock item</button>
           </div>
         </div>
       </header>
@@ -175,7 +182,7 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
                       <td className="py-1 pr-2"><select aria-label="Stock item" style={input} value={l.stockItemId ?? ""} onChange={e => {
                         const it = items.find(x => x.id === Number(e.target.value));
                         setLine(i, it ? { stockItemId: it.id, description: l.description || it.name, unit: it.unit, unitCost: l.unitCost || it.unitCost || 0 } : { stockItemId: null });
-                      }}><option value="">Not stock</option>{items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}</select></td>
+                      }}><option value="">Not stock</option>{groups.map(g => <optgroup key={g.section} label={g.section}>{g.items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}</optgroup>)}</select></td>
                       <td className="py-1 pr-2"><input aria-label="Description" style={input} value={l.description} onChange={e => setLine(i, { description: e.target.value })} placeholder="e.g. 18mm ply, 2440×1220" /></td>
                       <td className="py-1 pr-2"><input aria-label="Quantity" type="number" min={0} step="any" style={input} value={l.quantity} onChange={e => setLine(i, { quantity: e.target.value as unknown as number })} /></td>
                       <td className="py-1 pr-2"><input aria-label="Unit" style={input} value={l.unit ?? ""} onChange={e => setLine(i, { unit: e.target.value })} placeholder="sheets" /></td>
@@ -206,6 +213,9 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
             {itemForm && (
               <form onSubmit={saveItem} className="grid gap-2 grid-cols-2 p-3" style={{ background: "var(--tws-ground)" }}>
                 <div className="col-span-2"><label htmlFor="si-name" style={lbl}>Item</label><input id="si-name" required style={input} value={itemForm.name} onChange={e => setItemForm({ ...itemForm, name: e.target.value })} placeholder="18mm ply" /></div>
+                <div className="col-span-2"><label htmlFor="si-sec" style={lbl}>Section</label>
+                  <input id="si-sec" list="stock-sections" style={input} value={itemForm.section} onChange={e => setItemForm({ ...itemForm, section: e.target.value })} placeholder="Pick one or type a new section" />
+                  <datalist id="stock-sections">{sectionNames.map(n => <option key={n} value={n} />)}</datalist></div>
                 <div><label htmlFor="si-unit" style={lbl}>Unit</label><input id="si-unit" style={input} value={itemForm.unit} onChange={e => setItemForm({ ...itemForm, unit: e.target.value })} /></div>
                 {!itemForm.id && <div><label htmlFor="si-qty" style={lbl}>In stock now</label><input id="si-qty" type="number" min={0} step="any" style={input} value={itemForm.quantity} onChange={e => setItemForm({ ...itemForm, quantity: e.target.value })} /></div>}
                 <div><label htmlFor="si-re" style={lbl}>Reorder at</label><input id="si-re" type="number" min={0} step="any" style={input} value={itemForm.reorderLevel} onChange={e => setItemForm({ ...itemForm, reorderLevel: e.target.value })} /></div>
@@ -217,8 +227,25 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
               </form>
             )}
             {items.length === 0 ? <p className="text-sm" style={muted}>No stock items yet. Add what the workshop keeps (ply, MDF, steel, paint…) with a reorder level so it flags when it&apos;s low.</p> : (
+              <div className="flex flex-col gap-4">
+                {groups.length > 1 && (
+                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Stock sections">
+                    {[{ section: "all", items }, ...groups].map(g => {
+                      const nLow = g.items.filter(i => i.low).length;
+                      return <button key={g.section} type="button" aria-pressed={sec === g.section} onClick={() => setSection(g.section)} className="text-xs font-bold px-2.5 py-1.5"
+                        style={sec === g.section ? { background: "var(--tws-char)", color: "#fff" } : { background: "var(--tws-ground)", color: "var(--tws-ink)", border: "1px solid var(--tws-line)" }}>
+                        {g.section === "all" ? "All" : g.section} ({g.items.length}){nLow > 0 && <span style={{ color: sec === g.section ? "var(--tws-accent)" : "var(--tws-bad-ink)" }}> · {nLow} low</span>}</button>;
+                    })}
+                  </div>
+                )}
+                {shownGroups.map(g => (
+                <div key={g.section} className="flex flex-col">
+                  <div className="flex items-baseline justify-between gap-2 pb-1.5" style={{ borderBottom: "2px solid var(--tws-char)" }}>
+                    <h3 style={{ ...caps, margin: 0 }}>{g.section} <span style={muted}>· {g.items.length}</span></h3>
+                    <button type="button" onClick={() => newItem(g.section === NO_SECTION ? "" : g.section)} className="text-xs font-semibold" style={{ color: "var(--tws-accent-ink)" }}>+ Add to {g.section}</button>
+                  </div>
               <ul className="flex flex-col">
-                {items.map(i => (
+                {g.items.map(i => (
                   <li key={i.id} className="py-2.5 flex flex-col gap-1.5" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
                     <div className="flex justify-between gap-3 text-sm">
                       <span className="min-w-0"><strong>{i.name}</strong> <span style={muted}>{[i.location, i.supplier?.name, i.unitCost != null ? `${gbp(i.unitCost)} each` : null].filter(Boolean).join(" · ")}</span></span>
@@ -232,7 +259,7 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
                         <button key={k} type="button" onClick={() => setMove({ itemId: i.id, kind: k as "book_out", quantity: k === "count" ? String(i.quantity) : "", jobId: "", note: "" })} className="font-semibold" style={{ color: "var(--tws-accent-ink)" }}>{l}</button>
                       ))}
                       <button type="button" onClick={() => setPoForm({ supplierId: i.supplierId ? String(i.supplierId) : "", supplierName: "", jobId: "", notes: "", lines: [{ description: i.name, quantity: Math.max(1, (i.reorderLevel ?? 0) * 2 - i.quantity), unit: i.unit, unitCost: i.unitCost ?? 0, stockItemId: i.id }] })} className="font-semibold" style={{ color: "var(--tws-accent-ink)" }}>Order more</button>
-                      <button type="button" onClick={() => setItemForm({ id: i.id, name: i.name, unit: i.unit, quantity: "", reorderLevel: i.reorderLevel?.toString() ?? "", unitCost: i.unitCost?.toString() ?? "", supplierId: i.supplierId ? String(i.supplierId) : "", location: i.location ?? "" })} style={muted}>Edit</button>
+                      <button type="button" onClick={() => setItemForm({ id: i.id, name: i.name, unit: i.unit, quantity: "", reorderLevel: i.reorderLevel?.toString() ?? "", unitCost: i.unitCost?.toString() ?? "", supplierId: i.supplierId ? String(i.supplierId) : "", location: i.location ?? "", section: i.section ?? "" })} style={muted}>Edit</button>
                       <button type="button" onClick={() => archive(i)} style={muted}>Remove</button>
                     </div>
                     {move?.itemId === i.id && (
@@ -260,6 +287,9 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
                   </li>
                 ))}
               </ul>
+                </div>
+                ))}
+              </div>
             )}
           </section>
 

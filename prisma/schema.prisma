@@ -1370,6 +1370,7 @@ model StockItem {
   supplierId   Int?
   supplier     Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   location     String?
+  section      String? // grouping on the stock list: Timber, Sheet materials, Paint… (null = Other)
   archived     Boolean             @default(false)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt

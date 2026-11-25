@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
+
 /** Stock item fields from a body; only keys sent are changed. */
 export async function stockFields(body: Record<string, unknown>, creating: boolean): Promise<{ data: Record<string, unknown> } | { error: string }> {
   const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
@@ -22,6 +23,7 @@ export async function stockFields(body: Record<string, unknown>, creating: boole
     data.quantity = q;
   }
   if (has("location")) data.location = typeof body.location === "string" && body.location.trim() ? body.location.trim().slice(0, 80) : null;
+  if (has("section")) data.section = typeof body.section === "string" && body.section.trim() ? body.section.trim().replace(/\s+/g, " ").slice(0, 40) : null;
   if (has("archived")) data.archived = !!body.archived;
   if (has("supplierId")) {
     const id = num(body.supplierId);

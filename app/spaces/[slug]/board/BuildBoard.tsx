@@ -21,7 +21,11 @@ export default function BuildBoard({ initial, slug }: { initial: SpaceData; slug
   async function move(jobId: number, stage: string) {
     setBusy(jobId);
     const res = await fetch(`/api/jobs/${jobId}/build`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage }) });
-    if (!res.ok) { setBusy(null); return alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't move the build"); }
+    if (!res.ok) {
+      setBusy(null);
+      const d = await res.json().catch(() => ({}));
+      return alertDialog(res.status === 409 ? `${d.error}. Open the build to ${d.canOverride ? "see them or override" : "see them"}.` : d.error ?? "Couldn't move the build");
+    }
     const fresh = await fetch(`/api/spaces/${slug}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (fresh?.space) setData(fresh);
     setBusy(null);

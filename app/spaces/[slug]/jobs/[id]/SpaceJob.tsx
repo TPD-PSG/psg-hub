@@ -14,6 +14,7 @@ import { PO_STATUS } from "@/lib/poStatus";
 import { shrinkPhoto } from "@/lib/shrinkPhoto";
 import BuildChecklist, { type Check } from "@/components/BuildChecklist";
 import BuildDesign, { type JobContactRow, type JobFileRow } from "@/components/BuildDesign";
+import DrawingRegister, { type DrawingRow, type Blocker } from "@/components/DrawingRegister";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
@@ -39,9 +40,11 @@ const when = (p: PartRow) => {
 const th = "text-left font-semibold py-2 pr-3";
 const td = "py-2 pr-3 align-top";
 
-export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles }: {
-  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[]; initialChecks: Check[]; initialContacts: JobContactRow[]; initialFiles: JobFileRow[];
+export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles, initialDrawings }: {
+  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[]; initialChecks: Check[]; initialContacts: JobContactRow[]; initialFiles: JobFileRow[]; initialDrawings: { drawings: DrawingRow[]; blockers: Blocker[]; overrides?: { id: number; text: string; createdAt: string }[] };
 }) {
+  const [blockers, setBlockers] = useState(initialDrawings.blockers);
+  const [gate, setGate] = useState<null | { stage: string; message: string; canOverride: boolean; reason: string }>(null);
   const [checks, setChecks] = useState(initialChecks);
   const collect = checks.filter(c => c.kind === "collect");
   const [photos, setPhotos] = useState(initialPhotos);
@@ -109,7 +112,18 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
     e.preventDefault();
     if (await call(`/api/stock/${fromStock.itemId}/moves`, "POST", { kind: "book_out", quantity: fromStock.quantity, jobId: job.id })) { setFromStock({ itemId: "", quantity: "" }); reloadMat(); reload(); }
   }
-  async function setStage(stage: string) { const d = await call(`/api/jobs/${job.id}/build`, "PATCH", { stage }); if (d?.job) setJob(d.job); }
+  // Moving to Build or later is blocked until the drawings are signed off; admins can override with a reason
+  async function setStage(stage: string, override?: string) {
+    setBusy(true);
+    const res = await fetch(`/api/jobs/${job.id}/build`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(override ? { stage, override: true, overrideReason: override } : { stage }) });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (res.status === 409) { setGate({ stage, message: d.error, canOverride: !!d.canOverride, reason: "" }); return; }
+    if (!res.ok) return alertDialog(d.error ?? "That didn't work");
+    setGate(null);
+    if (override) { window.location.reload(); return; } // shows the override in the sign-off log
+    if (d.job) setJob(d.job);
+  }
   async function saveOut(e: React.FormEvent) {
     e.preventDefault();
     const d = await call(`/api/jobs/${job.id}/build`, "PATCH", { ...out, deliveryMethod: out.deliveryMethod || null });
@@ -170,6 +184,22 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
             );
           })}
         </ol>
+        {blockers.length > 0 && !gate && stageIndex(job.stage) < stageIndex("build") && (
+          <p className="text-[13px]" style={{ margin: 0, color: "var(--tws-warn-ink)" }}>⚠ {blockers.length} drawing{blockers.length === 1 ? "" : "s"} still to be signed off before this can move to Build.</p>
+        )}
+        {gate && (
+          <div role="alert" className="flex flex-col gap-2 px-4 py-3 text-sm" style={{ background: "var(--tws-warn-bg)", border: "1px solid var(--tws-warn-line)", color: "var(--tws-warn-ink)" }}>
+            <strong>Not yet: {gate.message}</strong>
+            {gate.canOverride ? (
+              <form onSubmit={e => { e.preventDefault(); if (gate.reason.trim()) setStage(gate.stage, gate.reason.trim()); }} className="flex flex-wrap gap-2 items-end">
+                <div className="flex-1 min-w-[240px]"><label htmlFor="gate-reason" style={lbl}>Override as an admin: why is it OK to go ahead? (logged on the build)</label>
+                  <input id="gate-reason" required style={input} value={gate.reason} onChange={e => setGate({ ...gate, reason: e.target.value })} placeholder="e.g. client approved on site visit, drawings to follow" /></div>
+                <button type="submit" disabled={busy} style={{ ...btnSolid, padding: "8px 14px" }}>Override and move on</button>
+                <button type="button" onClick={() => setGate(null)} style={{ ...btnLine, padding: "8px 14px" }}>Cancel</button>
+              </form>
+            ) : <span>Get the drawings signed off first (an admin can override if needed). <button type="button" onClick={() => setGate(null)} className="underline">OK</button></span>}
+          </div>
+        )}
       </header>
 
       <div className="px-4 sm:px-10 pt-6 pb-10 grid gap-6 lg:grid-cols-3 items-start">
@@ -205,6 +235,9 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
               )}
             </section>
           )}
+
+          {/* Drawings for client sign-off (the build gate) */}
+          <DrawingRegister jobId={initial.id} initial={initialDrawings} isAdmin={me.isAdmin} onBlockers={setBlockers} />
 
           {/* Design & contacts: the designer, drawings and model box */}
           <BuildDesign jobId={initial.id} initialContacts={initialContacts} initialFiles={initialFiles} me={me} />

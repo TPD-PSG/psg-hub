@@ -99,8 +99,8 @@ export default function BuildDesign({ jobId, initialContacts, initialFiles, me }
 
       {/* Designer drawings */}
       <div className="flex flex-col gap-2">
-        <div className="flex justify-between items-center gap-3 flex-wrap"><span style={caps}>Designer drawings</span>{uploadButton("design", "+ Upload drawings", "application/pdf,image/png,image/jpeg,image/webp")}</div>
-        {drawings.length === 0 ? <p className="text-sm" style={muted}>PDFs or images from the designer (ground plans, elevations, details). VectorWorks files go under Drawings &amp; files as links.</p> : (
+        <div className="flex justify-between items-center gap-3 flex-wrap"><span style={caps}>Reference drawings</span>{uploadButton("design", "+ Upload drawings", "application/pdf,image/png,image/jpeg,image/webp")}</div>
+        {drawings.length === 0 ? <p className="text-sm" style={muted}>Drawings for reference only. Drawings the client signs off go under Drawings &amp; sign-off. VectorWorks files go under Drawings &amp; files as links.</p> : (
           <ul className="flex flex-col">
             {drawings.map(f => (
               <li key={f.id} className="flex justify-between gap-3 py-2 text-sm" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>

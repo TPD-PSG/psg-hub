@@ -55,6 +55,8 @@ model User {
   buildVotes          BuildVote[]         @relation("BuildVotes")
   buildChecksDone     BuildCheck[]        @relation("BuildCheckDoneBy")
   jobFilesUploaded    JobFile[]           @relation("JobFileUploader")
+  drawingDecisions    DrawingDecision[]   @relation("DrawingDecisionBy")
+  jobLogs             JobLog[]            @relation("JobLogBy")
 }
 
 model Production {
@@ -1281,6 +1283,8 @@ model Job {
   checks          BuildCheck[]
   contacts        JobContact[]
   files           JobFile[]
+  drawings        Drawing[]
+  logs            JobLog[]
 }
 
 model JobCost {
@@ -1528,9 +1532,9 @@ model JobContact {
 
 // Files on a build: the designer's drawings (PDFs, images) and model box photos
 model JobFile {
-  id           Int      @id @default(autoincrement())
+  id           Int              @id @default(autoincrement())
   jobId        Int
-  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job          Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
   kind         String // design | modelbox
   name         String
   mime         String
@@ -1539,8 +1543,69 @@ model JobFile {
   data         String? // base64 when file storage isn't set up
   caption      String?
   uploadedById Int?
-  uploadedBy   User?    @relation("JobFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
+  uploadedBy   User?            @relation("JobFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime         @default(now())
+  revision     DrawingRevision?
+
+  @@index([jobId])
+}
+
+// Drawings for client sign-off on a build (decided 26 Nov 2026): each drawing has revisions
+// (A, B, C…); only the latest counts, older ones are superseded. A build can't move to Build or
+// later until every drawing's latest revision is approved (admins can override, with a reason).
+model Drawing {
+  id        Int               @id @default(autoincrement())
+  jobId     Int
+  job       Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  number    String? // e.g. GA-01
+  title     String
+  createdAt DateTime          @default(now())
+  revisions DrawingRevision[]
+
+  @@index([jobId])
+}
+
+model DrawingRevision {
+  id        Int               @id @default(autoincrement())
+  drawingId Int
+  drawing   Drawing           @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+  rev       String // A, B, C…
+  fileId    Int               @unique
+  file      JobFile           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  status    String            @default("pending") // pending | approved | changes | superseded
+  note      String? // what changed in this revision
+  createdAt DateTime          @default(now())
+  decisions DrawingDecision[]
+
+  @@index([drawingId])
+}
+
+// The sign-off log: who decided what on which revision, and when
+model DrawingDecision {
+  id         Int             @id @default(autoincrement())
+  revisionId Int
+  revision   DrawingRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  decision   String // approved | changes
+  comment    String?
+  userId     Int?
+  user       User?           @relation("DrawingDecisionBy", fields: [userId], references: [id], onDelete: SetNull)
+  byName     String // name at the time (kept if the account goes)
+  onBehalf   Boolean         @default(false) // recorded by PSG for the client (e.g. approved by email)
+  createdAt  DateTime        @default(now())
+
+  @@index([revisionId])
+}
+
+// A build's log of notable events (e.g. an admin overriding the drawings sign-off gate)
+model JobLog {
+  id        Int      @id @default(autoincrement())
+  jobId     Int
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  kind      String // gate_override | …
+  text      String
+  userId    Int?
+  user      User?    @relation("JobLogBy", fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
 
   @@index([jobId])
 }

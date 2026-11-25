@@ -10,6 +10,7 @@ import { PO_STATUS } from "@/lib/poStatus";
 import { downloadPoPDF } from "@/lib/poPdf";
 import { fmtDate } from "@/lib/format";
 import { STOCK_SECTIONS, NO_SECTION, groupBySection } from "@/lib/stockSections";
+import LabourTypes from "@/components/LabourTypes";
 import { caps, card, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader } from "@/lib/twsUi";
 
 type Opt = { id: number; name: string };
@@ -376,6 +377,7 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
             )}
           </section>
         </div>
+        <LabourTypes slug={space.slug} />
         <p className="text-xs" style={{ ...caps, letterSpacing: "0.15em", color: "var(--tws-muted)" }}>Delivered POs and stock booked out count towards each build&apos;s actual cost</p>
       </div>
     </>

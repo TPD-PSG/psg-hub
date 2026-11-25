@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PART_SELECT } from "@/lib/buildParts";
 
 type TMaterial = { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; stockItemId: number | null };
-export type TPart = { label: string; days: number; hours: number | null; materials: TMaterial[] };
+export type TPart = { label: string; days: number; hours: number | null; labourTypeId?: number | null; materials: TMaterial[] };
 
 /** Units that only come whole: scaled quantities round up. */
 const WHOLE = new Set(["sheets", "sheet", "lengths", "length", "each", "rolls", "roll", "tins", "tin", "boxes", "box", "packs", "pack", "pairs", "pair"]);
@@ -17,9 +17,9 @@ export function readParts(json: string): TPart[] {
 
 /** One unit's worth of a build's parts and materials. */
 export async function perUnitFromJob(jobId: number, units: number): Promise<TPart[]> {
-  const parts = await prisma.buildPart.findMany({ where: { jobId }, orderBy: [{ startDate: "asc" }, { id: "asc" }], select: { label: true, days: true, hours: true, materials: { orderBy: { sortOrder: "asc" }, select: { section: true, description: true, quantity: true, unit: true, unitCost: true, stockItemId: true } } } });
+  const parts = await prisma.buildPart.findMany({ where: { jobId }, orderBy: [{ startDate: "asc" }, { id: "asc" }], select: { label: true, days: true, hours: true, labourTypeId: true, materials: { orderBy: { sortOrder: "asc" }, select: { section: true, description: true, quantity: true, unit: true, unitCost: true, stockItemId: true } } } });
   return parts.map(p => ({
-    label: p.label, days: r2(p.days / units), hours: p.hours != null ? r2(p.hours / units) : null,
+    label: p.label, days: r2(p.days / units), hours: p.hours != null ? r2(p.hours / units) : null, labourTypeId: p.labourTypeId,
     materials: p.materials.map(m => ({ ...m, quantity: r2(m.quantity / units) })),
   }));
 }
@@ -33,6 +33,7 @@ export async function applyTemplate(jobId: number, t: { name: string; unitName: 
     await prisma.buildPart.create({
       data: {
         jobId, label: `${p.label}${many}`.slice(0, 120), pencilled,
+        labourTypeId: p.labourTypeId && (await prisma.labourType.count({ where: { id: p.labourTypeId } })) ? p.labourTypeId : null,
         days: Math.max(1, Math.min(60, Math.ceil(p.days * units - 1e-9))),
         hours: p.hours != null ? Math.round(p.hours * units * 2) / 2 : null,
         materials: { create: p.materials.map((m, i) => ({

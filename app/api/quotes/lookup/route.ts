@@ -1,5 +1,5 @@
-// While building a quote: find stock items (level, unit, cost) and what we last paid suppliers
-// for something similar (from purchase orders), so cost comes from real numbers.
+// While building a quote: find labour types (day rate), stock items (level, unit, cost) and what
+// we last paid suppliers for something similar (from purchase orders), so cost comes from real numbers.
 // ?q= text (2+ characters), &entityId= the quote's company (its stock first). Staff only;
 // limited to the companies the person can see.
 import { NextResponse } from "next/server";
@@ -14,13 +14,13 @@ export async function GET(req: Request) {
   if ("error" in who) return who.error;
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 60);
-  if (q.length < 2) return NextResponse.json({ stock: [], recent: [] });
+  if (q.length < 2) return NextResponse.json({ stock: [], recent: [], labour: [] });
   const entityId = Number(url.searchParams.get("entityId")) || null;
   const limit = await myCompanyLimit();
   const entityIn = limit ? { in: limit } : undefined;
   // Each word must appear (so "3x1 pine" finds "Pine PSE 3x1 (69x21mm)")
   const words = q.split(/\s+/).filter(Boolean).slice(0, 5);
-  const [stock, lines] = await Promise.all([
+  const [stock, lines, labour] = await Promise.all([
     prisma.stockItem.findMany({
       where: { archived: false, ...(entityIn ? { entityId: entityIn } : {}), AND: words.map(w => ({ name: { contains: w } })) },
       select: { id: true, name: true, unit: true, quantity: true, unitCost: true, section: true, entityId: true, supplier: { select: { name: true } } },
@@ -35,7 +35,13 @@ export async function GET(req: Request) {
       orderBy: { po: { createdAt: "desc" } },
       take: 80,
     }),
+    // Labour types: any word in the name ("carp" finds Carpenter)
+    prisma.labourType.findMany({
+      where: { archived: false, ...(entityIn ? { entityId: entityIn } : {}), AND: words.map(w => ({ name: { contains: w } })) },
+      select: { id: true, name: true, dayRate: true, entityId: true }, take: 20,
+    }),
   ]);
+  labour.sort((a, b) => Number(b.entityId === entityId) - Number(a.entityId === entityId) || a.name.localeCompare(b.name));
   // The quote's own company first, then by name
   stock.sort((a, b) => Number(b.entityId === entityId) - Number(a.entityId === entityId) || a.name.localeCompare(b.name));
   // Latest price per description (case-insensitive)
@@ -51,5 +57,6 @@ export async function GET(req: Request) {
   return NextResponse.json({
     stock: stock.slice(0, 10).map(s => ({ id: s.id, name: s.name, unit: s.unit, quantity: s.quantity, unitCost: s.unitCost, section: s.section, supplier: s.supplier?.name ?? null })),
     recent,
+    labour: labour.slice(0, 6).map(l => ({ id: l.id, name: l.name, dayRate: l.dayRate })),
   });
 }

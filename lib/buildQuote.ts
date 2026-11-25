@@ -1,7 +1,7 @@
 // "Quote this build" (TWS, 25 Nov 2026): a quote's lines drafted from the build's own plan.
 //   Labour   one line per part. Planned hours → hours at (day rate ÷ 8); else the part's days at
-//            the day rate. Day rate = the person's cost per day, else the standard workshop day
-//            rate (Settings, workshopDayRate), else £0 and the line says so.
+//            the day rate. Day rate = the person's cost per day, else the part's labour type's rate
+//            (28 Nov), else the standard workshop day rate (workshopDayRate), else £0 and it says so.
 //   Materials each part's estimated materials (27 Nov 2026), at cost. Only when no part has any
 //            are the build's purchase orders and booked-out stock used instead (never both, so
 //            nothing is counted twice).
@@ -26,7 +26,7 @@ export async function draftBuildLines(jobId: number, markupPct: number, group: "
   const std = await workshopDayRate();
   const notes: string[] = [];
   const [parts, pos, moves] = await Promise.all([
-    prisma.buildPart.findMany({ where: { jobId }, select: { label: true, days: true, hours: true, user: { select: { name: true, costDayRate: true } }, materials: { orderBy: { sortOrder: "asc" }, select: { section: true, description: true, quantity: true, unit: true, unitCost: true } } }, orderBy: [{ startDate: "asc" }, { id: "asc" }] }),
+    prisma.buildPart.findMany({ where: { jobId }, select: { label: true, days: true, hours: true, user: { select: { name: true, costDayRate: true } }, labourType: { select: { name: true, dayRate: true } }, materials: { orderBy: { sortOrder: "asc" }, select: { section: true, description: true, quantity: true, unit: true, unitCost: true } } }, orderBy: [{ startDate: "asc" }, { id: "asc" }] }),
     prisma.purchaseOrder.findMany({ where: { jobId, status: { not: "cancelled" } }, select: { number: true, supplierName: true, supplier: { select: { name: true } }, lines: { select: { description: true, quantity: true, unit: true, unitCost: true } } } }),
     prisma.stockMove.findMany({ where: { jobId, kind: { in: ["book_out", "return"] } }, select: { itemId: true, change: true, unitCost: true, item: { select: { name: true, unit: true } } } }),
   ]);
@@ -34,10 +34,10 @@ export async function draftBuildLines(jobId: number, markupPct: number, group: "
   const estimated = parts.some(p => p.materials.length);
   const labour: Line[] = [], mats: Line[] = [];
   for (const p of parts) {
-    const rate = p.user?.costDayRate ?? std;
-    if (rate == null) notes.push(`No day rate for "${p.label}"${p.user ? ` (${p.user.name})` : ""}: costed at £0`);
+    const rate = p.user?.costDayRate ?? p.labourType?.dayRate ?? std;
+    if (rate == null) notes.push(`No day rate for "${p.label}"${p.user ? ` (${p.user.name})` : p.labourType ? ` (${p.labourType.name})` : ""}: costed at £0`);
     const day = rate ?? 0;
-    const who = p.user ? ` (${p.user.name})` : "";
+    const who = p.user ? ` (${p.user.name})` : p.labourType ? ` (${p.labourType.name})` : "";
     const lab: Line = p.hours
       ? { section: "Labour", description: `${p.label}${who}`, quantity: p.hours, unit: "hrs", unitCost: r2(day / HOURS_PER_DAY), unitPrice: up(day / HOURS_PER_DAY) }
       : { section: "Labour", description: `${p.label}${who}`, quantity: p.days, unit: "days", unitCost: r2(day), unitPrice: up(day) };

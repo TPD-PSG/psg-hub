@@ -28,6 +28,7 @@ const qty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).repla
 
 export type QuoteForPdf = {
   number: string; title: string; vatRate: number; showSubtotals?: boolean;
+  pdfDetail?: string; // "items": one price per section (the client sees what each item costs, not how)
   kind?: string; // what the document is called (default "Quote"; a variation says "Variation")
   extraLines?: string[]; // small lines under the dates, e.g. "Approved by …"
   validUntil: string | null; terms: string | null; createdAt: string; sentAt: string | null;
@@ -99,7 +100,27 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
   }
   const t = quoteTotals(q.lines, q.vatRate);
   const R = (s: string, bold = false) => ({ content: s, styles: { halign: "right" as const, fontStyle: bold ? "bold" as const : "normal" as const } });
-  autoTable(doc, {
+  if (q.pdfDetail === "items") {
+    // One price per item: each section is an item at its total; lines with no section are items
+    // in their own right. The breakdown (labour, materials, quantities) stays in the Hub.
+    const items: [string, number][] = [];
+    for (const sec of sections) {
+      const ls = q.lines.filter(l => (l.section ?? "") === sec);
+      if (sec) items.push([sec, ls.reduce((s2, l) => s2 + l.quantity * l.unitPrice, 0)]);
+      else for (const l of ls) items.push([l.description, l.quantity * l.unitPrice]);
+    }
+    autoTable(doc, {
+      startY: y,
+      head: [["Item", R("Price")]] as never,
+      body: items.map(([n, v]) => [n, R(gbp(v))]) as never,
+      foot: [[R("Subtotal"), R(gbp(t.net))], [R(`VAT ${q.vatRate}%`), R(gbp(t.vat))], [R("Total", true), R(gbp(t.gross), true)]] as never,
+      styles: { fontSize: 10, cellPadding: 2.5 },
+      headStyles: { fillColor: brand.header },
+      footStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+      columnStyles: { 1: { cellWidth: 40 } },
+      margin: { left: M, right: M },
+    });
+  } else autoTable(doc, {
     startY: y,
     head: [["Description", "Qty", R("Rate"), R("Amount")]] as never,
     body: body as never,

@@ -3,7 +3,7 @@
 // One build in the space's own look: stage band, parts of the build (who, when, planned hours),
 // days logged, collection or delivery, drawings and files, and (for those who see money) the
 // quote against actual cost. Uses the same APIs as the Hub's job page.
-import { useState, Fragment } from "react";
+import { useEffect, useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
@@ -24,7 +24,7 @@ import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
 
-export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled?: boolean; materials?: PartMaterial[]; user: { id: number; name: string } | null };
+export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled?: boolean; materials?: PartMaterial[]; labourTypeId?: number | null; labourType?: { id: number; name: string; dayRate: number | null } | null; user: { id: number; name: string } | null };
 type Option = { id: number; name: string };
 export type JobPhoto = { id: number; url: string; caption: string | null; postId: number | null; clientVisible?: boolean; createdAt: string; uploadedById: number | null; uploadedBy: { name: string } | null };
 export type JobMaterials = {
@@ -103,7 +103,12 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
   const [busy, setBusy] = useState(false);
   const [editOut, setEditOut] = useState(false);
   const [out, setOut] = useState({ startDate: ymd(job.startDate), dueOut: ymd(job.endDate), deliveryMethod: job.deliveryMethod ?? "", deliveryNotes: job.deliveryNotes ?? "", forProductionId: job.forProduction ? String(job.forProduction.id) : "" });
-  const [part, setPart] = useState({ label: "", userId: "", startDate: "", days: "1", hours: "" });
+  const [part, setPart] = useState({ label: "", userId: "", labourTypeId: "", startDate: "", days: "1", hours: "" });
+  // The workshop's labour types (Carpenter, Scenic artist…), for parts
+  const [labour, setLabour] = useState<{ id: number; name: string; dayRate: number | null; archived: boolean }[]>([]);
+  useEffect(() => { fetch(`/api/spaces/${space.slug}/labour-types`).then(r => (r.ok ? r.json() : [])).then(d => Array.isArray(d) && setLabour(d)).catch(() => {}); }, [space.slug]);
+  const labourOptions = (current?: number | null) => labour.filter(l => !l.archived || l.id === current);
+  async function setPartLabour(p: PartRow, labourTypeId: string) { if (await call(`/api/jobs/${job.id}/parts/${p.id}`, "PATCH", { labourTypeId: labourTypeId || null })) reloadParts(); }
   const [openMats, setOpenMats] = useState<Set<number>>(new Set());
   const [group, setGroup] = useState<"part" | "type">("part");
   const toggleMats = (id: number) => setOpenMats(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -185,8 +190,8 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
   }
   async function addPart(e: React.FormEvent) {
     e.preventDefault();
-    if (await call(`/api/jobs/${job.id}/parts`, "POST", { ...part, userId: part.userId || null, startDate: part.startDate || null, days: Number(part.days) })) {
-      setPart({ label: "", userId: "", startDate: "", days: "1", hours: "" }); reloadParts();
+    if (await call(`/api/jobs/${job.id}/parts`, "POST", { ...part, userId: part.userId || null, labourTypeId: part.labourTypeId || null, startDate: part.startDate || null, days: Number(part.days) })) {
+      setPart({ label: "", userId: "", labourTypeId: part.labourTypeId, startDate: "", days: "1", hours: "" }); reloadParts();
     }
   }
   async function togglePart(p: PartRow) { if (await call(`/api/jobs/${job.id}/parts/${p.id}`, "PATCH", { done: !p.done })) reloadParts(); }
@@ -404,7 +409,12 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                             {p.materials?.length ? `Materials: ${p.materials.length} · ${gbp(materialsCost(p.materials))}` : "+ Materials"} {openMats.has(p.id) ? "▴" : "▾"}
                           </button>
                         </td>
-                        <td className={td}>{p.user?.name ?? <span style={muted}>Nobody yet</span>}</td>
+                        <td className={td}>{p.user?.name ?? <span style={muted}>Nobody yet</span>}
+                          {labour.length > 0 && (
+                            <select aria-label={`Labour type for ${p.label}`} value={p.labourTypeId ?? ""} onChange={e => setPartLabour(p, e.target.value)} className="block mt-0.5 text-xs max-w-[11rem]" style={{ background: "transparent", border: 0, padding: 0, color: "var(--tws-accent-ink)", fontWeight: 600 }}>
+                              <option value="">+ Labour type</option>{labourOptions(p.labourTypeId).map(l => <option key={l.id} value={l.id}>{l.name}{l.dayRate != null ? ` · £${l.dayRate}/day` : ""}</option>)}
+                            </select>
+                          )}</td>
                         <td className={td}>{when(p)}{p.days > 1 ? ` (${p.days}d)` : ""}
                           {p.pencilled && <button type="button" onClick={() => pencilPart(p)} title="Pencilled while the build is being quoted. Click to confirm these dates now."
                             className="ml-2 text-[11px] font-bold px-1.5 py-0.5" style={{ border: "2px dashed var(--tws-night)", fontStyle: "italic" }}>✎ Pencilled</button>}</td>
@@ -432,10 +442,12 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
             ))}
             <BuildTemplates<PartRow> jobId={job.id} slug={space.slug} hasParts={parts.length > 0} me={me} onParts={setParts} />
             {job.stage === "quote" && <p className="text-xs m-0 pt-2" style={muted}>✎ This build is still being quoted, so parts added now are pencilled in. They&apos;re confirmed when the quote&apos;s accepted.</p>}
-            <form onSubmit={addPart} className="grid gap-2 items-end pt-3 grid-cols-2 xl:grid-cols-[1.5fr_1.2fr_1fr_70px_80px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
+            <form onSubmit={addPart} className="grid gap-2 items-end pt-3 grid-cols-2 xl:grid-cols-[1.4fr_1.1fr_1.1fr_1fr_70px_80px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
               <div><label htmlFor="p-label" style={lbl}>Part</label><input id="p-label" required style={input} value={part.label} onChange={e => setPart({ ...part, label: e.target.value })} placeholder="e.g. Flats and doors" /></div>
               <div><label htmlFor="p-who" style={lbl}>Who</label>
                 <select id="p-who" style={input} value={part.userId} onChange={e => setPart({ ...part, userId: e.target.value })}><option value="">Plan later</option>{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+              {labour.length > 0 && <div><label htmlFor="p-labour" style={lbl}>Labour type</label>
+                <select id="p-labour" style={input} value={part.labourTypeId} onChange={e => setPart({ ...part, labourTypeId: e.target.value })}><option value="">—</option>{labourOptions().map(l => <option key={l.id} value={l.id}>{l.name}{l.dayRate != null ? ` (£${l.dayRate}/day)` : ""}</option>)}</select></div>}
               <div><label htmlFor="p-start" style={lbl}>Starts</label><input id="p-start" type="date" style={input} value={part.startDate} onChange={e => setPart({ ...part, startDate: e.target.value })} /></div>
               <div><label htmlFor="p-days" style={lbl}>Days</label><input id="p-days" type="number" min={1} max={60} required style={input} value={part.days} onChange={e => setPart({ ...part, days: e.target.value })} /></div>
               <div><label htmlFor="p-hours" style={lbl}>Hours</label><input id="p-hours" type="number" min={0} step="0.5" style={input} value={part.hours} onChange={e => setPart({ ...part, hours: e.target.value })} /></div>

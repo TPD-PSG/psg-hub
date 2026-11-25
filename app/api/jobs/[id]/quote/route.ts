@@ -29,6 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         data: {
           number: await newNumber("Q"), title: job.title, jobType: job.jobType, entityId: job.entityId, clientId: job.clientId,
           opportunityId: job.opportunityId, jobId: job.id, createdById: v.userId,
+          pdfDetail: group === "part" ? "items" : "lines", // by part: the client sees a price per item
           internalNotes: [`Drafted from the build's plan at cost + ${markup}%.`, ...notes].join("\n"),
           lines: { create: lines.map((l, i) => ({ ...l, sortOrder: i })) },
         },

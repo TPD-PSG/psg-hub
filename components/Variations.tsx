@@ -17,7 +17,7 @@ export type VariationRow = {
   lines: Line[]; totals: { cost: number; net: number; vat: number; gross: number; margin: number; marginPct: number | null };
 };
 type Row = { section: string; description: string; quantity: string; unit: string; unitCost: string; unitPrice: string };
-type Lookup = { stock: { id: number; name: string; unit: string; quantity: number; unitCost: number | null; section: string | null }[]; recent: { description: string; unit: string | null; unitCost: number; supplier: string | null; poNumber: string; date: string }[] };
+type Lookup = { labour?: { id: number; name: string; dayRate: number | null }[]; stock: { id: number; name: string; unit: string; quantity: number; unitCost: number | null; section: string | null }[]; recent: { description: string; unit: string | null; unitCost: number; supplier: string | null; poNumber: string; date: string }[] };
 
 const gbp = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 const num = (s: string) => (s.trim() === "" ? 0 : Number(s) || 0);
@@ -53,7 +53,7 @@ export default function Variations({ jobId, entityId, isAdmin, hasClient, initia
     const ctl = new AbortController();
     const timer = setTimeout(() => {
       fetch(`/api/quotes/lookup?q=${encodeURIComponent(text)}${entityId ? `&entityId=${entityId}` : ""}`, { signal: ctl.signal })
-        .then(r => (r.ok ? r.json() : null)).then(d => setFound(d && (d.stock.length || d.recent.length) ? d : null)).catch(() => {});
+        .then(r => (r.ok ? r.json() : null)).then(d => setFound(d && (d.stock.length || d.recent.length || d.labour?.length) ? d : null)).catch(() => {});
     }, 250);
     return () => { clearTimeout(timer); ctl.abort(); };
   }, [entry.description, entityId, searching]);
@@ -232,6 +232,12 @@ export default function Variations({ jobId, entityId, isAdmin, hasClient, initia
                 value={entry.description} onChange={e => { setEntry({ ...entry, description: e.target.value }); setSearching(true); }} onKeyDown={e => { if (e.key === "Escape") { setFound(null); setSearching(false); } }} />
               {found && searching && entry.description.trim().length >= 2 && (
                 <div className="absolute z-30 left-0 right-0 mt-1 max-h-64 overflow-y-auto text-xs shadow-xl" style={{ background: "#fff", border: "1px solid var(--tws-line)" }} role="listbox" aria-label="Stock and past prices">
+                  {found.labour?.map(lb => (
+                    <button key={`l${lb.id}`} type="button" role="option" aria-selected={false} className="w-full text-left px-2 py-1.5 flex justify-between gap-3 hover:bg-black/5"
+                      onClick={() => { const c = lb.dayRate ?? 0; setEntry(en => ({ ...en, description: lb.name, unit: "days", section: "Labour", unitCost: c ? String(c) : en.unitCost, unitPrice: c ? String(priced(c)) : en.unitPrice })); setFound(null); setSearching(false); }}>
+                      <span className="truncate">{lb.name} <span style={muted}>· labour</span></span><span className="shrink-0" style={muted}>{lb.dayRate != null ? `${gbp(lb.dayRate)}/day` : "no day rate yet"}</span>
+                    </button>
+                  ))}
                   {found.stock.map(st => (
                     <button key={`s${st.id}`} type="button" role="option" aria-selected={false} className="w-full text-left px-2 py-1.5 flex justify-between gap-3 hover:bg-black/5"
                       onClick={() => { const c = st.unitCost ?? 0; setEntry(en => ({ ...en, description: st.name, unit: st.unit, unitCost: c ? String(c) : en.unitCost, unitPrice: c ? String(priced(c)) : en.unitPrice, section: st.section || en.section })); setFound(null); setSearching(false); }}>

@@ -462,6 +462,7 @@ model Entity {
   storageLocations StorageLocation[]
   storedPieces   StoredPiece[]
   buildTemplates BuildTemplate[]
+  labourTypes    LabourType[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1216,6 +1217,7 @@ model Quote {
   terms         String? // shown on the PDF
   internalNotes String? // never on the PDF
   showSubtotals Boolean      @default(false) // a subtotal after each section on the PDF
+  pdfDetail     String       @default("lines") // lines: full breakdown | items: one price per section (item)
   sentAt        DateTime?
   decidedAt     DateTime?
   createdById   Int?
@@ -1368,6 +1370,8 @@ model BuildPart {
   hours     Float? // planned hours
   done      Boolean   @default(false)
   pencilled Boolean   @default(false) // tentative: held while the build is still being quoted
+  labourTypeId Int? // the kind of work (Carpenter, Welder…): costed at its rate until a person is planned
+  labourType   LabourType? @relation(fields: [labourTypeId], references: [id], onDelete: SetNull)
   materials BuildPartMaterial[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1833,6 +1837,22 @@ model BuildTemplate {
   createdById Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@unique([entityId, name])
+}
+
+// Labour types (28 Nov 2026): the kinds of work a workshop prices (Carpenter, Scenic artist…)
+// with what a day costs us. Searchable like stock when quoting; a part can be a labour type.
+model LabourType {
+  id        Int         @id @default(autoincrement())
+  entityId  Int
+  entity    Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  name      String
+  dayRate   Float? // cost per day ex VAT (per hour = ÷ 8); empty until set
+  notes     String?
+  archived  Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  parts     BuildPart[]
 
   @@unique([entityId, name])
 }

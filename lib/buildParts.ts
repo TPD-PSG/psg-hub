@@ -1,7 +1,7 @@
 // Parts of a build (TWS planner): validation shared by the create and update routes.
 import { prisma } from "@/lib/prisma";
 
-export const PART_SELECT = { id: true, jobId: true, label: true, userId: true, startDate: true, days: true, hours: true, done: true, pencilled: true, user: { select: { id: true, name: true } }, materials: { orderBy: { sortOrder: "asc" as const }, select: { id: true, section: true, description: true, quantity: true, unit: true, unitCost: true, stockItemId: true, po: { select: { id: true, number: true, status: true } }, stockMoveId: true } } } as const;
+export const PART_SELECT = { id: true, jobId: true, label: true, userId: true, startDate: true, days: true, hours: true, done: true, pencilled: true, user: { select: { id: true, name: true } }, labourTypeId: true, labourType: { select: { id: true, name: true, dayRate: true } }, materials: { orderBy: { sortOrder: "asc" as const }, select: { id: true, section: true, description: true, quantity: true, unit: true, unitCost: true, stockItemId: true, po: { select: { id: true, number: true, status: true } }, stockMoveId: true } } } as const;
 
 /** Midnight UTC of a YYYY-MM-DD day, or null. */
 export const dayUtc = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? new Date(`${s.slice(0, 10)}T00:00:00.000Z`) : null);
@@ -32,6 +32,11 @@ export async function partFields(body: Record<string, unknown>, creating: boolea
   }
   if (has("done")) data.done = !!body.done;
   if (has("pencilled")) data.pencilled = !!body.pencilled;
+  if (has("labourTypeId")) {
+    const lt = body.labourTypeId === "" || body.labourTypeId == null ? null : Number(body.labourTypeId);
+    if (lt !== null && !(await prisma.labourType.count({ where: { id: lt } }))) return { error: "Unknown labour type" };
+    data.labourTypeId = lt;
+  }
   if (has("startDate")) data.startDate = dayUtc(body.startDate);
   if (has("userId")) {
     const uid = body.userId === "" || body.userId == null ? null : Number(body.userId);

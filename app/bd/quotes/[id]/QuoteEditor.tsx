@@ -18,7 +18,7 @@ export type Option = { id: number; name: string };
 type Line = { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number };
 export type QuoteDetail = {
   id: number; number: string; title: string; jobType: string; status: string; vatRate: number;
-  validUntil: string | null; terms: string | null; internalNotes: string | null; showSubtotals?: boolean; createdAt: string; sentAt: string | null; decidedAt: string | null;
+  validUntil: string | null; terms: string | null; internalNotes: string | null; showSubtotals?: boolean; pdfDetail?: string; createdAt: string; sentAt: string | null; decidedAt: string | null;
   entity: Option | null; client: (Option & { billingName: string | null; billingAddress: string | null; billingEmail: string | null; address: string | null }) | null;
   opportunity: { id: number; title: string; stage: string } | null; job: { id: number; number: string; title: string } | null;
   createdBy: Option | null; lines: Line[];
@@ -33,6 +33,7 @@ const toRow = (l: Line): Row => ({ section: l.section ?? "", description: l.desc
 const num = (s: string) => (s.trim() === "" ? 0 : Number(s) || 0);
 const BLANK_ROW: Row = { section: "", description: "", quantity: "1", unit: "", unitCost: "", unitPrice: "" };
 type Lookup = {
+  labour?: { id: number; name: string; dayRate: number | null }[];
   stock: { id: number; name: string; unit: string; quantity: number; unitCost: number | null; section: string | null; supplier: string | null }[];
   recent: { description: string; unit: string | null; unitCost: number; supplier: string | null; poNumber: string; date: string }[];
 };
@@ -49,7 +50,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     title: initial.title, jobType: initial.jobType, entityId: initial.entity ? String(initial.entity.id) : "", clientId: initial.client ? String(initial.client.id) : "",
     opportunityId: initial.opportunity ? String(initial.opportunity.id) : "", vatRate: String(initial.vatRate),
     validUntil: initial.validUntil?.slice(0, 10) ?? "", terms: initial.terms ?? "", internalNotes: initial.internalNotes ?? "",
-    showSubtotals: !!initial.showSubtotals,
+    showSubtotals: !!initial.showSubtotals, pdfDetail: initial.pdfDetail === "items" ? "items" : "lines",
   });
   const [rows, setRows] = useState<Row[]>(initial.lines.map(toRow));
   // The "Add a line" bar: fill it in, press Add (or Enter), it joins the quote and the boxes clear
@@ -92,7 +93,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     const ctl = new AbortController();
     const timer = setTimeout(() => {
       fetch(`/api/quotes/lookup?q=${encodeURIComponent(text)}${head.entityId ? `&entityId=${head.entityId}` : ""}`, { signal: ctl.signal })
-        .then(r => (r.ok ? r.json() : null)).then(d => setFound(d && (d.stock.length || d.recent.length) ? d : null)).catch(() => {});
+        .then(r => (r.ok ? r.json() : null)).then(d => setFound(d && (d.stock.length || d.recent.length || d.labour?.length) ? d : null)).catch(() => {});
     }, 250);
     return () => { clearTimeout(timer); ctl.abort(); };
   }, [entry.description, head.entityId, searching]);
@@ -279,6 +280,14 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
                 onKeyDown={e => { if (e.key === "Escape") { setFound(null); setSearching(false); } }} />
               {found && searching && entry.description.trim().length >= 2 && (
                 <div className="absolute z-30 left-0 right-0 mt-1 rounded border shadow-xl max-h-72 overflow-y-auto text-xs" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }} role="listbox" aria-label="Stock and past prices">
+                  {!!found.labour?.length && <div className="px-2 pt-2 pb-1 uppercase tracking-wider text-[10px]" style={{ color: "var(--psg-muted)" }}>Labour</div>}
+                  {found.labour?.map(lb => (
+                    <button key={`l${lb.id}`} type="button" role="option" aria-selected={false} onClick={() => pick({ description: lb.name, unit: "days", unitCost: lb.dayRate, section: "Labour" })}
+                      className="w-full text-left px-2 py-1.5 hover:bg-white/10 flex justify-between gap-3">
+                      <span className="text-white truncate">{lb.name}</span>
+                      <span className="shrink-0 tabular-nums" style={{ color: "var(--psg-muted)" }}>{lb.dayRate != null ? `${gbp(lb.dayRate)}/day · ${gbp(lb.dayRate / 8)}/hour` : "no day rate yet"}</span>
+                    </button>
+                  ))}
                   {found.stock.length > 0 && <div className="px-2 pt-2 pb-1 uppercase tracking-wider text-[10px]" style={{ color: "var(--psg-muted)" }}>In stock</div>}
                   {found.stock.map(st => (
                     <button key={`s${st.id}`} type="button" role="option" aria-selected={false} onClick={() => pick({ description: st.name, unit: st.unit, unitCost: st.unitCost, section: st.section }, { quantity: st.quantity, unit: st.unit })}
@@ -341,9 +350,12 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
             <div key={l as string} className="flex justify-between"><span style={{ color: "var(--psg-muted)" }}>{l}</span><span className="text-white tabular-nums">{gbp(v as number)}</span></div>
           ))}
           <div className="flex justify-between border-t pt-1.5 font-semibold" style={{ borderColor: "var(--psg-card-border)" }}><span className="text-white">Total</span><span className="text-white tabular-nums">{gbp(t.gross)}</span></div>
-          <label className="flex items-center gap-2 pt-2 text-xs cursor-pointer" style={{ color: "var(--psg-muted)" }}>
-            <input type="checkbox" checked={head.showSubtotals} onChange={e => setH({ showSubtotals: e.target.checked })} />Show section subtotals on the PDF
-          </label>
+          <fieldset className="pt-2 text-xs flex flex-col gap-1" style={{ color: "var(--psg-muted)" }}>
+            <legend className="mb-1">On the client&apos;s PDF</legend>
+            <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="pdf-detail" checked={head.pdfDetail === "items"} onChange={() => setH({ pdfDetail: "items" })} />One price per item (each section)</label>
+            <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="pdf-detail" checked={head.pdfDetail !== "items"} onChange={() => setH({ pdfDetail: "lines" })} />Full breakdown (every line)</label>
+            {head.pdfDetail !== "items" && <label className="flex items-center gap-2 cursor-pointer mt-1"><input type="checkbox" checked={head.showSubtotals} onChange={e => setH({ showSubtotals: e.target.checked })} />Show section subtotals</label>}
+          </fieldset>
           <div className="flex justify-between pt-1.5"><span style={{ color: "var(--psg-muted)" }}>Margin</span>
             <span className="tabular-nums font-semibold" style={{ color: t.margin < 0 ? "#f87171" : "#1fae7a" }}>{gbp(t.margin)}{t.marginPct != null ? ` · ${Math.round(t.marginPct)}%` : ""}</span></div>
         </div>

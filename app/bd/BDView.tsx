@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { confirmDialog } from "@/components/Dialogs";
+import { bdStats, type Stat } from "@/lib/bdStats";
 import { fmtDate as fmtDateShared, fmtDateTime } from "@/lib/format";
 import { STAGES, ACTIVITY_KINDS, LEAD_SOURCES, weightPct, weightedValue, stuckReason, isOpen } from "@/lib/bdPipeline";
 import { splitFee, type FeeStageInput } from "@/lib/feeStages";
@@ -24,7 +25,7 @@ export type Opportunity = {
   tasks: BDTask[]; createdAt: string; updatedAt: string;
   entityId: number | null; entity: { id: number; name: string } | null;
   ownerUserId: number | null; owner: { id: number; name: string } | null;
-  probability: number | null; followUpDate: string | null; leadSource: string | null; competitor: string | null;
+  probability: number | null; followUpDate: string | null; tenderDeadline?: string | null; leadSource: string | null; competitor: string | null;
   stageChangedAt: string | null; productionId: number | null; production: { id: number; name: string } | null;
   job?: { id: number; number: string } | null;
   lastActivityAt: string | null;
@@ -38,7 +39,7 @@ const CLIENT_TYPES = ["promoter","venue","council","broadcaster","corporate","ot
 
 const BLANK_OPP = {
   title: "", type: "production", stage: "lead", value: "", clientId: "", description: "", closeDate: "", notes: "",
-  entityId: "", ownerUserId: "", probability: "", followUpDate: "", leadSource: "", competitor: "", lostReason: "",
+  entityId: "", ownerUserId: "", probability: "", followUpDate: "", tenderDeadline: "", leadSource: "", competitor: "", lostReason: "",
 };
 const BLANK_ACTIVITY = { kind: "note", text: "", followUpDate: "" };
 const PRODUCTION_TYPES = ["Play", "Musical", "Opera", "Dance", "Comedy", "Drama", "Physical Theatre", "Event", "Other"];
@@ -71,7 +72,8 @@ export default function BDView({ initial }: { initial: BDInitial }) {
   const [clients, setClients] = useState<Client[]>(initial?.clients ?? []);
   const [entities, setEntities] = useState<EntityOption[]>(initial?.entities ?? []);
   const [users, setUsers] = useState<UserOption[]>(initial?.users ?? []);
-  const [view, setView] = useState<"pipeline" | "list">("pipeline");
+  const [view, setView] = useState<"pipeline" | "list" | "results">("pipeline");
+  const [resultsMonths, setResultsMonths] = useState(12);
   const [filterStage, setFilterStage] = useState("all");
   const [filterEntity, setFilterEntity] = useState("all");
   const [filterOwner, setFilterOwner] = useState("all");
@@ -275,7 +277,7 @@ export default function BDView({ initial }: { initial: BDInitial }) {
       description: opp.description ?? "", closeDate: opp.closeDate ? opp.closeDate.slice(0, 10) : "",
       notes: opp.notes ?? "",
       entityId: opp.entityId?.toString() ?? "", ownerUserId: opp.ownerUserId?.toString() ?? "",
-      probability: opp.probability?.toString() ?? "", followUpDate: opp.followUpDate ? opp.followUpDate.slice(0, 10) : "",
+      probability: opp.probability?.toString() ?? "", followUpDate: opp.followUpDate ? opp.followUpDate.slice(0, 10) : "", tenderDeadline: opp.tenderDeadline ? opp.tenderDeadline.slice(0, 10) : "",
       leadSource: opp.leadSource ?? "", competitor: opp.competitor ?? "", lostReason: opp.lostReason ?? "",
     });
     setEditOpp(opp);
@@ -322,7 +324,7 @@ export default function BDView({ initial }: { initial: BDInitial }) {
       {/* View toggle + stage filter */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: "var(--psg-card-border)" }}>
-          {(["pipeline","list"] as const).map(v => (
+          {(["pipeline","list","results"] as const).map(v => (
             <button key={v} onClick={() => setView(v)} className="px-3 py-1.5 text-sm capitalize transition-colors" style={{ backgroundColor: view === v ? "var(--psg-blue)" : "transparent", color: view === v ? "#fff" : "var(--psg-muted)" }}>
               {v}
             </button>
@@ -357,6 +359,50 @@ export default function BDView({ initial }: { initial: BDInitial }) {
       </div>
 
       {/* Pipeline kanban */}
+      {/* Results: win rate, average won deal, time to close (deals decided in the period) */}
+      {view === "results" && (() => {
+        const r = bdStats(filtered, resultsMonths);
+        const pct = (n: number | null) => (n == null ? "—" : `${n}%`);
+        const table = (title: string, rows: Stat[]) => rows.length > 0 && (
+          <div className="rounded-lg border overflow-x-auto" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+            <table className="w-full text-sm" style={{ minWidth: 520 }}>
+              <thead><tr className="text-xs text-left" style={{ color: "var(--psg-muted)" }}><th className="px-3 py-2 font-medium">{title}</th><th className="px-3 py-2 font-medium text-right">Won</th><th className="px-3 py-2 font-medium text-right">Lost</th><th className="px-3 py-2 font-medium text-right">Win rate</th><th className="px-3 py-2 font-medium text-right">Average won</th><th className="px-3 py-2 font-medium text-right">Days to close</th></tr></thead>
+              <tbody>{rows.map(x => (
+                <tr key={x.key} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
+                  <td className="px-3 py-2 text-white">{x.key}</td><td className="px-3 py-2 text-right tabular-nums">{x.won}</td><td className="px-3 py-2 text-right tabular-nums">{x.lost}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-white">{pct(x.winRate)}</td><td className="px-3 py-2 text-right tabular-nums">{fmtValue(x.avgWon) ?? "—"}</td><td className="px-3 py-2 text-right tabular-nums">{x.medianDays ?? "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        );
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap text-sm">
+              <span style={{ color: "var(--psg-muted)" }}>Deals won or lost in the last</span>
+              <select aria-label="Period" className="rounded px-2 py-1 text-sm border" style={inpStyle} value={resultsMonths} onChange={e => setResultsMonths(Number(e.target.value))}>
+                {[3, 6, 12, 24].map(m => <option key={m} value={m}>{m} months</option>)}
+              </select>
+              <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Uses the company and owner filters above. Days to close is the middle value, from creating the deal to winning it.</span>
+            </div>
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+              {([["Win rate", pct(r.overall.winRate), `${r.overall.won} won · ${r.overall.lost} lost`], ["Won", fmtValue(r.overall.wonValue) ?? "£0", "total value"], ["Average won deal", fmtValue(r.overall.avgWon) ?? "—", "where a value was set"], ["Days to close", r.overall.medianDays != null ? String(r.overall.medianDays) : "—", "typical, lead to won"]] as const).map(([l, v, sub]) => (
+                <div key={l} className="rounded-lg border p-3" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+                  <div className="text-[11px] uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>{l}</div>
+                  <div className="text-2xl font-semibold text-white tabular-nums">{v}</div>
+                  <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{sub}</div>
+                </div>
+              ))}
+            </div>
+            {r.overall.won + r.overall.lost === 0 ? <p className="text-sm" style={{ color: "var(--psg-muted)" }}>No deals won or lost in this period yet.</p> : <>
+              {table("Company", r.byEntity)}
+              {table("Owner", r.byOwner)}
+              {table("Lead source", r.bySource)}
+            </>}
+          </div>
+        );
+      })()}
+
       {view === "pipeline" && (
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
           {STAGES.map(stage => {
@@ -387,6 +433,10 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                           {isOverdue(opp.closeDate) && opp.stage !== "won" && opp.stage !== "lost" ? "⚠ " : ""}Close {fmtDate(opp.closeDate)}
                         </div>
                       )}
+                      {opp.tenderDeadline && isOpen(opp.stage) && (() => {
+                        const days = Math.ceil((new Date(opp.tenderDeadline).getTime() - Date.now()) / 86400e3);
+                        return <div className="text-xs mt-1 font-medium" style={{ color: days <= 3 ? "#ef4444" : "#fbbf24" }}>Tender due {fmtDate(opp.tenderDeadline)}{days >= 0 && days <= 7 ? ` (${days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"}`})` : days < 0 ? " (passed)" : ""}</div>;
+                      })()}
                       {stuck(opp) && <div className="text-xs mt-1" style={{ color: "#fbbf24" }}>⚠ {stuck(opp)}</div>}
                       {!stuck(opp) && opp.followUpDate && isOpen(opp.stage) && (
                         <div className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>Follow up {fmtDate(opp.followUpDate)}</div>
@@ -836,6 +886,13 @@ export default function BDView({ initial }: { initial: BDInitial }) {
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Next follow-up</label>
                     <input type="date" className={inp} style={inpStyle} value={oppForm.followUpDate} onChange={e => setOppForm(f => ({ ...f, followUpDate: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="bd-tender" className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Tender deadline</label>
+                    <input id="bd-tender" type="date" className={inp} style={inpStyle} value={oppForm.tenderDeadline} onChange={e => setOppForm(f => ({ ...f, tenderDeadline: e.target.value }))} />
+                    <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>The owner is reminded 7, 3 and 1 days before, and on the day.</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">

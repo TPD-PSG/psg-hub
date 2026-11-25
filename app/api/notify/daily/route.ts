@@ -140,6 +140,42 @@ async function runDaily(req: NextRequest): Promise<Response> {
     }, `meeting-actions-${meetingId}`);
   }
 
+  // ── 4d. Tender deadlines: the deal's owner (else the admins), 7, 3 and 1 days before and on the day
+  const ukDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(d); // YYYY-MM-DD
+  const todayUk = ukDay(now);
+  const daysUntil = (d: Date) => Math.round((Date.parse(ukDay(d)) - Date.parse(todayUk)) / 86400e3);
+  const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
+  const tenders = await prisma.opportunity.findMany({
+    where: { stage: { notIn: ["won", "lost"] }, tenderDeadline: { gte: new Date(now.getTime() - 86400e3), lte: new Date(now.getTime() + 8 * 86400e3) } },
+    select: { id: true, title: true, tenderDeadline: true, ownerUserId: true, client: { select: { name: true } } },
+  });
+  for (const t of tenders) {
+    const n = daysUntil(t.tenderDeadline!);
+    if (![7, 3, 1, 0].includes(n)) continue;
+    const title = n === 0 ? `Tender due today: ${t.title}` : `Tender due in ${n} day${n === 1 ? "" : "s"}: ${t.title}`;
+    for (const uid of t.ownerUserId ? [t.ownerUserId] : admins.map(a => a.id)) {
+      if (sentTitles.has(`${uid}|${title}`)) continue;
+      add({ userId: uid, title, body: [t.client?.name, t.tenderDeadline!.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" })].filter(Boolean).join(" · "), link: "/bd" }, `tender-${t.id}-${uid}`);
+    }
+  }
+
+  // ── 4e. A show from a won deal closed yesterday: nudge whoever won it to follow up ────
+  const yesterdayUk = ukDay(new Date(now.getTime() - 86400e3));
+  const closedShows = await prisma.production.findMany({
+    where: { endDate: { gte: new Date(Date.parse(yesterdayUk) - 86400e3), lt: new Date(Date.parse(todayUk) + 86400e3) } },
+    select: { id: true, name: true, endDate: true, bdClient: { select: { id: true, name: true } }, fromOpportunity: { select: { ownerUserId: true, client: { select: { id: true, name: true } } } } },
+  });
+  for (const p of closedShows) {
+    if (!p.endDate || ukDay(p.endDate) !== yesterdayUk || !p.fromOpportunity) continue;
+    const client = p.fromOpportunity.client ?? p.bdClient;
+    const title = `${p.name} closed yesterday: follow up${client ? ` with ${client.name}` : ""}`;
+    const link = client ? `/bd/clients/${client.id}` : "/bd";
+    for (const uid of p.fromOpportunity.ownerUserId ? [p.fromOpportunity.ownerUserId] : admins.map(a => a.id)) {
+      if (sentTitles.has(`${uid}|${title}`)) continue;
+      add({ userId: uid, title, body: "A good moment to thank them and ask what's next.", link }, `closed-${p.id}-${uid}`);
+    }
+  }
+
   // ── 4c. Mondays: last week's show-report digest for each show's PSG team ──
   // (?digestFor=YYYY-MM-DD runs it for that week on any day, for testing and catch-up)
   const forced = req.nextUrl.searchParams.get("digestFor");

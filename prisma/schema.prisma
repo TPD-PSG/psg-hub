@@ -416,6 +416,7 @@ model Opportunity {
   owner          User?        @relation("OpportunityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   probability    Int? // % this deal counts in the weighted pipeline; null = the stage's default
   followUpDate   DateTime?
+  tenderDeadline DateTime? // when a tender or bid has to be in; reminders 7, 3 and 1 days before and on the day
   leadSource     String?
   competitor     String?
   stageChangedAt DateTime? // null = never changed since created (use createdAt)

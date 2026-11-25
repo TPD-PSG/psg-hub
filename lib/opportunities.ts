@@ -42,6 +42,7 @@ export function opportunityData(body: Record<string, unknown>) {
   if (has("ownerUserId")) d.ownerUserId = int(body.ownerUserId);
   if (has("probability")) { const p = int(body.probability); d.probability = p == null ? null : Math.max(0, Math.min(100, p)); }
   if (has("followUpDate")) d.followUpDate = date(body.followUpDate);
+  if (has("tenderDeadline")) d.tenderDeadline = date(body.tenderDeadline);
   if (has("leadSource")) d.leadSource = text(body.leadSource);
   if (has("competitor")) d.competitor = text(body.competitor);
   return d;

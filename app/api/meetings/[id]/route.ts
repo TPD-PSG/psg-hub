@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { recordingUrl } from "@/lib/transcript";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { toDate } from "@/lib/parse";
@@ -22,6 +23,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       attendees: body.attendees || null,
       agenda: body.agenda || null,
       minutes: body.minutes || null,
+      transcript: typeof body.transcript === "string" && body.transcript.trim() ? body.transcript.trim().slice(0, 500_000) : null,
+      recordingUrl: recordingUrl(body.recordingUrl),
     },
     include: { createdByUser: { select: { id: true, name: true } } },
   });

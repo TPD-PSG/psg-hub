@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { exportMeetingMinutesPDF } from "@/lib/exports";
 import { confirmDialog, alertDialog } from "@/components/Dialogs";
 import MeetingActions from "@/components/MeetingActions";
+import { parseTranscript, TRANSCRIPT_MAX_CHARS } from "@/lib/transcript";
 import { inp, inpStyle, sendJson, useList, type ProdContact, type TabProps } from "../shared";
 
 export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boolean }) {
   const id = String(prod.id);
-  type Meeting = { id: number; title: string; meetingDate: string; location: string | null; attendees: string | null; agenda: string | null; minutes: string | null; createdByUser: { id: number; name: string } | null };
-  const BLANK_MEETING = { title: "", meetingDate: "", location: "", attendees: "", agenda: "", minutes: "" };
+  type Meeting = { id: number; title: string; meetingDate: string; location: string | null; attendees: string | null; agenda: string | null; minutes: string | null; transcript: string | null; recordingUrl: string | null; createdByUser: { id: number; name: string } | null };
+  const BLANK_MEETING = { title: "", meetingDate: "", location: "", attendees: "", agenda: "", minutes: "", recordingUrl: "" };
   const [meetings, , reloadMeetingList] = useList<Meeting>(`/api/productions/${id}/meetings`);
   const [meetingContacts, , reloadMeetingContacts] = useList<ProdContact>(`/api/productions/${id}/contacts`);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
@@ -17,11 +18,24 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
   const [meetingForm, setMeetingForm] = useState(BLANK_MEETING);
   const [meetingAttendeeIds, setMeetingAttendeeIds] = useState<number[]>([]);
   const [meetingAttendeeExtra, setMeetingAttendeeExtra] = useState("");
-  const [expandedMeetings, setExpandedMeetings] = useState<Record<number, { agenda: boolean; minutes: boolean }>>({});
+  const [expandedMeetings, setExpandedMeetings] = useState<Record<number, { agenda?: boolean; minutes?: boolean; transcript?: boolean }>>({});
   const [meetingRecording, setMeetingRecording] = useState(false);
   const [meetingTranscript, setMeetingTranscript] = useState("");
   const [generatingMinutes, setGeneratingMinutes] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const transcriptFileRef = useRef<HTMLInputElement>(null);
+
+  // A transcript file from Zoom or Teams (.vtt), .srt, or Word's Transcribe saved as .txt
+  async function loadTranscriptFile(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alertDialog("That file is over 5 MB. A transcript file is usually much smaller: check it's the transcript (.vtt or .txt), not the recording."); return; }
+    if (/^(video|audio)\//.test(file.type) || /\.(mp4|m4a|mp3|mov|wav)$/i.test(file.name)) { alertDialog("That's the recording itself. Upload its transcript (.vtt or .txt) instead, or paste the recording's link below."); return; }
+    const text = parseTranscript(await file.text());
+    if (!text.trim()) { alertDialog("Couldn't find any words in that file."); return; }
+    if (meetingTranscript.trim() && !(await confirmDialog("Replace the transcript that's already here?"))) return;
+    setMeetingTranscript(text);
+    if (text.length >= TRANSCRIPT_MAX_CHARS) alertDialog("That transcript is very long, so only the first part was kept.");
+  }
 
   // Live transcription stops if you leave the tab
   useEffect(() => () => recognitionRef.current?.stop(), []);
@@ -48,7 +62,8 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
     if (m) {
       const { contactIds, extra } = parseAttendees(m.attendees);
       setEditingMeeting(m);
-      setMeetingForm({ title: m.title, meetingDate: m.meetingDate.slice(0, 16), location: m.location || "", attendees: m.attendees || "", agenda: m.agenda || "", minutes: m.minutes || "" });
+      setMeetingForm({ title: m.title, meetingDate: m.meetingDate.slice(0, 16), location: m.location || "", attendees: m.attendees || "", agenda: m.agenda || "", minutes: m.minutes || "", recordingUrl: m.recordingUrl || "" });
+      setMeetingTranscript(m.transcript || "");
       setMeetingAttendeeIds(contactIds);
       setMeetingAttendeeExtra(extra);
     } else {
@@ -56,13 +71,14 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
       setMeetingForm(BLANK_MEETING);
       setMeetingAttendeeIds([]);
       setMeetingAttendeeExtra("");
+      setMeetingTranscript("");
     }
     setShowMeetingForm(true);
   }
 
   async function saveMeeting(e: React.FormEvent) {
     e.preventDefault();
-    const payload = { ...meetingForm, attendees: serializeAttendees(meetingAttendeeIds, meetingAttendeeExtra) };
+    const payload = { ...meetingForm, transcript: meetingTranscript, attendees: serializeAttendees(meetingAttendeeIds, meetingAttendeeExtra) };
     if (editingMeeting) {
       await sendJson(`/api/meetings/${editingMeeting.id}`, "PUT", payload);
     } else {
@@ -151,6 +167,7 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
               </div>
               <input required type="datetime-local" value={meetingForm.meetingDate} onChange={e => setMeetingForm(f => ({ ...f, meetingDate: e.target.value }))} className={inp} style={inpStyle} />
               <input placeholder="Location" value={meetingForm.location} onChange={e => setMeetingForm(f => ({ ...f, location: e.target.value }))} className={inp} style={inpStyle} />
+              <input type="url" aria-label="Recording link" placeholder="Recording link (Zoom, Teams, OneDrive…)" value={meetingForm.recordingUrl} onChange={e => setMeetingForm(f => ({ ...f, recordingUrl: e.target.value }))} className={`${inp} col-span-2`} style={inpStyle} />
             </div>
 
             <div>
@@ -208,6 +225,10 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
                       ⏹ Stop
                     </button>
                   )}
+                  <button type="button" onClick={() => transcriptFileRef.current?.click()} className="px-3 py-1 rounded text-xs font-medium" style={{ background: "rgba(255,255,255,0.08)", color: "var(--psg-text)", border: "1px solid var(--psg-card-border)" }}>
+                    📄 Upload transcript
+                  </button>
+                  <input ref={transcriptFileRef} type="file" accept=".vtt,.srt,.txt,text/vtt,text/plain" className="hidden" onChange={e => { loadTranscriptFile(e.target.files?.[0]); e.target.value = ""; }} />
                   <button type="button" onClick={() => generateMinutes()} disabled={generatingMinutes || !meetingTranscript.trim()}
                     className="px-3 py-1 rounded text-xs font-medium"
                     style={{ background: generatingMinutes || !meetingTranscript.trim() ? "rgba(255,255,255,0.06)" : "#8b5cf6", color: generatingMinutes || !meetingTranscript.trim() ? "var(--psg-muted)" : "#fff", border: "1px solid var(--psg-card-border)", opacity: generatingMinutes || !meetingTranscript.trim() ? 0.6 : 1 }}>
@@ -217,7 +238,7 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
                 </div>
               </div>
               {meetingRecording && <p style={{ color: "#ef4444", fontSize: 11, marginBottom: 4 }}>● Recording… speak clearly</p>}
-              <textarea placeholder="Transcript will appear here as you record — or paste a Zoom/Teams transcript" value={meetingTranscript} onChange={e => setMeetingTranscript(e.target.value)}
+              <textarea placeholder="Transcript appears here as you record. Or upload a Zoom/Teams transcript (.vtt) or Word transcript (.txt), or paste one. It's saved with the meeting." value={meetingTranscript} onChange={e => setMeetingTranscript(e.target.value)}
                 rows={3} className={inp} style={{ ...inpStyle, fontSize: 12, resize: "vertical" }} />
             </div>
             <textarea placeholder="Minutes" value={meetingForm.minutes} onChange={e => setMeetingForm(f => ({ ...f, minutes: e.target.value }))} rows={4} className={inp} style={{ ...inpStyle, resize: "vertical" }} />
@@ -255,6 +276,9 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
                     {names.length > 0 && (
                       <p style={{ color: "var(--psg-muted)", fontSize: 12, marginTop: 4 }}>👥 {names.join(", ")}</p>
                     )}
+                    {m.recordingUrl && (
+                      <a href={m.recordingUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-xs mt-1 text-blue-300 hover:underline">▶ Watch the recording</a>
+                    )}
                   </div>
                   <div className="flex gap-2 shrink-0 items-center">
                     {m.minutes && (
@@ -287,6 +311,18 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
                     </button>
                     {exp.minutes && (
                       <div style={{ padding: "8px 16px 12px", color: "var(--psg-muted)", fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{m.minutes}</div>
+                    )}
+                  </div>
+                )}
+
+                {m.transcript && (
+                  <div style={{ borderTop: "1px solid var(--psg-card-border)" }}>
+                    <button onClick={() => setExpandedMeetings(prev => ({ ...prev, [m.id]: { ...prev[m.id], transcript: !prev[m.id]?.transcript } }))} className="w-full flex items-center justify-between" style={{ padding: "8px 16px", background: "none", border: "none", cursor: "pointer", color: "var(--psg-text)", fontSize: 13, fontWeight: 500 }}>
+                      <span>🗒 Transcript</span>
+                      <span style={{ color: "var(--psg-muted)" }}>{exp.transcript ? "▲" : "▼"}</span>
+                    </button>
+                    {exp.transcript && (
+                      <div style={{ padding: "8px 16px 12px", color: "var(--psg-muted)", fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.6, maxHeight: 420, overflowY: "auto" }}>{m.transcript}</div>
                     )}
                   </div>
                 )}

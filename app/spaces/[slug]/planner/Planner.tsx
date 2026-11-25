@@ -33,6 +33,7 @@ export default function Planner({ initial }: { initial: PlannerData }) {
   const [parts, setParts] = useState(initial.parts);
   const [extraRows, setExtraRows] = useState<{ id: number; name: string; team: boolean }[]>([]);
   const [sel, setSel] = useState<number | null>(null);
+  const [weeks, setWeeks] = useState(26);
   const [drag, setDrag] = useState<number | null>(null);
   const [adding, setAdding] = useState({ jobId: initial.jobs[0]?.id ? String(initial.jobs[0].id) : "", label: "", days: "1", hours: "", pencilled: initial.jobs[0]?.stage === "quote" });
   const { space, jobs, elsewhere, canEdit } = initial;
@@ -107,10 +108,25 @@ export default function Planner({ initial }: { initial: PlannerData }) {
   } : {};
   const dropId = (e: React.DragEvent) => { e.preventDefault(); const v = Number(e.dataTransfer.getData("text/plain")); return v || drag || sel; };
 
-  // Builds timeline: 8 weeks from this fortnight's Monday
-  const W = 8, tlDays = W * 7;
+  // Builds timeline from this fortnight's Monday, as far ahead as chosen (scrolls sideways), with a
+  // capacity row: crew-days booked each week (Mon–Fri) against what the team has (team × 5)
+  const W = weeks, tlDays = W * 7;
   const tl = jobs.filter(j => j.startDate || j.endDate);
   const unscheduled = jobs.filter(j => !j.startDate && !j.endDate);
+  const teamSize = initial.crew.filter(c => c.team).length;
+  const capacity = Array.from({ length: W }, (_, w) => {
+    const w0 = from + w * 7 * DAY;
+    let confirmed = 0, pencilled = 0;
+    for (const p of parts) {
+      if (p.done || !p.startDate) continue;
+      const p0 = t(p.startDate);
+      for (let d = 0; d < 5; d++) { // Mon–Fri of this week
+        const day = w0 + d * DAY;
+        if (day >= p0 && day < p0 + p.days * DAY) { if (p.pencilled) pencilled++; else confirmed++; }
+      }
+    }
+    return { confirmed, pencilled, available: teamSize * 5 };
+  });
 
   return (
     <>
@@ -272,19 +288,32 @@ export default function Planner({ initial }: { initial: PlannerData }) {
         </section>
 
         {/* Builds timeline */}
-        <section style={card} className="flex flex-col gap-3 overflow-x-auto" aria-label="Builds timeline">
-          <h2 style={h2}>Builds · next {W} weeks</h2>
-          {tl.length === 0 ? <p className="text-sm" style={muted}>No builds have dates yet. Set a build&apos;s start and due-out dates on its page.</p> : (
-            <div className="grid gap-1 text-xs" style={{ gridTemplateColumns: `200px repeat(${tlDays}, minmax(9px, 1fr))`, minWidth: 820 }}>
-              <span />
-              {Array.from({ length: W }, (_, w) => <strong key={w} className="py-1 px-1 truncate" style={{ gridColumn: `span 7`, background: w % 2 ? "var(--tws-ground)" : "var(--tws-tint-2)" }}>w/c {new Date(from + w * 7 * DAY).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</strong>)}
+        <section style={card} className="flex flex-col gap-3 min-w-0" aria-label="Builds timeline">
+          <div className="flex flex-wrap justify-between items-baseline gap-3">
+            <h2 style={h2}>Builds &amp; capacity · next {W === 52 ? "year" : W >= 13 ? `${Math.round(W / 4.33)} months` : `${W} weeks`}</h2>
+            <div className="flex gap-1.5 flex-wrap" role="group" aria-label="How far ahead">
+              {([[8, "8 weeks"], [13, "3 months"], [26, "6 months"], [52, "1 year"]] as const).map(([n, l]) => (
+                <button key={n} type="button" aria-pressed={weeks === n} onClick={() => setWeeks(n)} className="text-xs font-bold px-2.5 py-1.5"
+                  style={weeks === n ? { background: "var(--tws-char)", color: "#fff" } : { background: "var(--tws-ground)", color: "var(--tws-ink)", border: "1px solid var(--tws-line)" }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div className="overflow-x-auto pb-5" tabIndex={0} aria-label="Timeline (scrolls sideways)">
+            <div className="grid gap-y-1 text-xs" style={{ gridTemplateColumns: `clamp(110px, 28vw, 200px) repeat(${tlDays}, 10px)`, width: "max-content" }}>
+              <span className="sticky left-0 z-10" style={{ background: "var(--tws-card)" }} />
+              {Array.from({ length: W }, (_, w) => {
+                const d = new Date(from + w * 7 * DAY);
+                const newMonth = w === 0 || d.getUTCDate() <= 7;
+                return <strong key={w} className="py-1 px-1 truncate" style={{ gridColumn: `span 7`, background: w % 2 ? "var(--tws-ground)" : "var(--tws-tint-2)", borderLeft: newMonth ? "2px solid var(--tws-char)" : undefined }}>
+                  {newMonth ? d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }) + " " : ""}{d.getUTCDate()}</strong>;
+              })}
               {tl.map(j => {
                 const s0 = j.startDate ? t(j.startDate) : t(j.endDate!), e0 = j.endDate ? t(j.endDate) : s0;
                 const s = Math.max(0, Math.round((s0 - from) / DAY)), e = Math.min(tlDays - 1, Math.round((e0 - from) / DAY));
                 const visible = e >= 0 && s <= tlDays - 1;
                 return (
                   <div key={j.id} className="contents">
-                    <Link href={`${base}/jobs/${j.id}`} className="py-1 truncate hover:underline font-semibold" style={{ color: "var(--tws-ink)" }} title={j.title}>{j.title}</Link>
+                    <Link href={`${base}/jobs/${j.id}`} className="py-1 pr-2 truncate hover:underline font-semibold sticky left-0 z-10" style={{ color: "var(--tws-ink)", background: "var(--tws-card)" }} title={j.title}>{j.title}</Link>
                     {visible ? (
                       <>
                         {s > 0 && <span style={{ gridColumn: `span ${s}` }} />}
@@ -297,8 +326,37 @@ export default function Planner({ initial }: { initial: PlannerData }) {
                   </div>
                 );
               })}
+              {tl.length === 0 && <span className="py-1 sticky left-0" style={{ ...muted, gridColumn: `span ${tlDays + 1}` }}>No builds have dates yet. Set a build&apos;s start and due-out dates on its page.</span>}
+
+              {/* Capacity: crew-days booked per week (confirmed, then pencilled) against the team's days */}
+              <span className="pt-2 pr-2 font-semibold sticky left-0 z-10 flex flex-col" style={{ background: "var(--tws-card)", borderTop: "2px solid var(--tws-char)" }}>
+                Crew-days booked
+                <span className="font-normal text-[11px]" style={muted}>{teamSize ? `of ${teamSize * 5} a week (${teamSize} in the team)` : "add the team in Admin → Users"}</span>
+              </span>
+              {capacity.map((c, w) => {
+                const used = c.confirmed + c.pencilled, cap = c.available || Math.max(1, ...capacity.map(x => x.confirmed + x.pencilled));
+                const over = c.available > 0 && used > c.available;
+                const pct = (n: number) => `${Math.min(100, (n / cap) * 100)}%`;
+                return (
+                  <div key={w} className="pt-2 flex flex-col gap-1" style={{ gridColumn: "span 7", borderTop: "2px solid var(--tws-char)" }}
+                    title={`w/c ${dname(from + w * 7 * DAY)}: ${c.confirmed} confirmed + ${c.pencilled} pencilled crew-days${c.available ? ` of ${c.available}` : ""}`}>
+                    <div className="h-14 mx-1 flex flex-col justify-end" style={{ background: "var(--tws-ground)", outline: over ? "2px solid #b3261e" : "none" }}>
+                      <div style={{ height: pct(c.pencilled), ...PENCIL, borderWidth: c.pencilled ? 1 : 0, background: "var(--tws-accent-light)" }} />
+                      <div style={{ height: pct(c.confirmed), background: "var(--tws-char)" }} />
+                    </div>
+                    <span className="text-center tabular-nums text-[11px] font-semibold" style={{ color: over ? "#b3261e" : "var(--tws-ink)" }}>
+                      {used}{c.available ? `/${c.available}` : ""}{over ? " !" : ""}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          )}
+          </div>
+          <p className="text-[11px] m-0 flex flex-wrap gap-x-4 gap-y-1" style={muted}>
+            <span><span aria-hidden="true" className="inline-block w-3 h-3 align-middle mr-1" style={{ background: "var(--tws-char)" }} />Confirmed</span>
+            <span><span aria-hidden="true" className="inline-block w-3 h-3 align-middle mr-1 box-border" style={{ ...PENCIL, borderWidth: 1, background: "var(--tws-accent-light)" }} />Pencilled</span>
+            <span>Crew-days count Monday to Friday. Scroll sideways to look further ahead.</span>
+          </p>
           {unscheduled.length > 0 && <p className="text-[13px]" style={muted}>No dates yet: {unscheduled.map((j, i) => <span key={j.id}>{i ? ", " : ""}<Link href={`${base}/jobs/${j.id}`} style={{ color: "var(--tws-accent-ink)" }}>{j.title}</Link></span>)}</p>}
         </section>
 

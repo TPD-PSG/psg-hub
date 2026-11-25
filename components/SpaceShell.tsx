@@ -24,6 +24,8 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
     { href: `${base}/quotes`, label: "Quotes" },
     { href: `${base}/materials`, label: "Materials & kit" },
     { href: `${base}/storage`, label: "Storage" },
+    { href: `${base}/aftercare`, label: "Aftercare" },
+    { href: `${base}/tablet`, label: "Tablet mode" },
     { href: `${base}/noticeboard`, label: "Noticeboard" },
     { href: `${base}/fun`, label: "Fun Corner" },
     { href: `${base}/roadmap`, label: "Roadmap" },
@@ -92,7 +94,7 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
       </header>
 
       <div className="flex flex-1 min-h-0">
-        <aside className="hidden md:block w-[240px] shrink-0" style={{ background: "var(--tws-night)" }}>
+        <aside className={`${pathname === `${base}/tablet` ? "hidden" : "hidden md:block"} w-[240px] shrink-0`} style={{ background: "var(--tws-night)" }}>
           <div className="sticky top-16">{nav}</div>
         </aside>
         {menu && (

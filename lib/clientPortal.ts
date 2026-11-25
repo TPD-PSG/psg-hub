@@ -30,6 +30,8 @@ export async function clientBuilds(clientId: number) {
       id: true, number: true, title: true, stage: true, status: true, startDate: true, endDate: true,
       entity: { select: { name: true, shortName: true, slug: true, color: true, logoMime: true, updatedAt: true } },
       variations: { where: { status: { not: "draft" } }, orderBy: { number: "desc" }, include: { lines: { orderBy: { sortOrder: "asc" } } } },
+      repairs: { orderBy: { createdAt: "desc" }, take: 30, select: { id: true, title: true, whereAt: true, urgency: true, status: true, scheduledFor: true, resolution: true, reportedByName: true, createdAt: true, doneAt: true } },
+      storedPieces: { orderBy: { name: "asc" }, select: { id: true, name: true } }, // for reporting a repair (pieces on tour have gone out)
       photos: { where: { clientVisible: true }, orderBy: { createdAt: "desc" }, take: 60, select: { id: true, caption: true, createdAt: true } },
       drawings: {
         orderBy: [{ number: "asc" }, { createdAt: "asc" }],

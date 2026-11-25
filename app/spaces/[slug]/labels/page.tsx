@@ -35,7 +35,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
               <div key={`${p.id}-${n}`} className="tws-label flex gap-3 p-3 bg-white" style={{ border: "1px solid #24272b", breakInside: "avoid" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- QR from our own API */}
                 <img src={`/api/stored-pieces/${p.id}/qr`} alt={`QR code for ${p.name}`} className="w-28 h-28 shrink-0" />
-                <div className="min-w-0 flex flex-col gap-0.5" style={{ color: "#24272b" }}>
+                <div className="min-w-0 flex flex-col gap-0.5" style={{ color: "#24272b", overflowWrap: "anywhere" }}>
                   <span className="text-[10px] font-bold tracking-[0.2em] uppercase">{space.shortName ?? space.name}</span>
                   <strong className="text-base leading-tight break-words">{p.name}</strong>
                   {p.quantity > 1 && <span className="text-sm font-bold">{n} of {p.quantity}</span>}

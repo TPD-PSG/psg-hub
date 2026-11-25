@@ -4,6 +4,7 @@
 // of each drawing can be approved one at a time or several at once, or sent back with a comment.
 import { useState } from "react";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
+import { shrinkPhoto } from "@/lib/shrinkPhoto";
 import { BUILD_STAGES, stageIndex } from "@/lib/buildStages";
 import { fmtDate } from "@/lib/format";
 import type { SpaceTheme } from "@/lib/spaces";
@@ -18,6 +19,8 @@ type Build = {
   drawings: Drawing[];
   photos: { id: number; caption: string | null; createdAt: string; url: string }[];
   variations: ClientVariation[];
+  repairs: { id: number; title: string; whereAt: string | null; urgency: string; status: string; scheduledFor: string | null; resolution: string | null; reportedByName: string | null; createdAt: string; doneAt: string | null }[];
+  storedPieces: { id: number; name: string }[];
 };
 type ClientVariation = {
   id: number; label: string; title: string; notes: string | null; vatRate: number; status: string; sentAt: string | null; decidedAt: string | null;
@@ -47,6 +50,22 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
   const [history, setHistory] = useState<Set<number>>(new Set());
   const [showAll, setShowAll] = useState<Set<number>>(new Set());
   const [declining, setDeclining] = useState<{ id: number; comment: string } | null>(null);
+  const [reporting, setReporting] = useState<null | { jobId: number; pieceId: string; title: string; description: string; whereAt: string; urgency: string; photo: File | null }>(null);
+  async function sendReport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reporting) return;
+    const fd = new FormData();
+    const { photo, ...rest } = reporting;
+    Object.entries(rest).forEach(([k, v]) => fd.append(k, String(v)));
+    if (photo) fd.append("photo", await shrinkPhoto(photo));
+    setBusy(true);
+    const res = await fetch("/api/my-builds/repairs", { method: "POST", body: fd });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(d.error ?? "That didn't go through. Try again.");
+    setData(d); setReporting(null);
+    alertDialog(`Thanks. ${builderName} has been told and will be in touch.`);
+  }
   const [openVar, setOpenVar] = useState<Set<number>>(new Set());
   async function decideVar(v: ClientVariation, decision: "approved" | "declined", comment?: string) {
     if (decision === "approved" && !(await confirmDialog(`Approve ${v.label}, ${v.title}, for ${gbp(v.totals.net)} + VAT (${gbp(v.totals.gross)})? It's added to the price of this build.`))) return;
@@ -211,6 +230,40 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
                     </ul>
                   </div>
                 )}
+
+                {/* Repairs and aftercare: report a problem with the set; see what's happening */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 style={{ ...caps, margin: 0 }}>Repairs &amp; aftercare</h3>
+                    {reporting?.jobId !== b.id && <button type="button" onClick={() => setReporting({ jobId: b.id, pieceId: "", title: "", description: "", whereAt: "", urgency: "soon", photo: null })} className="text-[13px]" style={link}>Report a problem</button>}
+                  </div>
+                  {reporting?.jobId === b.id && (
+                    <form onSubmit={sendReport} className="flex flex-col gap-2.5 p-3" style={{ background: "var(--tws-ground)", borderTop: "4px solid var(--tws-accent)" }}>
+                      <div><label htmlFor={`rp-t${b.id}`} style={lbl}>What&apos;s wrong?</label><input id={`rp-t${b.id}`} required autoFocus style={input} value={reporting.title} onChange={e => setReporting({ ...reporting, title: e.target.value })} placeholder="e.g. Door on the palace flat won't close" /></div>
+                      {b.storedPieces.length > 0 && <div><label htmlFor={`rp-p${b.id}`} style={lbl}>Which piece? (optional)</label>
+                        <select id={`rp-p${b.id}`} style={input} value={reporting.pieceId} onChange={e => setReporting({ ...reporting, pieceId: e.target.value })}><option value="">Not sure / general</option>{b.storedPieces.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>}
+                      <div><label htmlFor={`rp-d${b.id}`} style={lbl}>More detail (optional)</label><textarea id={`rp-d${b.id}`} rows={2} style={input} value={reporting.description} onChange={e => setReporting({ ...reporting, description: e.target.value })} /></div>
+                      <div className="grid gap-2.5 sm:grid-cols-2">
+                        <div><label htmlFor={`rp-w${b.id}`} style={lbl}>Where is the set now?</label><input id={`rp-w${b.id}`} style={input} value={reporting.whereAt} onChange={e => setReporting({ ...reporting, whereAt: e.target.value })} placeholder="Venue and dates" /></div>
+                        <div><label htmlFor={`rp-u${b.id}`} style={lbl}>How urgent?</label>
+                          <select id={`rp-u${b.id}`} style={input} value={reporting.urgency} onChange={e => setReporting({ ...reporting, urgency: e.target.value })}><option value="urgent">Urgent: affects the show</option><option value="soon">Soon</option><option value="routine">When convenient</option></select></div>
+                      </div>
+                      <div><label htmlFor={`rp-ph${b.id}`} style={lbl}>Photo (optional)</label><input id={`rp-ph${b.id}`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="text-sm" onChange={e => setReporting({ ...reporting, photo: e.target.files?.[0] ?? null })} /></div>
+                      <div className="flex gap-2 flex-wrap"><button type="submit" disabled={busy} style={small}>Send to {builderName}</button><button type="button" onClick={() => setReporting(null)} style={smallLine}>Cancel</button></div>
+                    </form>
+                  )}
+                  {b.repairs.length > 0 && (
+                    <ul className="flex flex-col m-0 p-0 list-none text-[13px]">
+                      {b.repairs.map(r => (
+                        <li key={r.id} className="py-2 flex flex-wrap gap-x-3 gap-y-0.5" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
+                          <strong className="min-w-0 break-words">{r.title}</strong>
+                          <span className="ml-auto font-bold" style={{ color: r.status === "done" ? "var(--tws-muted)" : "var(--tws-ink)" }}>{r.status === "open" ? "Reported" : r.status === "scheduled" ? `Booked in${r.scheduledFor ? ` ${fmtDate(r.scheduledFor)}` : ""}` : "Done"}</span>
+                          <span className="basis-full text-xs" style={muted}>{[r.whereAt, `reported ${fmtDate(r.createdAt)}`, r.resolution && (r.status === "done" ? `done: ${r.resolution}` : r.resolution)].filter(Boolean).join(" · ")}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
                 {/* Progress photos (staff choose which) */}
                 {b.photos.length > 0 && (

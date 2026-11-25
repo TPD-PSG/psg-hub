@@ -38,7 +38,7 @@ const MODULES = [
   { key: "fun", label: "Fun Corner" },
 ];
 
-type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[] };
+type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[]; spaceEntityIds?: number[] };
 export type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
   color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null; homeEntityId?: number | null;
@@ -62,6 +62,47 @@ const BLANK = { name: "", email: "", password: "", role: "member", color: "", co
 const MEMBER_COLORS = ["#f59e0b","#10b981","#3b82f6","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16","#f97316","#14b8a6"];
 
 const INVITE_BLANK = { name: "", email: "", role: "member" };
+
+type Company = { id: number; name: string; hasSpace: boolean; archived: boolean };
+
+/**
+ * Which company spaces (e.g. The Workshop Stoke) a person can open: all, or only the ticked ones.
+ * Stored as permissions.spaceEntityIds; missing means all. Admins always see every space.
+ */
+function SpaceAccessPicker({ perms, setPerms, companies, name }: { perms: Permissions; setPerms: (fn: (p: Permissions) => Permissions) => void; companies: Company[]; name: string }) {
+  const spaces = companies.filter(c => c.hasSpace);
+  if (!spaces.length) return null;
+  const limited = Array.isArray(perms.spaceEntityIds);
+  const ids = perms.spaceEntityIds ?? [];
+  return (
+    <div className="border-t pt-4" style={{ borderColor: "var(--psg-card-border)" }}>
+      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Company spaces</div>
+      <div className="space-y-2">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input type="radio" name={name} checked={!limited} onChange={() => setPerms(p => { const { spaceEntityIds, ...rest } = p; void spaceEntityIds; return rest; })} className="w-4 h-4" />
+          <span className="text-sm">All company spaces</span>
+        </label>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input type="radio" name={name} checked={limited} onChange={() => setPerms(p => ({ ...p, spaceEntityIds: p.spaceEntityIds ?? [] }))} className="w-4 h-4" />
+          <span className="text-sm">Only these</span>
+        </label>
+        {limited && (
+          <div className="ml-7 space-y-1">
+            {spaces.map(c => (
+              <label key={c.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                <input type="checkbox" className="w-4 h-4 rounded" checked={ids.includes(c.id)}
+                  onChange={() => setPerms(p => { const cur = p.spaceEntityIds ?? []; return { ...p, spaceEntityIds: cur.includes(c.id) ? cur.filter(x => x !== c.id) : [...cur, c.id] }; })} />
+                <span className="text-sm">{c.name}</span>
+              </label>
+            ))}
+            {ids.length === 0 && <p className="text-xs" style={{ color: "#fbbf24" }}>Nothing ticked: they won&apos;t be able to open any company space.</p>}
+          </div>
+        )}
+        <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Only affects company spaces (build board, planner, materials, noticeboard). Productions, BD and jobs are unchanged.</p>
+      </div>
+    </div>
+  );
+}
 
 export type UsersInitial = { users: User[]; productions: Production[]; invites?: Invite[] } | null;
 
@@ -96,7 +137,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
   const [invitePerms, setInvitePerms] = useState<Permissions>(defaultPerms());
   const [inviteSelectedProductions, setInviteSelectedProductions] = useState<number[]>();
   const [allProductions, setAllProductions] = useState<Production[]>(initial?.productions ?? []);
-  const [companies, setCompanies] = useState<{ id: number; name: string; hasSpace: boolean; archived: boolean }[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   useEffect(() => {
     fetch("/api/entities").then(r => r.json()).then(d => { if (Array.isArray(d)) setCompanies(d.filter((e: { archived: boolean }) => !e.archived)); }).catch(() => {});
   }, []);
@@ -268,6 +309,11 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>
                     {isAdmin ? "All" : p.allProductions ? "All" : "Team only"}
+                    {!isAdmin && Array.isArray(p.spaceEntityIds) && (
+                      <div className="mt-1" style={{ color: "#fbbf24" }}>
+                        Spaces: {p.spaceEntityIds.length ? companies.filter(c => p.spaceEntityIds!.includes(c.id)).map(c => c.name).join(", ") || "—" : "none"}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2 justify-end">
@@ -433,6 +479,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                       </div>
                     </div>
                   )}
+                  <SpaceAccessPicker perms={perms} setPerms={setPerms} companies={companies} name="spaceAccess" />
                   {perms.modules.includes("productions") && (
                     <div className="border-t pt-4" style={{ borderColor: "var(--psg-card-border)" }}>
                       <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Production Access</div>
@@ -560,6 +607,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                             </div>
                           </div>
 
+                          <SpaceAccessPicker perms={invitePerms} setPerms={setInvitePerms} companies={companies} name="inviteSpaceAccess" />
                           <div className="border-t pt-3" style={{ borderColor: "var(--psg-card-border)" }}>
                             <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--psg-muted)" }}>Production Access</div>
                             <div className="space-y-2 mb-2">

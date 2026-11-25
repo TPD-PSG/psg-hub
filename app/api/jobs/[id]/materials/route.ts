@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePoUser, poTotal } from "@/lib/purchaseOrders";
+import { canSeeCompanyRecord } from "@/lib/spaces";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const u = await requirePoUser();
@@ -10,6 +11,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const id = parseInt((await params).id);
   const job = await prisma.job.findUnique({ where: { id }, select: { entityId: true } });
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await canSeeCompanyRecord({ id: u.userId, role: u.role }, job.entityId))) return NextResponse.json({ error: "This space isn't yours" }, { status: 403 });
   const [pos, moves, items] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where: { jobId: id, status: { not: "cancelled" } },

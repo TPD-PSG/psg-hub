@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canAccess, parsePerms, hiddenSectionsFor } from "@/lib/permissions";
 import { buildEntityOverview, type OverviewProduction } from "@/lib/entityOverview";
+import { spaceLimitFor } from "@/lib/spaces";
 
 export const dynamic = "force-dynamic";
 
@@ -63,5 +64,8 @@ export async function GET() {
     deals.map(d => ({ ...d, lastActivityAt: d.activities[0]?.at ?? null })),
     see,
   );
+  // No "Space →" link to a space this person isn't allowed into
+  const limit = role === "admin" ? null : (await spaceLimitFor(Number(user.id))).ids;
+  if (limit) for (const r of rows) if (r.spaceSlug && (r.entityId == null || !limit.includes(r.entityId))) r.spaceSlug = null;
   return NextResponse.json({ see, rows });
 }

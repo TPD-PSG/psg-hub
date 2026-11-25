@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePoUser, PO_INCLUDE, poLines, poTotal, poApprovalLimit } from "@/lib/purchaseOrders";
+import { canSeeCompanyRecord } from "@/lib/spaces";
 
 const load = (id: number) => prisma.purchaseOrder.findUnique({ where: { id }, include: PO_INCLUDE });
 const done = async (id: number) => { const po = await load(id); return NextResponse.json({ ...po, total: poTotal(po!.lines) }); };
@@ -14,6 +15,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const id = parseInt((await params).id);
   const po = await load(id);
   if (!po) return bad("Not found", 404);
+  if (!(await canSeeCompanyRecord({ id: u.userId, role: u.role }, po.entityId))) return bad("This space isn't yours", 403);
   const body = await req.json();
   const action = body.action as string;
   const now = new Date();
@@ -91,8 +93,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const u = await requirePoUser();
   if ("error" in u) return u.error;
   const id = parseInt((await params).id);
-  const po = await prisma.purchaseOrder.findUnique({ where: { id }, select: { status: true } });
+  const po = await prisma.purchaseOrder.findUnique({ where: { id }, select: { status: true, entityId: true } });
   if (!po) return bad("Not found", 404);
+  if (!(await canSeeCompanyRecord({ id: u.userId, role: u.role }, po.entityId))) return bad("This space isn't yours", 403);
   if (po.status !== "draft") return bad("Only a draft can be deleted (cancel it instead)");
   await prisma.purchaseOrder.delete({ where: { id } });
   return NextResponse.json({ ok: true });

@@ -2,12 +2,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePoUser } from "@/lib/purchaseOrders";
+import { canSeeCompanyRecord } from "@/lib/spaces";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const u = await requirePoUser();
   if ("error" in u) return u.error;
   const item = await prisma.stockItem.findUnique({ where: { id: parseInt((await params).id) } });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await canSeeCompanyRecord({ id: u.userId, role: u.role }, item.entityId))) return NextResponse.json({ error: "This space isn't yours" }, { status: 403 });
   const body = await req.json();
   const kind = body.kind;
   if (!["book_out", "return", "count"].includes(kind)) return NextResponse.json({ error: "Book out, return or count" }, { status: 400 });

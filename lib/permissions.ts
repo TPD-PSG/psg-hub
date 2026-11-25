@@ -1,4 +1,5 @@
-export type UserPerms = { modules: string[]; allProductions: boolean; hiddenSections?: string[] };
+// spaceEntityIds: the company spaces this person may open (missing = all). Admins ignore it. (25 Nov 2026)
+export type UserPerms = { modules: string[]; allProductions: boolean; hiddenSections?: string[]; spaceEntityIds?: number[] };
 
 // Modules a client can access regardless of stored permissions
 const CLIENT_MODULES = new Set(["productions", "venues"]);

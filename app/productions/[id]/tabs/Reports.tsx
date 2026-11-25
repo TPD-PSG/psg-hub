@@ -5,6 +5,7 @@ import { confirmDialog } from "@/components/Dialogs";
 import { F, Btns, inp, inpStyle, pickFiles, sendJson, toggled, useList, type TabProps } from "../shared";
 import { fmtWeekdayDate } from "@/lib/format";
 import { findReportGaps } from "@/lib/reportGaps";
+import WeeklyDigest from "@/components/WeeklyDigest";
 
 export default function ReportsTab({ prod }: TabProps) {
   const id = String(prod.id);
@@ -177,8 +178,15 @@ export default function ReportsTab({ prod }: TabProps) {
     }
   }
 
+  // From the weekly digest: open that report in the list and bring it into view
+  function openReport(rid: number) {
+    setExpandedReports(s => new Set([...s, rid]));
+    setTimeout(() => document.getElementById(`report-${rid}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
   return (
     <div className="space-y-4">
+      <WeeklyDigest productionId={prod.id} onOpenReport={openReport} />
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-white">Show Reports</h3>
@@ -277,7 +285,7 @@ export default function ReportsTab({ prod }: TabProps) {
             const isExpanded = expandedReports.has(r.id);
             const flags = parseFlags(r);
             return (
-              <div key={r.id}>
+              <div key={r.id} id={`report-${r.id}`} className="scroll-mt-20">
                 {/* Collapsed header — always visible */}
                 {/* The row toggles open; Edit/Delete sit beside it, since a button can't hold buttons */}
                 <div className="px-4 py-3 flex items-center gap-2 hover:bg-white/5 transition-colors">

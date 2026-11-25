@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { recordRun } from "@/lib/job-status";
 import { summariseDaily } from "@/lib/jobSummaries";
+import { weekDigest } from "@/lib/showDigest";
+import { digestLine, mondayOf } from "@/lib/showDigestCore";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +138,29 @@ async function runDaily(req: NextRequest): Promise<Response> {
       body: lines.join(" · ") + (acts.length > 8 ? ` · and ${acts.length - 8} more` : ""),
       link,
     }, `meeting-actions-${meetingId}`);
+  }
+
+  // ── 4c. Mondays: last week's show-report digest for each show's PSG team ──
+  // (?digestFor=YYYY-MM-DD runs it for that week on any day, for testing and catch-up)
+  const forced = req.nextUrl.searchParams.get("digestFor");
+  const isMonday = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Europe/London" }).format(now) === "Monday";
+  if (isMonday || forced) {
+    const weekStart = forced ? mondayOf(forced) : new Date(mondayOf().getTime() - 7 * 86400e3);
+    const weekEnd = new Date(weekStart.getTime() + 7 * 86400e3);
+    const shows = await prisma.production.findMany({
+      where: { showReports: { some: { reportDate: { gte: weekStart, lt: weekEnd } } } },
+      select: { id: true, name: true, team: { select: { user: { select: { id: true, role: true } } } } },
+    });
+    for (const show of shows) {
+      const g = await weekDigest(show.id, weekStart.toISOString().slice(0, 10));
+      const link = `/productions/${show.id}?section=reports&digest=${g.week}`;
+      const when = weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+      for (const { user } of show.team) {
+        if (user.role !== "admin" && user.role !== "member") continue; // PSG staff
+        if (sentLinks.has(`${user.id}|${link}`)) continue;
+        add({ userId: user.id, title: `${show.name}: week of ${when}`, body: digestLine(g), link }, `digest-${show.id}-${user.id}`);
+      }
+    }
   }
 
   if (queue.length) await prisma.notification.createMany({ data: queue });

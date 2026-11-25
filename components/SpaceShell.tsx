@@ -25,6 +25,7 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
     { href: `${base}/materials`, label: "Materials & kit" },
     { href: `${base}/noticeboard`, label: "Noticeboard" },
     { href: `${base}/fun`, label: "Fun Corner" },
+    { href: `${base}/roadmap`, label: "Roadmap" },
   ];
   const shared = [
     { href: "/tasks", label: "My tasks" }, { href: "/calendar", label: "Calendar" },

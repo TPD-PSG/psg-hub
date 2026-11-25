@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
   const now = new Date();
   const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  await mkdir(MEDIA_DIR, { recursive: true });
+  if (files.length) await mkdir(MEDIA_DIR, { recursive: true }); // only when there are photos to keep
   const mediaData = await Promise.all(
     files.map(async (file) => {
       const buf = await file.arrayBuffer();

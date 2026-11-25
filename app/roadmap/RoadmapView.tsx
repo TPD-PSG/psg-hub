@@ -15,6 +15,7 @@ export type RoadmapItem = {
   pinned: boolean;
   createdAt: string;
   createdByUser: UserInfo | null;
+  entity?: { id: number; name: string; shortName: string | null } | null;
 };
 
 const STATUSES = [
@@ -206,6 +207,7 @@ export default function RoadmapView({ initial }: { initial: RoadmapItem[] | null
                         {CAT_LABELS[item.category] ?? item.category}
                       </span>
                       {item.pinned && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-900/60 text-blue-300 shrink-0">Pinned</span>}
+                      {item.entity && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{ backgroundColor: "rgba(196,154,108,0.2)", color: "#e3c39d" }}>From {item.entity.shortName || item.entity.name}</span>}
                     </div>
                     <p className="text-sm font-medium text-white mb-1">{item.title}</p>
                     {item.body && <p className="text-xs mb-2 leading-relaxed" style={{ color: "var(--psg-muted)" }}>{item.body}</p>}

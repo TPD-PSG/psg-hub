@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { ROADMAP_INCLUDE } from "@/lib/roadmap";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       status: body.status !== undefined ? body.status : undefined,
       pinned: body.pinned !== undefined ? body.pinned : undefined,
     },
-    include: { createdByUser: { select: { id: true, name: true, avatarUrl: true } } },
+    include: ROADMAP_INCLUDE,
   });
   return NextResponse.json(item);
 }

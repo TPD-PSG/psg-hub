@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { ROADMAP_INCLUDE } from "@/lib/roadmap";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const items = await prisma.roadmapItem.findMany({
-    include: { createdByUser: { select: { id: true, name: true, avatarUrl: true } } },
+    include: ROADMAP_INCLUDE,
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
   });
   return NextResponse.json(items);
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
       status: body.status ?? "idea",
       createdByUserId: userId,
     },
-    include: { createdByUser: { select: { id: true, name: true, avatarUrl: true } } },
+    include: ROADMAP_INCLUDE,
   });
   return NextResponse.json(item, { status: 201 });
 }

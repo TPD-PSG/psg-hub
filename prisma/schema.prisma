@@ -454,6 +454,7 @@ model Entity {
   spacePhotos    SpacePhoto[]
   buildVotes     BuildVote[]
   funSubmissions FunSubmission[]
+  roadmapItems   RoadmapItem[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1080,6 +1081,8 @@ model RoadmapItem {
   pinned          Boolean  @default(false)
   createdByUserId Int?
   createdByUser   User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  entityId        Int? // the company space it was raised from (null = the main Hub)
+  entity          Entity?  @relation(fields: [entityId], references: [id], onDelete: SetNull)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

@@ -16,6 +16,7 @@ import BuildChecklist, { type Check } from "@/components/BuildChecklist";
 import BuildDesign, { type JobContactRow, type JobFileRow } from "@/components/BuildDesign";
 import DrawingRegister, { type DrawingRow, type Blocker } from "@/components/DrawingRegister";
 import Variations, { type VariationRow } from "@/components/Variations";
+import SetStorage, { type StorageData } from "@/components/SetStorage";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
@@ -41,9 +42,10 @@ const when = (p: PartRow) => {
 const th = "text-left font-semibold py-2 pr-3";
 const td = "py-2 pr-3 align-top";
 
-export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles, initialDrawings, initialVariations = [] }: {
+export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles, initialDrawings, initialVariations = [], initialStorage = null }: {
   space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[]; initialChecks: Check[]; initialContacts: JobContactRow[]; initialFiles: JobFileRow[]; initialDrawings: { drawings: DrawingRow[]; blockers: Blocker[]; overrides?: { id: number; text: string; createdAt: string }[] };
   initialVariations?: VariationRow[];
+  initialStorage?: StorageData | null;
 }) {
   const [blockers, setBlockers] = useState(initialDrawings.blockers);
   const [gate, setGate] = useState<null | { stage: string; message: string; canOverride: boolean; reason: string }>(null);
@@ -440,6 +442,8 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
               <Link href={`${base}/noticeboard`} className="text-[13px] font-semibold" style={link}>Noticeboard →</Link>
             </div>
           </section>
+
+          {initialStorage && <SetStorage slug={space.slug} base={`/spaces/${space.slug}`} jobId={job.id} initial={initialStorage} />}
 
           {/* Drawings & files */}
           <section style={card} className="flex flex-col gap-2.5">

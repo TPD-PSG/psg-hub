@@ -458,6 +458,8 @@ model Entity {
   buildVotes     BuildVote[]
   funSubmissions FunSubmission[]
   roadmapItems   RoadmapItem[]
+  storageLocations StorageLocation[]
+  storedPieces   StoredPiece[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1294,6 +1296,7 @@ model Job {
   files           JobFile[]
   drawings        Drawing[]
   variations      JobVariation[]
+  storedPieces    StoredPiece[]
   logs            JobLog[]
 }
 
@@ -1661,4 +1664,56 @@ model VariationLine {
   sortOrder   Int          @default(0)
 
   @@index([variationId])
+}
+
+// Set storage (27 Nov 2026): built pieces and where they've been put. Nothing is charged.
+// Each company space keeps its own list of locations (Bay 3, Racking A2, Container 1…).
+model StorageLocation {
+  id        Int           @id @default(autoincrement())
+  entityId  Int
+  entity    Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  name      String
+  notes     String?
+  archived  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  pieces    StoredPiece[]
+
+  @@unique([entityId, name])
+}
+
+model StoredPiece {
+  id          Int              @id @default(autoincrement())
+  entityId    Int
+  entity      Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  jobId       Int?
+  job         Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  name        String // e.g. "Palace flats (pair)", "Truck 3"
+  quantity    Int              @default(1)
+  locationId  Int?
+  location    StorageLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  notes       String?
+  storedAt    DateTime         @default(now())
+  outAt       DateTime? // gone out (delivered, collected, scrapped); null = in store
+  outNote     String?
+  createdById Int?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  moves       StoredPieceMove[]
+
+  @@index([entityId, outAt])
+  @@index([jobId])
+}
+
+// Where a piece has been: put in, moved, gone out, back in
+model StoredPieceMove {
+  id        Int         @id @default(autoincrement())
+  pieceId   Int
+  piece     StoredPiece @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+  kind      String // in | move | out | back
+  location  String? // the location's name at the time
+  note      String?
+  byName    String?
+  createdAt DateTime    @default(now())
+
+  @@index([pieceId])
 }

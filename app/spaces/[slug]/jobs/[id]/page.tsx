@@ -10,13 +10,14 @@ import type { Check } from "@/components/BuildChecklist";
 import type { JobContactRow, JobFileRow } from "@/components/BuildDesign";
 import type { DrawingRow, Blocker, Override } from "@/components/DrawingRegister";
 import type { VariationRow } from "@/components/Variations";
+import type { StorageData } from "@/components/SetStorage";
 
 export default async function SpaceJobPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
   if (!/^[a-z0-9-]{2,30}$/.test(slug) || !/^\d+$/.test(id)) notFound();
   const session = await auth();
   const me = session?.user as { id?: string; role?: string } | undefined;
-  const [data, plan, parts, prods, materials, photos, checks, contacts, files, drawings, variations] = await Promise.all([
+  const [data, plan, parts, prods, materials, photos, checks, contacts, files, drawings, variations, storage] = await Promise.all([
     serverApi<{ seeMoney: boolean; job: JobDetail }>(`/api/jobs/${id}`),
     serverApi<PlannerData>(`/api/spaces/${slug}/planner`),
     serverApi<PartRow[]>(`/api/jobs/${id}/parts`),
@@ -28,6 +29,7 @@ export default async function SpaceJobPage({ params }: { params: Promise<{ slug:
     serverApi<JobFileRow[]>(`/api/jobs/${id}/files`),
     serverApi<{ drawings: DrawingRow[]; blockers: Blocker[]; overrides: Override[] }>(`/api/jobs/${id}/drawings`),
     serverApi<VariationRow[]>(`/api/jobs/${id}/variations`), // only for people who can see prices
+    serverApi<StorageData>(`/api/spaces/${slug}/storage?jobId=${id}`),
   ]);
   if (!data?.job || !plan?.space) notFound();
   if (data.job.entity?.id !== plan.space.id) redirect(`/jobs/${id}`);
@@ -40,6 +42,7 @@ export default async function SpaceJobPage({ params }: { params: Promise<{ slug:
       initialPhotos={Array.isArray(photos) ? photos : []} initialChecks={Array.isArray(checks) ? checks : []}
       initialContacts={Array.isArray(contacts) ? contacts : []} initialFiles={Array.isArray(files) ? files : []}
       initialDrawings={drawings && "drawings" in drawings ? drawings : { drawings: [], blockers: [] }} me={{ id: Number(me?.id), isAdmin: me?.role === "admin" }}
-      initialVariations={Array.isArray(variations) ? variations : []} />
+      initialVariations={Array.isArray(variations) ? variations : []}
+      initialStorage={storage && Array.isArray(storage.pieces) ? storage : null} />
   );
 }

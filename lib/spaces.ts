@@ -35,3 +35,13 @@ export function textOn(hex: string | null): "#ffffff" | "#0a193d" {
   const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return L > 0.4 ? "#0a193d" : "#ffffff";
 }
+
+/** The spaces a person can open: PSG staff see every switched-on space, others their own company's. */
+export async function spacesFor(user: { id: number; role: string }): Promise<SpaceTheme[]> {
+  if (user.role === "admin" || user.role === "member") {
+    const all = await prisma.entity.findMany({ where: { hasSpace: true, archived: false, slug: { not: null } }, select: THEME_SELECT, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+    return all.map(toTheme);
+  }
+  const home = await homeSpaceFor(user.id);
+  return home ? [home] : [];
+}

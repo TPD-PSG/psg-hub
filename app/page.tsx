@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 import { serverApi } from "@/lib/serverApi";
 import DashboardView, { type DashboardData } from "./DashboardView";
 import type { EntityOverviewRow, Visibility } from "@/lib/entityOverview";
-import { homeSpaceFor } from "@/lib/spaces";
+import { homeSpaceFor, spacesFor } from "@/lib/spaces";
 
 const list = <T,>(v: unknown) => (Array.isArray(v) ? (v as T[]) : []);
 
@@ -45,6 +45,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     salesTasksCount: list<{ completedAt: string | null }>(salesTasks).filter(t => !t.completedAt).length,
     calEvents: list(calEvents),
     entityOverview: entityOverview && Array.isArray(entityOverview.rows) ? entityOverview : null,
+    spaces: await spacesFor({ id: viewer.id, role: viewer.role }).catch(() => []),
     // Sources a user's modules block (e.g. finance for a freelancer) come back null too; only treat
     // the always-available ones as a sign the server couldn't reach its own API
     complete: tasks !== null && productions !== null && quickLinks !== null && settings !== null && calEvents !== null,

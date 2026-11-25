@@ -11,7 +11,8 @@ import { MobileSidebarProvider } from "@/components/Sidebar";
 import AppChrome from "@/components/AppChrome";
 import MobileMenuButton from "@/components/MobileMenuButton";
 import SeasonalOverlay from "@/components/SeasonalOverlay";
-import { homeSpaceFor, textOn } from "@/lib/spaces";
+import { homeSpaceFor, spacesFor, textOn } from "@/lib/spaces";
+import { SpaceTopBarLinks } from "@/components/SpaceLinks";
 
 export const metadata: Metadata = {
   title: "PSG Hub",
@@ -32,6 +33,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // A person whose company has its own space sees its colours, logo and name in the top bar
   const userId = Number((session?.user as { id?: string } | undefined)?.id);
   const space = userId ? await homeSpaceFor(userId).catch(() => null) : null;
+  // Company spaces this person can open get a button in the top bar on every Hub page
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "member";
+  const spaces = userId ? await spacesFor({ id: userId, role }).catch(() => []) : [];
   const barColor = space?.color ?? "var(--psg-navy)";
   const barInk = space?.color ? textOn(space.color) : "#ffffff";
   return (
@@ -64,6 +68,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   {space ? `${space.shortName ?? space.name} · PSG Hub` : "PSG Hub"}
                 </span>
                 <div className="flex-1" />
+                <SpaceTopBarLinks spaces={spaces} />
                 <NotificationBell />
                 <UserNav />
               </header>

@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from "react";
 import EntityOverview from "@/components/EntityOverview";
 import type { EntityOverviewRow, Visibility } from "@/lib/entityOverview";
+import type { SpaceTheme } from "@/lib/spaces";
+import { SpaceHomeBanners } from "@/components/SpaceLinks";
 import Link from "next/link";
 import { parsePerms, canAccess } from "@/lib/permissions";
 import { fmtDay as fmtDate } from "@/lib/format";
@@ -245,6 +247,7 @@ export type DashboardData = {
   expenses: { id: number; status: string; netAmount: number; vatAmount: number }[];
   salesBrands: SalesBrand[]; salesTasksCount: number; calEvents: CalEvent[];
   entityOverview?: { see: Visibility; rows: EntityOverviewRow[] } | null; // staff only
+  spaces?: SpaceTheme[]; // company spaces this person can open (e.g. The Workshop Stoke)
   complete: boolean; // false if any source failed on the server; the browser then loads them itself
 };
 
@@ -344,6 +347,9 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
           {now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </p>
       </div>
+
+      {/* Company spaces, in their own colours */}
+      <SpaceHomeBanners spaces={initial.spaces ?? []} />
 
       {/* Top two-column section */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -476,10 +482,6 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
             {(role === "admin" || role === "member") && (
               <CompactTile href="/jobs" icon="🧾" title="Jobs" sub="Days, costs and margin per job" />
             )}
-            {/* Each company with its own space (e.g. The Workshop Stoke) */}
-            {initial.entityOverview?.rows.filter(r => r.spaceSlug).map(r => (
-              <CompactTile key={r.spaceSlug} href={`/spaces/${r.spaceSlug}`} icon="🏭" title={r.name} sub="Company space: live jobs and schedule" />
-            ))}
             {/* Haulage across productions is staff-only, like its API */}
             {canAccess(perms, "productions", role) && (role === "admin" || role === "member") && (
               <CompactTile href="/haulage" icon="🚚" title="Haulage" sub="Movements across all productions" />

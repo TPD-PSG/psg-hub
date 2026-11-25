@@ -58,7 +58,11 @@ export default () => run("spaces", async ({ db, users, login, anon, results }) =
     ok(page.includes("Space test build") && page.includes("SHARED WITH PSG") && page.includes("#e4572e"), "space page in the first HTML, in the space's own frame and colours");
     ok(page.includes("WORKSHOP SPACE TEST") && page.includes("Build board") && page.includes("Planner"), "space has its own top bar and sidebar");
     const adminHome = await (await a("/", { headers: { accept: "text/html" } })).text();
-    ok(adminHome.includes(`/spaces/${SLUG}`), "Home links to the space (tile and Companies row)");
+    ok(adminHome.includes(`/spaces/${SLUG}`) && adminHome.includes("Company space") && adminHome.includes("Open TWS-T"), "Hub home has a banner into the space");
+    const prodPage = await (await a("/productions", { headers: { accept: "text/html" } })).text();
+    ok(prodPage.includes("TWS-T space") && prodPage.includes(`href="/spaces/${SLUG}"`), "every Hub page has the space in the top bar");
+    const clientPage = await (await c("/productions", { headers: { accept: "text/html" } })).text();
+    ok(!clientPage.includes(`href="/spaces/${SLUG}"`), "people from other companies don't get the link");
     ok(!adminHome.includes("TWS-T · PSG Hub"), "people from other companies keep the PSG top bar");
   } finally {
     await db.user.updateMany({ where: { homeEntityId: entity?.id }, data: { homeEntityId: null } }).catch(() => {});

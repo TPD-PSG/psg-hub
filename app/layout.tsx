@@ -7,7 +7,8 @@ import { auth } from "@/auth";
 import { DialogHost } from "@/components/Dialogs";
 import UserNav from "@/components/UserNav";
 import NotificationBell from "@/components/NotificationBell";
-import Sidebar, { MobileSidebarProvider } from "@/components/Sidebar";
+import { MobileSidebarProvider } from "@/components/Sidebar";
+import AppChrome from "@/components/AppChrome";
 import MobileMenuButton from "@/components/MobileMenuButton";
 import SeasonalOverlay from "@/components/SeasonalOverlay";
 import { homeSpaceFor, textOn } from "@/lib/spaces";
@@ -43,36 +44,32 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen" style={{ backgroundColor: "var(--psg-dark-bg)", color: "var(--psg-text)" }}>
         <AuthProvider session={session}>
           <MobileSidebarProvider>
-            {/* Top bar */}
-            <header style={{ backgroundColor: barColor }} className="h-14 flex items-center px-4 gap-3 shadow-lg shrink-0 sticky top-0 z-40">
-              <MobileMenuButton />
-              <Link href="/" className="flex items-center shrink-0 gap-2">
-                {space?.logoUrl ? (
-                  <div className="bg-white rounded px-2 py-1 h-10 flex items-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- served by our own API with a cache-busting version */}
-                    <img src={space.logoUrl} alt={space.name} className="h-8 w-auto max-w-[90px] object-contain" />
-                  </div>
-                ) : (
-                  <div className="bg-white rounded px-2 py-1">
-                    <Image src="/psg-logo.png" alt="Production Solutions Group" width={70} height={45} className="object-contain" priority />
-                  </div>
-                )}
-              </Link>
-              <span className="text-xs font-semibold tracking-widest uppercase hidden sm:block" style={{ color: barInk, opacity: 0.6 }}>
-                {space ? `${space.shortName ?? space.name} · PSG Hub` : "PSG Hub"}
-              </span>
-              <div className="flex-1" />
-              <NotificationBell />
-              <UserNav />
-            </header>
-
-            {/* Body: sidebar + content */}
-            <div className="flex" style={{ minHeight: "calc(100vh - 56px)" }}>
-              <Sidebar />
-              <main className="flex-1 min-w-0 px-4 md:px-6 py-6 md:py-8">
-                {children}
-              </main>
-            </div>
+            {/* Top bar, sidebar and page (a company space draws its own) */}
+            <AppChrome header={
+              <header style={{ backgroundColor: barColor }} className="h-14 flex items-center px-4 gap-3 shadow-lg shrink-0 sticky top-0 z-40">
+                <MobileMenuButton />
+                <Link href="/" className="flex items-center shrink-0 gap-2">
+                  {space?.logoUrl ? (
+                    <div className="bg-white rounded px-2 py-1 h-10 flex items-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- served by our own API with a cache-busting version */}
+                      <img src={space.logoUrl} alt={space.name} className="h-8 w-auto max-w-[90px] object-contain" />
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded px-2 py-1">
+                      <Image src="/psg-logo.png" alt="Production Solutions Group" width={70} height={45} className="object-contain" priority />
+                    </div>
+                  )}
+                </Link>
+                <span className="text-xs font-semibold tracking-widest uppercase hidden sm:block" style={{ color: barInk, opacity: 0.6 }}>
+                  {space ? `${space.shortName ?? space.name} · PSG Hub` : "PSG Hub"}
+                </span>
+                <div className="flex-1" />
+                <NotificationBell />
+                <UserNav />
+              </header>
+            }>
+              {children}
+            </AppChrome>
           </MobileSidebarProvider>
           <SeasonalOverlay />
           <DialogHost />

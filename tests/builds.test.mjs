@@ -57,6 +57,29 @@ export default () => run("builds", async ({ db, users, login, results }) => {
     ok(sj?.stage === "technical_design" && sj.deliveryMethod === "collection" && sj.forProduction?.id === made.prod.id, "space data carries stage, collection and the show");
     const board = await (await m("/spaces/builds-test/board", { headers: { accept: "text/html" } })).text();
     ok(board.includes("Build board") && board.includes("Builds test flat") && board.includes("Technical Design"), "build board page renders the build in its stage");
+    // Parts and the planner
+    const part = (body, who = m, id = job.id) => who(`/api/jobs/${id}/parts`, { method: "POST", body: JSON.stringify(body) });
+    ok((await part({ label: "Frames", days: 2 }, f)).status === 403, "a freelancer can't add parts");
+    ok((await part({ label: "", days: 2 })).status === 400, "a part needs a name");
+    ok((await part({ label: "Frames", days: 0 })).status === 400, "days from 1 up");
+    const p1 = await json(await part({ label: "Truck frames", days: 3, hours: 24, userId: member.id, startDate: "2026-12-07" }));
+    const p2 = await json(await part({ label: "Load-out", days: 1 }));
+    ok(p1.user?.id === member.id && p1.startDate?.startsWith("2026-12-07") && p1.days === 3 && p2.userId === null, "parts added, one planned and one to plan");
+    ok((await m(`/api/jobs/${pm.id}/parts/${p2.id}`, { method: "PATCH", body: JSON.stringify({ done: true }) })).status === 404, "a part can only be changed on its own job");
+    let pr = await json(await m(`/api/jobs/${job.id}/parts/${p2.id}`, { method: "PATCH", body: JSON.stringify({ userId: member.id, startDate: "2026-12-08" }) }));
+    ok(pr.userId === member.id && pr.startDate?.startsWith("2026-12-08"), "a part is planned onto a person and day");
+    const plan = await json(await m("/api/spaces/builds-test/planner?from=2026-12-09"));
+    ok(plan.from === "2026-12-07" && plan.days === 14, "planner starts on the Monday of the week asked for");
+    ok(plan.parts?.length === 2 && plan.crew?.some(c => c.id === member.id) && plan.jobs?.some(j => j.id === job.id) && plan.canEdit, "planner has the parts, the crew planned on them and the builds");
+    ok(!JSON.stringify(plan).includes("price"), "no money in the planner");
+    ok((await c("/api/spaces/builds-test/planner")).status === 403, "someone from another company can't open the planner");
+    const pp = await (await m("/spaces/builds-test/planner", { headers: { accept: "text/html" } })).text();
+    ok(pp.includes("Workshop planner") && pp.includes("Truck frames"), "planner page renders");
+    const jp = await (await m(`/spaces/builds-test/jobs/${job.id}`, { headers: { accept: "text/html" } })).text();
+    ok(jp.includes("Parts of this build") && jp.includes("Truck frames") && jp.includes("Builds test flat"), "the build's page inside the space renders");
+    const other = await m(`/spaces/builds-test/jobs/${pm.id}`, { headers: { accept: "text/html" }, redirect: "manual" });
+    ok([303, 307, 308].includes(other.status) || (await other.text()).includes("NEXT_REDIRECT"), "a job from another company goes to the normal Jobs page");
+    ok((await m(`/api/jobs/${job.id}/parts/${p2.id}`, { method: "DELETE" })).status === 200, "a part is deleted");
     const list = await json(await m("/api/jobs"));
     ok((Array.isArray(list) ? list : list.jobs ?? []).find(j => j.id === job.id)?.stage === "technical_design", "jobs list carries the stage");
   } finally {

@@ -23,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       where: { entityId: space.id, status: "active" },
       select: {
         id: true, number: true, title: true, jobType: true, startDate: true, endDate: true,
-        stage: true, stageChangedAt: true, deliveryMethod: true, forProduction: { select: { id: true, name: true } },
+        stage: true, stageChangedAt: true, deliveryMethod: true, deliveryNotes: true, forProduction: { select: { id: true, name: true } },
         client: { select: { id: true, name: true } }, production: { select: { id: true, name: true } },
         _count: { select: { time: true } },
       },
@@ -32,6 +32,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     prisma.user.findMany({ where: { homeEntityId: space.id }, select: { id: true, name: true, avatarUrl: true, role: true }, orderBy: { name: "asc" } }),
     prisma.setting.findUnique({ where: { key: "news" } }),
   ]);
+  // Parts of the live builds (crew per build this week, and what's still to plan)
+  const parts = await prisma.buildPart.findMany({
+    where: { jobId: { in: jobs.map(j => j.id) } },
+    select: { id: true, jobId: true, label: true, userId: true, startDate: true, days: true, done: true },
+  });
   // Build schedule: starts and finishes in the next four weeks; due out: finishing within 4 weeks
   const schedule = jobs.flatMap(j => [
     j.startDate && j.startDate >= today && j.startDate < in28 ? [{ date: j.startDate, kind: "Starts", jobId: j.id, title: j.title }] : [],
@@ -39,5 +44,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   ].flat()).sort((a, b) => a.date.getTime() - b.date.getTime());
   const dueOut = jobs.filter(j => j.endDate && j.endDate >= today && j.endDate < in28);
   const overdue = jobs.filter(j => j.endDate && j.endDate < today);
-  return NextResponse.json({ space, jobs, schedule, dueOut, overdue, team, news: news?.value || null });
+  return NextResponse.json({ space, jobs, parts, schedule, dueOut, overdue, team, news: news?.value || null, canEdit: user.role === "admin" || user.role === "member" });
 }

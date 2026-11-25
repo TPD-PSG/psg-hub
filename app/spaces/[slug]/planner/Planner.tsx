@@ -1,0 +1,284 @@
+"use client";
+
+// Workshop planner: parts of each build placed on a person and a run of days. Drag a part onto a
+// person's day, or click a part and then a slot. Parts with no one or no date wait in "To plan".
+// Clashes (two parts at once, or a part while booked on a show elsewhere in the Hub) show in red.
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { alertDialog, confirmDialog } from "@/components/Dialogs";
+import type { SpaceTheme } from "@/lib/spaces";
+import { buildStageLabel } from "@/lib/buildStages";
+import { caps, card, h2, muted, btnSolid, btnLine, input, label as lbl, pageHeader, JOB_FILLS } from "@/lib/twsUi";
+
+type Part = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; user: { id: number; name: string } | null };
+type Job = { id: number; number: string; title: string; stage: string | null; startDate: string | null; endDate: string | null; deliveryMethod: string | null; client: { name: string } | null };
+export type PlannerData = {
+  space: SpaceTheme; from: string; days: number; jobs: Job[]; parts: Part[];
+  crew: { id: number; name: string; team: boolean }[];
+  elsewhere: { userId: number; startDate: string; endDate: string; activityType: string | null; production: { id: number; name: string } }[];
+  staff: { id: number; name: string }[]; canEdit: boolean;
+};
+
+const DAY = 86400e3;
+const t = (s: string) => new Date(`${s.slice(0, 10)}T00:00:00Z`).getTime();
+const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const dname = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: "UTC" });
+const range = (ms: number, n: number) => `${dname(ms)} – ${new Date(ms + (n - 1) * DAY).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}`;
+
+export default function Planner({ initial }: { initial: PlannerData }) {
+  const router = useRouter();
+  const [parts, setParts] = useState(initial.parts);
+  const [extraRows, setExtraRows] = useState<{ id: number; name: string; team: boolean }[]>([]);
+  const [sel, setSel] = useState<number | null>(null);
+  const [drag, setDrag] = useState<number | null>(null);
+  const [adding, setAdding] = useState({ jobId: initial.jobs[0]?.id ? String(initial.jobs[0].id) : "", label: "", days: "1", hours: "" });
+  const { space, jobs, elsewhere, canEdit } = initial;
+  const base = `/spaces/${space.slug}`;
+  const from = t(initial.from), N = initial.days;
+  const days = Array.from({ length: N }, (_, i) => from + i * DAY);
+  const today = t(new Date().toISOString());
+  const fill = (jobId: number) => JOB_FILLS[Math.max(0, jobs.findIndex(j => j.id === jobId)) % JOB_FILLS.length];
+  const jobName = (jobId: number) => jobs.find(j => j.id === jobId)?.title ?? "";
+  const crew = useMemo(() => [...initial.crew, ...extraRows.filter(r => !initial.crew.some(c => c.id === r.id))], [initial.crew, extraRows]);
+
+  // Clashes per person: overlapping parts, or a part during a show booking elsewhere
+  const { clashIds, clashText } = useMemo(() => {
+    const ids = new Set<number>(), text: string[] = [];
+    for (const c of crew) {
+      const mine = parts.filter(p => p.userId === c.id && p.startDate && !p.done);
+      mine.forEach((a, i) => mine.slice(i + 1).forEach(b => {
+        const a0 = t(a.startDate!), b0 = t(b.startDate!);
+        if (a0 < b0 + b.days * DAY && b0 < a0 + a.days * DAY) { ids.add(a.id); ids.add(b.id); text.push(`${c.name} has ${a.label} and ${b.label} on ${dname(Math.max(a0, b0))}`); }
+      }));
+      for (const p of mine) for (const e of elsewhere.filter(e => e.userId === c.id)) {
+        const p0 = t(p.startDate!), e0 = t(e.startDate), e1 = t(e.endDate) + DAY;
+        if (p0 < e1 && e0 < p0 + p.days * DAY) { ids.add(p.id); text.push(`${c.name} is on ${e.production.name} during ${p.label}`); }
+      }
+    }
+    return { clashIds: ids, clashText: text };
+  }, [parts, crew, elsewhere]);
+
+  async function save(p: Part, patch: Partial<Pick<Part, "userId" | "startDate" | "days" | "done">>) {
+    const before = parts;
+    setParts(ps => ps.map(x => (x.id === p.id ? { ...x, ...patch, user: patch.userId === undefined ? x.user : crew.find(c => c.id === patch.userId) ?? null } : x)));
+    const res = await fetch(`/api/jobs/${p.jobId}/parts/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+    if (!res.ok) { setParts(before); alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't save that"); }
+  }
+  const place = (id: number | null, userId: number | null, day: number | null) => {
+    const p = parts.find(x => x.id === id);
+    setSel(null); setDrag(null);
+    if (!p || !canEdit) return;
+    save(p, userId === null ? { userId: null, startDate: null } : { userId, startDate: iso(day!) });
+  };
+  async function addPart(e: React.FormEvent) {
+    e.preventDefault();
+    if (!adding.jobId) return alertDialog("Pick the build this part belongs to.");
+    const res = await fetch(`/api/jobs/${adding.jobId}/parts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: adding.label, days: Number(adding.days), hours: adding.hours }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(body.error ?? "Couldn't add the part");
+    setParts(ps => [...ps, body]); setAdding(a => ({ ...a, label: "", hours: "" })); setSel(body.id);
+  }
+  async function remove(p: Part) {
+    if (!(await confirmDialog(`Delete the part "${p.label}"?`))) return;
+    const res = await fetch(`/api/jobs/${p.jobId}/parts/${p.id}`, { method: "DELETE" });
+    if (res.ok) { setParts(ps => ps.filter(x => x.id !== p.id)); setSel(null); }
+  }
+
+  const tray = parts.filter(p => !p.done && (!p.userId || !p.startDate));
+  const selPart = parts.find(p => p.id === sel) ?? null;
+  const go = (ms: number) => router.push(`${base}/planner?from=${iso(ms)}`);
+  const dragProps = (p: Part) => canEdit ? {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => { try { e.dataTransfer.setData("text/plain", String(p.id)); e.dataTransfer.effectAllowed = "move"; } catch { /* some browsers refuse */ } setDrag(p.id); },
+    onDragEnd: () => setDrag(null),
+  } : {};
+  const dropId = (e: React.DragEvent) => { e.preventDefault(); const v = Number(e.dataTransfer.getData("text/plain")); return v || drag || sel; };
+
+  // Builds timeline: 8 weeks from this fortnight's Monday
+  const W = 8, tlDays = W * 7;
+  const tl = jobs.filter(j => j.startDate || j.endDate);
+  const unscheduled = jobs.filter(j => !j.startDate && !j.endDate);
+
+  return (
+    <>
+      <header style={pageHeader} className="px-4 sm:px-10 pt-5 pb-6 flex flex-col gap-3">
+        <div className="text-[13px]" style={muted}><Link href={base} style={{ color: "var(--tws-accent-ink)" }}>{space.name}</Link> › Planner</div>
+        <div className="flex flex-wrap justify-between items-end gap-4">
+          <div className="flex flex-col gap-1 min-w-0">
+            <h1 style={{ margin: 0, fontSize: 30, lineHeight: "36px", fontWeight: 800 }}>Workshop planner</h1>
+            <span className="text-sm" style={muted}>{range(from, N)} · weekends shaded{canEdit ? " · drag a part onto a person and day, or click a part then click a slot" : ""}</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button type="button" onClick={() => go(from - 14 * DAY)} style={btnLine} aria-label="Previous fortnight">←</button>
+            <button type="button" onClick={() => go(today)} style={btnLine}>This week</button>
+            <button type="button" onClick={() => go(from + 14 * DAY)} style={btnLine} aria-label="Next fortnight">→</button>
+          </div>
+        </div>
+        {jobs.length > 0 && (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px]" aria-label="Builds">
+            {jobs.map(j => <li key={j.id} className="flex gap-1.5 items-center"><span aria-hidden="true" className="w-3.5 h-3.5 inline-block box-border" style={fill(j.id)} /><Link href={`${base}/jobs/${j.id}`} className="hover:underline" style={{ color: "var(--tws-ink)" }}>{j.title}</Link></li>)}
+          </ul>
+        )}
+      </header>
+
+      <div className="px-4 sm:px-10 pt-6 pb-10 flex flex-col gap-5">
+        {clashText.length > 0 && (
+          <div role="alert" className="px-4 py-3 text-sm" style={{ background: "var(--tws-bad-bg)", border: "1px solid var(--tws-bad-line)", color: "#7a2414" }}>
+            <strong>Clash:</strong> {clashText.join(" · ")}
+          </div>
+        )}
+
+        {/* To plan */}
+        <section aria-label="Parts not yet planned" className="p-4 flex flex-col gap-3" style={{ background: "var(--tws-card)", border: "2px dashed #b5ac9c" }}
+          onDragOver={e => e.preventDefault()} onDrop={e => place(dropId(e), null, null)}>
+          <div className="flex justify-between items-baseline gap-3 flex-wrap">
+            <h2 style={{ ...h2, fontSize: 16 }}>To plan</h2>
+            {selPart && canEdit && (
+              <div className="flex gap-2 flex-wrap items-center text-[13px]">
+                <span className="font-semibold">{selPart.label}:</span>
+                <button type="button" onClick={() => save(selPart, { days: Math.max(1, selPart.days - 1) })} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }} aria-label="One day shorter">− day</button>
+                <span>{selPart.days}d</span>
+                <button type="button" onClick={() => save(selPart, { days: selPart.days + 1 })} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }} aria-label="One day longer">+ day</button>
+                {selPart.userId && <button type="button" onClick={() => place(selPart.id, null, null)} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }}>Back to To plan</button>}
+                <button type="button" onClick={() => { save(selPart, { done: true }); setSel(null); }} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }}>Mark done</button>
+                <button type="button" onClick={() => remove(selPart)} style={{ ...btnLine, padding: "4px 10px", fontSize: 13, color: "var(--tws-bad-ink)", borderColor: "var(--tws-bad-line)" }}>Delete</button>
+                <button type="button" onClick={() => setSel(null)} className="underline" style={muted}>Cancel</button>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 min-h-11">
+            {tray.map(p => (
+              <button key={p.id} type="button" {...dragProps(p)} onClick={() => canEdit && setSel(sel === p.id ? null : p.id)} aria-pressed={sel === p.id}
+                className="text-[13px] font-semibold text-left min-h-11 px-3 py-1.5" style={{ ...fill(p.jobId), cursor: canEdit ? "grab" : "default", outline: sel === p.id ? "3px solid var(--tws-night)" : "none" }}>
+                {p.label} ({jobName(p.jobId)}) · {p.days}d{p.user ? ` · ${p.user.name}` : ""}
+              </button>
+            ))}
+            {tray.length === 0 && <span className="text-[13px] self-center" style={muted}>{parts.length ? "Everything is planned." : "No parts yet. Add the parts of each build below."}</span>}
+          </div>
+          {canEdit && jobs.length > 0 && (
+            <form onSubmit={addPart} className="grid gap-2 items-end pt-3 sm:grid-cols-[1.4fr_1.6fr_80px_90px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
+              <div><label htmlFor="np-job" style={lbl}>Build</label>
+                <select id="np-job" style={input} value={adding.jobId} onChange={e => setAdding({ ...adding, jobId: e.target.value })}>{jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}</select></div>
+              <div><label htmlFor="np-label" style={lbl}>Part</label>
+                <input id="np-label" required style={input} value={adding.label} onChange={e => setAdding({ ...adding, label: e.target.value })} placeholder="e.g. Truck frames" /></div>
+              <div><label htmlFor="np-days" style={lbl}>Days</label>
+                <input id="np-days" type="number" min={1} max={60} required style={input} value={adding.days} onChange={e => setAdding({ ...adding, days: e.target.value })} /></div>
+              <div><label htmlFor="np-hours" style={lbl}>Hours</label>
+                <input id="np-hours" type="number" min={0} step="0.5" style={input} value={adding.hours} onChange={e => setAdding({ ...adding, hours: e.target.value })} placeholder="opt." /></div>
+              <button type="submit" style={{ ...btnSolid, padding: "8px 14px" }}>Add part</button>
+            </form>
+          )}
+        </section>
+
+        {/* Crew by day */}
+        <section aria-label="Planner grid" className="p-4 overflow-x-auto" style={{ background: "var(--tws-card)", border: "1px solid var(--tws-line)" }}>
+          <div className="flex flex-col gap-1.5" style={{ minWidth: 1100 }}>
+            <div className="grid gap-1 text-xs font-bold" style={{ gridTemplateColumns: `170px repeat(${N}, minmax(0, 1fr))` }}>
+              <span style={{ ...caps, letterSpacing: "0.2em", alignSelf: "center" }}>Crew</span>
+              {days.map(d => {
+                const wk = new Date(d).getUTCDay() % 6 === 0;
+                return <span key={d} className="text-center py-1.5" style={d === today ? { background: "var(--tws-char)", color: "#fff" } : { background: wk ? "#e2d9ca" : "var(--tws-ground)" }}>{dname(d)}</span>;
+              })}
+            </div>
+            {crew.length === 0 && <p className="text-sm py-3" style={muted}>No crew yet. Set people&apos;s company to {space.name} in Admin → Users, or add someone below.</p>}
+            {crew.map(c => {
+              const mine = parts.filter(p => p.userId === c.id && p.startDate && !p.done);
+              const load = mine.reduce((n, p) => n + Math.max(0, Math.min(t(p.startDate!) + p.days * DAY, from + N * DAY) - Math.max(t(p.startDate!), from)) / DAY, 0);
+              const away = elsewhere.filter(e => e.userId === c.id);
+              // Overlapping parts go in lanes so none hides another; show bookings get a lane of their own
+              const lanes: number[][] = [];
+              const laneOf = new Map<number, number>();
+              for (const p of [...mine].sort((a, b) => t(a.startDate!) - t(b.startDate!))) {
+                const s0 = t(p.startDate!), e0 = s0 + p.days * DAY;
+                let li = lanes.findIndex(l => l.every(id => { const q = mine.find(x => x.id === id)!; const q0 = t(q.startDate!); return e0 <= q0 || q0 + q.days * DAY <= s0; }));
+                if (li < 0) { lanes.push([]); li = lanes.length - 1; }
+                lanes[li].push(p.id); laneOf.set(p.id, li);
+              }
+              const L = Math.max(1, lanes.length) + (away.length ? 1 : 0);
+              const laneH = L === 1 ? 52 : 30;
+              return (
+                <div key={c.id} className="grid gap-1 items-stretch" style={{ gridTemplateColumns: "170px minmax(0, 1fr)" }}>
+                  <div className="flex flex-col justify-center px-2 py-1" style={{ background: "var(--tws-ground)" }}>
+                    <strong className="text-[13px] truncate">{c.name}</strong>
+                    <span className="text-[11px]" style={muted}>{load} day{load === 1 ? "" : "s"} booked{c.team ? "" : " · from PSG"}</span>
+                  </div>
+                  <div className="grid gap-x-1 gap-y-0.5" style={{ gridTemplateColumns: `repeat(${N}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${L}, ${laneH}px)` }}>
+                    {days.map((d, i) => {
+                      const wk = new Date(d).getUTCDay() % 6 === 0;
+                      return <button key={d} type="button" disabled={!canEdit} aria-label={`Plan the selected part for ${c.name}, ${dname(d)}`}
+                        onClick={() => sel && place(sel, c.id, d)} onDragOver={e => e.preventDefault()} onDrop={e => place(dropId(e), c.id, d)}
+                        style={{ gridRow: `1 / span ${L}`, gridColumn: i + 1, border: "1px solid var(--tws-line-soft)", background: d === today ? "#fbf8f2" : wk ? "#f1ece3" : "#fff", cursor: sel ? "copy" : "default" }} />;
+                    })}
+                    {away.map((e, i) => {
+                      const s = Math.max(0, (t(e.startDate) - from) / DAY), en = Math.min(N, (t(e.endDate) - from) / DAY + 1);
+                      if (en <= 0 || s >= N) return null;
+                      return <span key={`a${i}`} title={`On ${e.production.name}`} className="text-[11px] font-semibold px-2 py-1 truncate"
+                        style={{ gridRow: L, gridColumn: `${s + 1} / span ${en - s}`, zIndex: 1, pointerEvents: drag || sel ? "none" : "auto", lineHeight: "18px",
+                          background: "repeating-linear-gradient(135deg, #d9d4cb 0 6px, #ece6db 6px 12px)", color: "var(--tws-ink)" }}>On {e.production.name}</span>;
+                    })}
+                    {mine.map(p => {
+                      const s = Math.max(0, (t(p.startDate!) - from) / DAY), en = Math.min(N, (t(p.startDate!) - from) / DAY + p.days);
+                      if (en <= 0 || s >= N) return null;
+                      return (
+                        <button key={p.id} type="button" {...dragProps(p)} onClick={() => canEdit && setSel(sel === p.id ? null : p.id)} aria-pressed={sel === p.id}
+                          className="text-xs font-bold text-left px-2 py-1 overflow-hidden whitespace-nowrap text-ellipsis"
+                          style={{ ...fill(p.jobId), gridRow: (laneOf.get(p.id) ?? 0) + 1, gridColumn: `${s + 1} / span ${en - s}`, zIndex: 2,
+                            pointerEvents: drag ? "none" : "auto", cursor: canEdit ? "grab" : "default",
+                            outline: clashIds.has(p.id) ? "3px solid #b3261e" : sel === p.id ? "3px solid var(--tws-night)" : "none", outlineOffset: -3 }}>
+                          {p.label}{L === 1 && <span className="block font-medium text-[11px] truncate">{jobName(p.jobId)}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {canEdit && initial.staff.length > 0 && (
+            <div className="mt-3 flex items-center gap-2 text-[13px]">
+              <label htmlFor="add-crew" style={{ ...lbl, marginBottom: 0 }}>Add someone to the grid</label>
+              <select id="add-crew" style={{ ...input, width: "auto" }} value="" onChange={e => { const s = initial.staff.find(x => x.id === Number(e.target.value)); if (s) setExtraRows(r => [...r, { ...s, team: false }]); }}>
+                <option value="">Choose…</option>
+                {initial.staff.filter(s => !crew.some(c => c.id === s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          )}
+        </section>
+
+        {/* Builds timeline */}
+        <section style={card} className="flex flex-col gap-3 overflow-x-auto" aria-label="Builds timeline">
+          <h2 style={h2}>Builds · next {W} weeks</h2>
+          {tl.length === 0 ? <p className="text-sm" style={muted}>No builds have dates yet. Set a build&apos;s start and due-out dates on its page.</p> : (
+            <div className="grid gap-1 text-xs" style={{ gridTemplateColumns: `200px repeat(${tlDays}, minmax(9px, 1fr))`, minWidth: 820 }}>
+              <span />
+              {Array.from({ length: W }, (_, w) => <strong key={w} className="py-1 px-1 truncate" style={{ gridColumn: `span 7`, background: w % 2 ? "var(--tws-ground)" : "var(--tws-tint-2)" }}>w/c {new Date(from + w * 7 * DAY).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</strong>)}
+              {tl.map(j => {
+                const s0 = j.startDate ? t(j.startDate) : t(j.endDate!), e0 = j.endDate ? t(j.endDate) : s0;
+                const s = Math.max(0, Math.round((s0 - from) / DAY)), e = Math.min(tlDays - 1, Math.round((e0 - from) / DAY));
+                const visible = e >= 0 && s <= tlDays - 1;
+                return (
+                  <div key={j.id} className="contents">
+                    <Link href={`${base}/jobs/${j.id}`} className="py-1 truncate hover:underline font-semibold" style={{ color: "var(--tws-ink)" }} title={j.title}>{j.title}</Link>
+                    {visible ? (
+                      <>
+                        {s > 0 && <span style={{ gridColumn: `span ${s}` }} />}
+                        <span className="px-2 py-1 font-semibold truncate" style={{ ...fill(j.id), gridColumn: `span ${e - s + 1}` }} title={`${buildStageLabel(j.stage)}${j.endDate ? ` · out ${dname(t(j.endDate))}` : ""}`}>
+                          {buildStageLabel(j.stage)}{j.endDate && e0 - from < tlDays * DAY ? ` · out ${dname(e0)}` : ""}
+                        </span>
+                        {e < tlDays - 1 && <span style={{ gridColumn: `span ${tlDays - 1 - e}` }} />}
+                      </>
+                    ) : <span className="py-1" style={{ ...muted, gridColumn: `span ${tlDays}` }}>{e0 < from ? `Was due out ${dname(e0)}` : `Starts ${dname(s0)}`}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {unscheduled.length > 0 && <p className="text-[13px]" style={muted}>No dates yet: {unscheduled.map((j, i) => <span key={j.id}>{i ? ", " : ""}<Link href={`${base}/jobs/${j.id}`} style={{ color: "var(--tws-accent-ink)" }}>{j.title}</Link></span>)}</p>}
+        </section>
+
+        {parts.some(p => p.done) && <p className="text-[13px]" style={muted}>{parts.filter(p => p.done).length} finished part{parts.filter(p => p.done).length === 1 ? " is" : "s are"} hidden. Untick them on the build&apos;s page.</p>}
+      </div>
+    </>
+  );
+}

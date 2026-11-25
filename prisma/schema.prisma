@@ -46,6 +46,7 @@ model User {
   timeEntries         TimeEntry[]         @relation("TimeEntryUser")
   bdActivities        BDActivity[]        @relation("BDActivityUser")
   targetClients       Client[]            @relation("ClientTargetOwner")
+  buildParts          BuildPart[]         @relation("BuildParts")
 }
 
 model Production {
@@ -1253,6 +1254,7 @@ model Job {
   quotes          Quote[]
   costs           JobCost[]
   time            TimeEntry[]
+  parts           BuildPart[]
 }
 
 model JobCost {
@@ -1300,4 +1302,24 @@ model JobLink {
   createdAt DateTime @default(now())
 
   @@index([jobId])
+}
+
+// TWS planner: a part of a build (e.g. "Truck frames"), who's doing it and when. A part with no
+// person or start date waits in the planner's "To plan" tray.
+model BuildPart {
+  id        Int       @id @default(autoincrement())
+  jobId     Int
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  label     String
+  userId    Int?
+  user      User?     @relation("BuildParts", fields: [userId], references: [id], onDelete: SetNull)
+  startDate DateTime? // midnight UTC of the first day
+  days      Int       @default(1) // consecutive calendar days
+  hours     Float? // planned hours
+  done      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([jobId])
+  @@index([userId, startDate])
 }

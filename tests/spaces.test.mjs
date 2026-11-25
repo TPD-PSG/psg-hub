@@ -55,7 +55,8 @@ export default () => run("spaces", async ({ db, users, login, anon, results }) =
     ok((await m(`/api/spaces/${SLUG}`)).status === 200, "PSG staff can open any space");
     ok((await a("/api/spaces/other-space-test")).status === 404, "a company without its space switched on has no space");
     const page = await (await f(`/spaces/${SLUG}`, { headers: { accept: "text/html" } })).text();
-    ok(page.includes("Space test build") && page.includes("TWS-T · PSG Hub") && page.includes("#e4572e"), "space page in the first HTML, top bar in the company's colours and name");
+    ok(page.includes("Space test build") && page.includes("SHARED WITH PSG") && page.includes("#e4572e"), "space page in the first HTML, in the space's own frame and colours");
+    ok(page.includes("WORKSHOP SPACE TEST") && page.includes("Build board") && page.includes("Planner"), "space has its own top bar and sidebar");
     const adminHome = await (await a("/", { headers: { accept: "text/html" } })).text();
     ok(adminHome.includes(`/spaces/${SLUG}`), "Home links to the space (tile and Companies row)");
     ok(!adminHome.includes("TWS-T · PSG Hub"), "people from other companies keep the PSG top bar");

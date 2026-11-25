@@ -44,6 +44,7 @@ export type User = {
   color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null; homeEntityId?: number | null;
 };
 export type Production = { id: number; name: string; status: string };
+export type Invite = { id: number; email: string; name: string; role: string; expiresAt: string; createdAt: string; expired: boolean };
 
 const inp = "w-full rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
@@ -62,10 +63,26 @@ const MEMBER_COLORS = ["#f59e0b","#10b981","#3b82f6","#8b5cf6","#ef4444","#06b6d
 
 const INVITE_BLANK = { name: "", email: "", role: "member" };
 
-export type UsersInitial = { users: User[]; productions: Production[] } | null;
+export type UsersInitial = { users: User[]; productions: Production[]; invites?: Invite[] } | null;
 
 export default function UsersView({ initial }: { initial: UsersInitial }) {
   const [users, setUsers] = useState<User[]>(initial?.users ?? []);
+  const [invites, setInvites] = useState<Invite[]>(initial?.invites ?? []);
+  const [inviteBusy, setInviteBusy] = useState<number | null>(null);
+  async function reloadInvites() {
+    const d = await fetch("/api/user-invites").then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (Array.isArray(d)) setInvites(d);
+  }
+  async function inviteAction(inv: Invite, method: "POST" | "DELETE") {
+    if (method === "DELETE" && !(await confirmDialog(`Cancel the invite to ${inv.name}? Their link will stop working.`))) return;
+    setInviteBusy(inv.id);
+    const res = await fetch(`/api/user-invites/${inv.id}`, { method });
+    setInviteBusy(null);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { alertDialog(d.error ?? "That didn't work"); reloadInvites(); return; }
+    if (Array.isArray(d)) setInvites(d);
+    if (method === "POST") alertDialog(`A new invite has gone to ${inv.email}. It's valid for 7 days.`);
+  }
   const [showForm, setShowForm] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [form, setForm] = useState(BLANK);
@@ -171,6 +188,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
       return;
     }
     setInviteSent(true);
+    reloadInvites();
   }
 
   async function deleteUser(id: number) {
@@ -263,6 +281,49 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
           </tbody>
         </table>
       </div>
+
+      {/* Invited but not signed up yet */}
+      {invites.length > 0 && (
+        <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+          <div className="px-4 py-3 border-b flex items-baseline justify-between gap-3 flex-wrap" style={{ borderColor: "var(--psg-card-border)" }}>
+            <h2 className="text-sm font-semibold text-white">Invited ({invites.length})</h2>
+            <span className="text-xs" style={{ color: "var(--psg-muted)" }}>Sent an invite but haven&apos;t set up their account yet. Links last 7 days.</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ minWidth: 640 }}>
+              <thead>
+                <tr className="border-b text-left" style={{ borderColor: "var(--psg-card-border)" }}>
+                  {["Name", "Email", "Role", "Invited", "Link", ""].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--psg-muted)" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {invites.map(inv => {
+                  const days = Math.ceil((new Date(inv.expiresAt).getTime() - Date.now()) / 86400e3);
+                  return (
+                    <tr key={inv.id} className="border-b last:border-0" style={{ borderColor: "var(--psg-card-border)", opacity: inviteBusy === inv.id ? 0.5 : 1 }}>
+                      <td className="px-4 py-3 text-white">{inv.name}</td>
+                      <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{inv.email}</td>
+                      <td className="px-4 py-3 capitalize" style={{ color: "var(--psg-muted)" }}>{inv.role}</td>
+                      <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{new Date(inv.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
+                      <td className="px-4 py-3">
+                        {inv.expired
+                          ? <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: "rgba(248,113,113,0.12)", color: "#f87171" }}>Expired</span>
+                          : <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>Waiting · {days} day{days === 1 ? "" : "s"} left</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <button type="button" disabled={inviteBusy !== null} onClick={() => inviteAction(inv, "POST")} className="text-xs text-blue-400 hover:underline disabled:opacity-50 mr-4">Resend</button>
+                        <button type="button" disabled={inviteBusy !== null} onClick={() => inviteAction(inv, "DELETE")} className="text-xs text-red-400 hover:underline disabled:opacity-50">Cancel invite</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showForm && (
@@ -387,7 +448,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                           <input type="radio" name="prodAccess" checked={!perms.allProductions} onChange={() => setPerms((p) => ({ ...p, allProductions: false }))} className="w-4 h-4" />
                           <div>
                             <div className="text-sm font-medium">Team only</div>
-                            <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Only sees productions they're added to as a team member</div>
+                            <div className="text-xs" style={{ color: "var(--psg-muted)" }}>Only sees productions they&apos;re added to as a team member</div>
                           </div>
                         </label>
                       </div>

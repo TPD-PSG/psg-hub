@@ -45,6 +45,7 @@ export function quoteFields(body: Record<string, unknown>) {
   if (has("entityId")) d.entityId = int(body.entityId);
   if (has("clientId")) d.clientId = int(body.clientId);
   if (has("opportunityId")) d.opportunityId = int(body.opportunityId);
+  if (has("jobId")) d.jobId = int(body.jobId); // the build/job this quote is for (its accepted price becomes the job's)
   if (has("vatRate")) { const v = Number(body.vatRate); if (Number.isFinite(v) && v >= 0 && v <= 100) d.vatRate = v; }
   if (has("validUntil")) d.validUntil = typeof body.validUntil === "string" && body.validUntil ? new Date(body.validUntil) : null;
   if (has("terms")) d.terms = text(body.terms);

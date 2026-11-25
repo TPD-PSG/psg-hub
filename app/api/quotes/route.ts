@@ -50,6 +50,12 @@ export async function POST(req: Request) {
     fields.jobType ??= deal.type === "scenic" ? "workshop" : "pm";
   }
   if (!fields.title) return NextResponse.json({ error: "Give the quote a title" }, { status: 400 });
+  if (fields.jobId != null) {
+    const j = await prisma.job.findUnique({ where: { id: fields.jobId as number }, select: { entityId: true, clientId: true } });
+    if (!j) return NextResponse.json({ error: "Unknown job" }, { status: 400 });
+    if (fields.entityId == null) fields.entityId = j.entityId;
+    if (!("clientId" in fields) || fields.clientId == null) fields.clientId = j.clientId;
+  }
   const ent = scopedEntityId(await myCompanyLimit(), (fields.entityId as number | null | undefined) ?? null);
   if ("error" in ent) return NextResponse.json({ error: ent.error }, { status: 400 });
   if (ent.entityId != null) fields.entityId = ent.entityId;

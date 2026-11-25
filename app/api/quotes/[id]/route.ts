@@ -51,6 +51,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (!q?.jobId && q?.opportunity?.job) fields.jobId = q.opportunity.job.id;
   }
   await prisma.quote.update({ where: { id }, data: { ...fields, ...lineOps } });
+  // A build still at the Quote stage moves on to Confirmation once its quote is accepted
+  if (fields.status === "accepted") {
+    const jq = await prisma.quote.findUnique({ where: { id }, select: { jobId: true } });
+    if (jq?.jobId) await prisma.job.updateMany({ where: { id: jq.jobId, stage: "quote" }, data: { stage: "confirmation", stageChangedAt: new Date() } });
+  }
   return NextResponse.json(await load(id));
 }
 

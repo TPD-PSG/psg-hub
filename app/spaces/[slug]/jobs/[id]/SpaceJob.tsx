@@ -5,6 +5,7 @@
 // quote against actual cost. Uses the same APIs as the Hub's job page.
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
 import type { SpaceTheme } from "@/lib/spaces";
 import type { JobDetail } from "@/app/jobs/[id]/JobView";
@@ -65,7 +66,17 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
     if (res.ok) setPhotos(ps => ps.filter(x => x.id !== p.id));
     else alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't delete it");
   }
+  const router = useRouter();
   const [mat, setMat] = useState(initialMaterials);
+  const [markup, setMarkup] = useState("30");
+  async function quoteThisBuild(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch(`/api/jobs/${initial.id}/quote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markupPct: markup }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(d.error ?? "Couldn't start the quote");
+    if (d.notes?.length) await alertDialog(`Quote ${d.number} started with ${d.lines} lines. Check: ${d.notes.join("; ")}.`);
+    router.push(`/spaces/${space.slug}/quotes/${d.id}`);
+  }
   const [fromStock, setFromStock] = useState({ itemId: "", quantity: "" });
   const [job, setJob] = useState(initial);
   const [parts, setParts] = useState(initialParts);
@@ -162,6 +173,18 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
           {seeMoney && f && (
             <section style={card} className="flex flex-col gap-3.5">
               <div className="flex justify-between items-baseline gap-3 flex-wrap"><h2 style={h2}>Quote vs actual</h2><Link href={`/jobs/${job.id}`} className="text-[13px]" style={link}>Costs in detail →</Link></div>
+              {/* Quotes for this build, and "Quote this build" drafted from its parts and materials */}
+              <div className="flex flex-wrap items-end gap-3 justify-between p-3" style={{ background: "var(--tws-ground)" }}>
+                <div className="text-sm flex flex-col gap-1 min-w-0">
+                  {job.quotes.length === 0 ? <span style={muted}>No quote yet. Draft one from this build&apos;s parts (labour) and materials, at cost plus your markup.</span>
+                    : job.quotes.map(q => <Link key={q.id} href={`/spaces/${space.slug}/quotes/${q.id}`} style={link}>Quote {q.number} · {q.status}</Link>)}
+                </div>
+                <form onSubmit={quoteThisBuild} className="flex items-end gap-2">
+                  <div><label htmlFor="qb-markup" style={lbl}>Markup %</label>
+                    <input id="qb-markup" type="number" min={0} max={1000} step="1" style={{ ...input, width: 80 }} value={markup} onChange={e => setMarkup(e.target.value)} /></div>
+                  <button type="submit" disabled={busy} style={{ ...btnSolid, padding: "8px 14px" }}>{job.quotes.length ? "New quote from plan" : "Quote this build"}</button>
+                </form>
+              </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div><div className="text-xs font-semibold" style={muted}>Price</div><div className="text-2xl font-extrabold tabular-nums">{gbp(f.price)}</div><div className="text-xs" style={muted}>{f.priceFrom === "quote" ? "accepted quote, ex VAT" : f.priceFrom === "agreed" ? "agreed price" : "no accepted quote yet"}</div></div>
                 <div><div className="text-xs font-semibold" style={muted}>Spent so far</div><div className="text-2xl font-extrabold tabular-nums">{gbp(f.actual)}</div><div className="text-xs" style={muted}>{f.quotedCost != null ? `quoted cost ${gbp(f.quotedCost)}` : `${f.days} day${f.days === 1 ? "" : "s"} + costs`}</div></div>

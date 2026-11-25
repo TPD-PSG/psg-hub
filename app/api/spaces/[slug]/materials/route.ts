@@ -29,13 +29,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   });
 }
 
-/** Admins set the approval limit (£, ex VAT). */
+/** Admins set the PO approval limit and the standard workshop day rate (£, ex VAT). */
 export async function PUT(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const s = await staffInSpace((await params).slug);
   if ("error" in s) return s.error;
-  if (s.user.role !== "admin") return NextResponse.json({ error: "Only admins can change the approval limit" }, { status: 403 });
-  const n = Number((await req.json()).poApprovalLimit);
-  if (!isFinite(n) || n < 0 || n > 1_000_000) return NextResponse.json({ error: "Enter an amount in pounds" }, { status: 400 });
-  await prisma.setting.upsert({ where: { key: "poApprovalLimit" }, update: { value: String(n) }, create: { key: "poApprovalLimit", value: String(n) } });
-  return NextResponse.json({ limit: n });
+  if (s.user.role !== "admin") return NextResponse.json({ error: "Only admins can change these" }, { status: 403 });
+  const body = await req.json();
+  const out: Record<string, number | null> = {};
+  if ("poApprovalLimit" in body) {
+    const n = Number(body.poApprovalLimit);
+    if (!isFinite(n) || n < 0 || n > 1_000_000) return NextResponse.json({ error: "Enter an amount in pounds" }, { status: 400 });
+    await prisma.setting.upsert({ where: { key: "poApprovalLimit" }, update: { value: String(n) }, create: { key: "poApprovalLimit", value: String(n) } });
+    out.limit = n;
+  }
+  if ("workshopDayRate" in body) {
+    const blank = body.workshopDayRate === "" || body.workshopDayRate == null;
+    const n = Number(body.workshopDayRate);
+    if (!blank && (!isFinite(n) || n <= 0 || n > 10_000)) return NextResponse.json({ error: "Enter a day rate in pounds" }, { status: 400 });
+    if (blank) await prisma.setting.deleteMany({ where: { key: "workshopDayRate" } });
+    else await prisma.setting.upsert({ where: { key: "workshopDayRate" }, update: { value: String(n) }, create: { key: "workshopDayRate", value: String(n) } });
+    out.workshopDayRate = blank ? null : n;
+  }
+  return NextResponse.json(out);
 }

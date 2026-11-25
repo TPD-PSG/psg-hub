@@ -21,7 +21,7 @@ import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl
 
 export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; user: { id: number; name: string } | null };
 type Option = { id: number; name: string };
-export type JobPhoto = { id: number; url: string; caption: string | null; postId: number | null; createdAt: string; uploadedById: number | null; uploadedBy: { name: string } | null };
+export type JobPhoto = { id: number; url: string; caption: string | null; postId: number | null; clientVisible?: boolean; createdAt: string; uploadedById: number | null; uploadedBy: { name: string } | null };
 export type JobMaterials = {
   pos: { id: number; number: string; status: string; inSage: boolean; total: number; supplierName: string | null; supplier: { name: string } | null; lines: { id: number; description: string; quantity: number; unit: string | null; unitCost: number }[] }[];
   moves: { id: number; change: number; kind: string; createdAt: string; item: { name: string; unit: string } }[];
@@ -66,6 +66,11 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
     const res = await fetch(`/api/space-photos/${p.id}/share`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
     if (!res.ok) return alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't share it");
     setPhotos(ps => ps.map(x => (x.id === p.id ? { ...x, postId: -1 } : x)));
+  }
+  async function showClient(p: JobPhoto) {
+    const res = await fetch(`/api/space-photos/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientVisible: !p.clientVisible }) });
+    if (!res.ok) return alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't change that");
+    setPhotos(ps => ps.map(x => (x.id === p.id ? { ...x, clientVisible: !p.clientVisible } : x)));
   }
   async function deletePhoto(p: JobPhoto) {
     if (!(await confirmDialog("Delete this photo?"))) return;
@@ -393,6 +398,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
           {/* Build photos */}
           <section style={card} className="flex flex-col gap-2.5" aria-label="Build photos">
             <h2 style={h2}>Build photos</h2>
+            {job.client && <p className="text-xs m-0" style={muted}>Tick &ldquo;Client&rdquo; on a photo for {job.client.name} to see it in their progress photos.</p>}
             {photos.length === 0 ? <p className="text-sm" style={muted}>No photos yet. Photos added this month put the build up for build of the month.</p> : (
               <div className="grid grid-cols-2 gap-2">
                 {photos.map(p => (
@@ -401,9 +407,14 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                       {/* eslint-disable-next-line @next/next/no-img-element -- served by our own API with access checks */}
                       <img src={p.url} alt={p.caption ?? `${job.title} build photo`} loading="lazy" className="w-full h-24 object-cover" style={{ background: "var(--tws-tint)" }} />
                     </a>
-                    <figcaption className="text-[11px] flex justify-between gap-1" style={muted}>
-                      <span className="truncate">{p.caption ?? p.uploadedBy?.name ?? ""}</span>
+                    <figcaption className="text-[11px] flex flex-wrap justify-between gap-x-2 gap-y-0.5" style={muted}>
+                      <span className="truncate min-w-0 basis-full">{p.caption ?? p.uploadedBy?.name ?? ""}</span>
                       <span className="flex gap-2 shrink-0">
+                        {job.client && (
+                          <label className="flex items-center gap-1 cursor-pointer" title={`Show ${job.client.name} this photo`} style={p.clientVisible ? { color: "var(--tws-ink)", fontWeight: 700 } : undefined}>
+                            <input type="checkbox" checked={!!p.clientVisible} onChange={() => showClient(p)} style={{ accentColor: "var(--tws-char)" }} />Client
+                          </label>
+                        )}
                         {p.postId ? <span>On board</span> : <button type="button" onClick={() => sharePhoto(p)} className="font-semibold" style={{ color: "var(--tws-accent-ink)" }}>Share</button>}
                         {(p.uploadedById === me.id || me.isAdmin) && <button type="button" onClick={() => deletePhoto(p)} aria-label="Delete photo" style={{ color: "var(--tws-bad-ink)" }}>✕</button>}
                       </span>

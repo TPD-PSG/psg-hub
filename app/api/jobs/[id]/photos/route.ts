@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { memberOfEntity, storePhotos, withUrl } from "@/lib/spaceBoard";
 
 const jobOf = async (params: Promise<{ id: string }>) => prisma.job.findUnique({ where: { id: parseInt((await params).id) }, select: { id: true, entityId: true } });
-const SELECT = { id: true, caption: true, postId: true, createdAt: true, uploadedById: true, uploadedBy: { select: { name: true } } } as const;
+const SELECT = { id: true, caption: true, postId: true, clientVisible: true, createdAt: true, uploadedById: true, uploadedBy: { select: { name: true } } } as const;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see

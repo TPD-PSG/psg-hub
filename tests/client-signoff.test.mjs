@@ -78,6 +78,26 @@ export default () => run("client-signoff", async ({ db, users, login, results })
     const gaNow = mb.builds[0].drawings.find(x => x.number === "GA-01");
     ok(gaNow.revisions[0].rev === "B" && gaNow.revisions[0].status === "pending" && gaNow.revisions[1].status === "superseded", "rev B is waiting for sign-off, A is kept in the history");
 
+    // Progress photos: only the ones staff tick
+    const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64").toString("base64");
+    const ph1 = await db.spacePhoto.create({ data: { entityId: made.e.id, jobId: j1.id, mime: "image/png", data: PNG, caption: "Revolve frame", uploadedById: member.id } });
+    const ph2 = await db.spacePhoto.create({ data: { entityId: made.e.id, jobId: j1.id, mime: "image/png", data: PNG, caption: "Messy bench" } });
+    const ph3 = await db.spacePhoto.create({ data: { entityId: made.e.id, jobId: j2.id, mime: "image/png", data: PNG } });
+    mb = await json(await c("/api/my-builds"));
+    ok(mb.builds[0].photos.length === 0, "no photos reach the client until staff choose them");
+    ok((await c(`/api/space-photos/${ph1.id}`, { method: "PATCH", body: JSON.stringify({ clientVisible: true }) })).status === 403, "the client can't share photos themselves");
+    r = await m(`/api/space-photos/${ph1.id}`, { method: "PATCH", body: JSON.stringify({ clientVisible: true }) });
+    ok(r.status === 200 && (await json(r)).clientVisible === true, "staff tick a photo to show the client");
+    await m(`/api/space-photos/${ph3.id}`, { method: "PATCH", body: JSON.stringify({ clientVisible: true }) });
+    mb = await json(await c("/api/my-builds"));
+    const shown = mb.builds[0].photos;
+    ok(shown.length === 1 && shown[0].caption === "Revolve frame", "the client sees just that one, on their build");
+    ok((await c(shown[0].url)).status === 200, "and can open it");
+    ok((await c(`/api/my-builds/photos/${ph2.id}`)).status === 404 && (await c(`/api/my-builds/photos/${ph3.id}`)).status === 404, "unticked photos and other clients' photos stay hidden");
+    ok((await c(`/api/space-photos/${ph1.id}`)).status === 403, "the space's own photo route stays closed to clients");
+    const job1Photos = await json(await m(`/api/jobs/${j1.id}/photos`));
+    ok(job1Photos.find(x => x.id === ph1.id)?.clientVisible === true, "the build page knows which photos the client sees");
+
     // Pages
     const page = await html(await c("/my-builds", { headers: { accept: "text/html" } }));
     ok(page.includes("Your builds") && page.includes("CT revolve") && page.includes("Awaiting your sign-off") && !page.includes("CT other build"), "the My builds page shows their build and what's waiting");
@@ -87,6 +107,7 @@ export default () => run("client-signoff", async ({ db, users, login, results })
     await db.user.update({ where: { id: client.id }, data: { clientId: null } }).catch(() => {});
     await db.notification.deleteMany({ where: { createdAt: { gte: since }, OR: [{ link: "/my-builds" }, { title: { contains: "CT " } }] } }).catch(() => {});
     for (const id of made.jobs) {
+      await db.spacePhoto.deleteMany({ where: { jobId: id } }).catch(() => {});
       await db.drawing.deleteMany({ where: { jobId: id } }).catch(() => {});
       await db.jobFile.deleteMany({ where: { jobId: id } }).catch(() => {});
       await db.job.delete({ where: { id } }).catch(() => {});

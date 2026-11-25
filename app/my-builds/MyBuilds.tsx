@@ -16,6 +16,7 @@ type Build = {
   id: number; number: string; title: string; stage: string | null; status: string; startDate: string | null; endDate: string | null;
   builder: { name: string; shortName: string | null; color: string | null; logoUrl: string | null } | null;
   drawings: Drawing[];
+  photos: { id: number; caption: string | null; createdAt: string; url: string }[];
 };
 export type MyBuildsData = { me: { name: string; company: string }; builds: Build[]; brand: SpaceTheme | null };
 
@@ -36,6 +37,7 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<Set<number>>(new Set());
+  const [showAll, setShowAll] = useState<Set<number>>(new Set());
 
   const latest = (d: Drawing) => d.revisions[0];
   const waiting = data.builds.flatMap(b => b.drawings.filter(d => latest(d)?.status === "pending"));
@@ -130,6 +132,27 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
                   </ol>
                 )}
 
+                {/* Progress photos (staff choose which) */}
+                {b.photos.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <h3 style={{ ...caps, margin: 0 }}>Progress photos</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {b.photos.slice(0, showAll.has(b.id) ? undefined : 8).map(p => (
+                        <figure key={p.id} className="m-0 flex flex-col gap-1 min-w-0">
+                          <a href={p.url} target="_blank" rel="noopener">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- served by our own API with access checks */}
+                            <img src={p.url} alt={p.caption ?? `${b.title} progress photo`} loading="lazy" className="w-full aspect-[4/3] object-cover" style={{ background: "var(--tws-tint)" }} />
+                          </a>
+                          <figcaption className="text-[11px] truncate" style={muted}>{p.caption ? `${p.caption} · ` : ""}{fmtDate(p.createdAt)}</figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                    {b.photos.length > 8 && !showAll.has(b.id) && (
+                      <button onClick={() => setShowAll(x => new Set([...x, b.id]))} className="text-[13px] self-start" style={link}>Show all {b.photos.length} photos</button>
+                    )}
+                  </div>
+                )}
+
                 {/* Drawings */}
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -152,7 +175,7 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
                               {canDecide && (
                                 <input type="checkbox" aria-label={`Select ${label(d)}`} checked={picked.has(r.id)} onChange={() => toggle(r.id)} className="w-4 h-4" style={{ accentColor: "var(--tws-char)" }} />
                               )}
-                              <div className="min-w-0 flex-1">
+                              <div className="min-w-0 flex-1 basis-[calc(100%-2rem)] sm:basis-0">
                                 <div className="text-[15px] font-bold break-words">{label(d)} <span className="font-medium" style={muted}>· rev {r.rev}</span></div>
                                 <div className="text-xs" style={muted}>Uploaded {fmtDate(r.createdAt)}{r.note ? ` · ${r.note}` : ""}</div>
                               </div>

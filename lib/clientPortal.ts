@@ -28,6 +28,7 @@ export async function clientBuilds(clientId: number) {
     select: {
       id: true, number: true, title: true, stage: true, status: true, startDate: true, endDate: true,
       entity: { select: { name: true, shortName: true, slug: true, color: true, logoMime: true, updatedAt: true } },
+      photos: { where: { clientVisible: true }, orderBy: { createdAt: "desc" }, take: 60, select: { id: true, caption: true, createdAt: true } },
       drawings: {
         orderBy: [{ number: "asc" }, { createdAt: "asc" }],
         select: {
@@ -49,6 +50,7 @@ export async function clientBuilds(clientId: number) {
     ...j,
     builder: j.entity ? { name: j.entity.name, shortName: j.entity.shortName, color: j.entity.color, logoUrl: spaceLogoUrl(j.entity) } : null,
     entity: undefined,
+    photos: j.photos.map(p => ({ ...p, url: `/api/my-builds/photos/${p.id}` })),
     drawings: j.drawings.map(d => ({
       ...d,
       revisions: d.revisions.map(r => ({ ...r, url: `/api/my-builds/files/${r.id}` })),

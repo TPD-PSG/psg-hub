@@ -16,6 +16,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return new Response(new Uint8Array(bytes), { headers: { "Content-Type": photo.mime, "Cache-Control": "private, max-age=604800, immutable", "X-Content-Type-Options": "nosniff" } });
 }
 
+// Staff in the space switch whether the build's client sees it (progress photos in My builds)
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const photo = await find(params);
+  if (!photo) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const m = await memberOfEntity(photo.entityId);
+  if ("error" in m) return m.error;
+  if (!m.staff) return NextResponse.json({ error: "Only staff can share photos with the client" }, { status: 403 });
+  const body = await req.json().catch(() => ({}));
+  if (typeof body.clientVisible !== "boolean") return NextResponse.json({ error: "Say whether the client sees it" }, { status: 400 });
+  if (body.clientVisible && !(photo.jobId && (await prisma.job.count({ where: { id: photo.jobId, clientId: { not: null } } })))) return NextResponse.json({ error: "This photo isn't on a build with a client" }, { status: 400 });
+  const updated = await prisma.spacePhoto.update({ where: { id: photo.id }, data: { clientVisible: body.clientVisible }, select: { id: true, clientVisible: true } });
+  return NextResponse.json(updated);
+}
+
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const photo = await find(params);
   if (!photo) return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -1483,6 +1483,7 @@ model SpacePhoto {
   data         String? // base64 when file storage isn't set up
   mime         String
   caption      String?
+  clientVisible Boolean   @default(false) // a progress photo the build's client sees in My builds
   createdAt    DateTime   @default(now())
 
   @@index([jobId])

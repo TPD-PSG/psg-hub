@@ -10,8 +10,9 @@ export async function GET(req: Request) {
   const who = await requireStaff();
   if ("error" in who) return who.error;
   const opp = Number(new URL(req.url).searchParams.get("opportunityId"));
+  const ent = Number(new URL(req.url).searchParams.get("entityId")); // a company's quotes (e.g. in its space)
   const quotes = await prisma.quote.findMany({
-    where: { ...(Number.isInteger(opp) && opp > 0 ? { opportunityId: opp } : {}), ...entityWhere(await myCompanyLimit()) },
+    where: { ...(Number.isInteger(opp) && opp > 0 ? { opportunityId: opp } : {}), ...(Number.isInteger(ent) && ent > 0 ? { entityId: ent } : {}), AND: [entityWhere(await myCompanyLimit())] },
     include: QUOTE_INCLUDE,
     orderBy: { createdAt: "desc" },
   });

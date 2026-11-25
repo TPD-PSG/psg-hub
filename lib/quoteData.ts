@@ -6,7 +6,8 @@ import { nextNumber, JOB_TYPES, QUOTE_STATUSES } from "@/lib/quotes";
 
 export const QUOTE_INCLUDE = {
   lines: { orderBy: { sortOrder: "asc" as const } },
-  entity: { select: { id: true, name: true } },
+  // Branding for the PDF: a company with its own space (e.g. TWS) gets its own logo and colours
+  entity: { select: { id: true, name: true, hasSpace: true, slug: true, color: true, logoMime: true, updatedAt: true } },
   client: { select: { id: true, name: true, billingName: true, billingAddress: true, billingEmail: true, address: true } },
   opportunity: { select: { id: true, title: true, stage: true } },
   job: { select: { id: true, number: true, title: true } },

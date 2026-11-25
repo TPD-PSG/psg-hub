@@ -7,6 +7,7 @@ import { BUILD_STAGES, buildStageLabel, stageIndex, usesBuildStages } from "@/li
 import { jobTypeLabel } from "@/lib/quotes";
 import { caps, card, darkCard, h2, muted, link, btnSolid, btnLine, pageHeader, dayChip } from "@/lib/twsUi";
 import BuildOfMonth from "@/components/BuildOfMonth";
+import NewBuildJob from "@/components/NewBuildJob";
 import type { BoardData } from "./noticeboard/Noticeboard";
 
 type Job = {
@@ -88,7 +89,8 @@ export default function SpaceHome({ data, firstName, board }: { data: SpaceData;
           </div>
         </div>
         <div className="flex gap-3 flex-wrap">
-          <Link href={`${base}/board`} style={btnSolid}>Build board</Link>
+          {data.canEdit && <NewBuildJob slug={space.slug} />}
+          <Link href={`${base}/board`} style={data.canEdit ? btnLine : btnSolid}>Build board</Link>
           <Link href={`${base}/planner`} style={btnLine}>Open planner</Link>
         </div>
       </header>

@@ -30,7 +30,10 @@ const toRow = (l: Line): Row => ({ section: l.section ?? "", description: l.desc
 const num = (s: string) => (s.trim() === "" ? 0 : Number(s) || 0);
 const BLANK_ROW: Row = { section: "", description: "", quantity: "1", unit: "", unitCost: "", unitPrice: "" };
 
-export default function QuoteEditor({ initial, entities, clients, deals }: { initial: QuoteDetail; entities: Option[]; clients: Option[]; deals: Option[] }) {
+// listHref/jobsBase: inside a company space the editor's links stay in that space
+export default function QuoteEditor({ initial, entities, clients, deals, listHref = "/bd/quotes", jobsBase = "/jobs" }: {
+  initial: QuoteDetail; entities: Option[]; clients: Option[]; deals: Option[]; listHref?: string; jobsBase?: string;
+}) {
   const router = useRouter();
   const [q, setQ] = useState(initial);
   const [head, setHead] = useState({
@@ -92,7 +95,7 @@ export default function QuoteEditor({ initial, entities, clients, deals }: { ini
     if (!await confirmDialog(`Delete quote ${q.number}? This can't be undone.`)) return;
     const res = await fetch(`/api/quotes/${q.id}`, { method: "DELETE" });
     if (!res.ok) return alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't delete it");
-    router.push("/bd/quotes");
+    router.push(listHref);
   }
 
   const st = STATUS_STYLE[q.status];
@@ -100,13 +103,13 @@ export default function QuoteEditor({ initial, entities, clients, deals }: { ini
     <div className="space-y-5 max-w-6xl">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
-          <Link href="/bd/quotes" className="text-xs" style={{ color: "var(--psg-muted)" }}>← Quotes</Link>
+          <Link href={listHref} className="text-xs" style={{ color: "var(--psg-muted)" }}>← Quotes</Link>
           <h1 className="text-2xl font-bold text-white mt-1 break-words">{q.number}</h1>
           <p className="text-sm" style={{ color: "var(--psg-muted)" }}>
             <span style={{ color: st?.color }}>{st?.label ?? q.status}</span>
             {q.sentAt && ` · sent ${fmtDate(q.sentAt)}`}{q.decidedAt && ` · ${q.status} ${fmtDate(q.decidedAt)}`}
             {q.createdBy && ` · by ${q.createdBy.name}`}
-            {q.job && <> · job <Link href={`/jobs/${q.job.id}`} className="text-blue-400">{q.job.number}</Link></>}
+            {q.job && <> · job <Link href={`${jobsBase}/${q.job.id}`} className="text-blue-400">{q.job.number}</Link></>}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">

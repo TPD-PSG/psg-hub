@@ -356,7 +356,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 <button type="button" onClick={() => removeLink(l.id)} aria-label={`Remove link ${l.label}`} className="text-xs font-semibold shrink-0" style={{ color: "var(--tws-bad-ink)" }}>Remove</button>
               </div>
             ))}
-            {job.quotes.map(q => <Link key={q.id} href={`/bd/quotes/${q.id}`} className="text-sm" style={link}>Quote {q.number} ({q.status})</Link>)}
+            {job.quotes.map(q => <Link key={q.id} href={`${base}/quotes/${q.id}`} className="text-sm" style={link}>Quote {q.number} ({q.status})</Link>)}
             <form onSubmit={addLink} className="flex flex-col gap-2 pt-3" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
               <div><label htmlFor="l-label" style={lbl}>Name</label><input id="l-label" required style={input} value={link_.label} onChange={e => setLink({ ...link_, label: e.target.value })} placeholder="General arrangement" /></div>
               <div><label htmlFor="l-url" style={lbl}>Link</label><input id="l-url" type="url" required style={input} value={link_.url} onChange={e => setLink({ ...link_, url: e.target.value })} placeholder="https://…sharepoint.com/…" /></div>

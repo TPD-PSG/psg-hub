@@ -56,6 +56,9 @@ export default () => run("spaces", async ({ db, users, login, anon, results }) =
     ok((await a("/api/spaces/other-space-test")).status === 404, "a company without its space switched on has no space");
     const page = await (await f(`/spaces/${SLUG}`, { headers: { accept: "text/html" } })).text();
     ok(page.includes("Space test build") && page.includes("SHARED WITH PSG") && page.includes("#e4572e"), "space page in the first HTML, in the space's own frame and colours");
+    ok(page.includes("<title>TWS-T · PSG Hub</title>") && page.includes(`/api/spaces/${SLUG}/icon`), "inside the space the browser tab shows its name and icon");
+    const icon = await f(`/api/spaces/${SLUG}/icon?s=64`);
+    ok(icon.status === 200 && icon.headers.get("content-type") === "image/png", "the space's square tab icon is made from its logo");
     ok(page.includes("WORKSHOP SPACE TEST") && page.includes("Build board") && page.includes("Planner"), "space has its own top bar and sidebar");
     const adminHome = await (await a("/", { headers: { accept: "text/html" } })).text();
     ok(adminHome.includes(`/spaces/${SLUG}`) && adminHome.includes("Company space") && adminHome.includes("Open TWS-T"), "Hub home has a banner into the space");

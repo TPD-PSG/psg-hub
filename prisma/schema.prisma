@@ -461,6 +461,7 @@ model Entity {
   roadmapItems   RoadmapItem[]
   storageLocations StorageLocation[]
   storedPieces   StoredPiece[]
+  buildTemplates BuildTemplate[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1817,4 +1818,21 @@ model BuildPartMaterial {
   createdAt   DateTime  @default(now())
 
   @@index([partId])
+}
+
+// Build templates (28 Nov 2026): a typical piece of work, e.g. "Standard flat" or "Truck", with its
+// parts (labour) and materials for ONE unit. Adding it to a build scales by how many units.
+model BuildTemplate {
+  id          Int      @id @default(autoincrement())
+  entityId    Int
+  entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  name        String
+  unitName    String   @default("each") // what one unit is: flat, truck, m², each…
+  notes       String?
+  parts       String // JSON: [{ label, days, hours, materials: [{ section, description, quantity, unit, unitCost, stockItemId }] }] per unit
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([entityId, name])
 }

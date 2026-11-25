@@ -19,6 +19,7 @@ import Variations, { type VariationRow } from "@/components/Variations";
 import SetStorage, { type StorageData } from "@/components/SetStorage";
 import FrCertificates, { type CertRow } from "@/components/FrCertificates";
 import PartMaterials, { materialsCost, ordered, type PartMaterial } from "@/components/PartMaterials";
+import BuildTemplates from "@/components/BuildTemplates";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
@@ -429,6 +430,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 <PartMaterials jobId={job.id} partId={p.id} entityId={space.id} materials={p.materials ?? []} onChange={ms => setPartMaterials(p.id, ms)} />
               </div>
             ))}
+            <BuildTemplates<PartRow> jobId={job.id} slug={space.slug} hasParts={parts.length > 0} me={me} onParts={setParts} />
             {job.stage === "quote" && <p className="text-xs m-0 pt-2" style={muted}>✎ This build is still being quoted, so parts added now are pencilled in. They&apos;re confirmed when the quote&apos;s accepted.</p>}
             <form onSubmit={addPart} className="grid gap-2 items-end pt-3 grid-cols-2 xl:grid-cols-[1.5fr_1.2fr_1fr_70px_80px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
               <div><label htmlFor="p-label" style={lbl}>Part</label><input id="p-label" required style={input} value={part.label} onChange={e => setPart({ ...part, label: e.target.value })} placeholder="e.g. Flats and doors" /></div>

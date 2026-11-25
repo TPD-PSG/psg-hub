@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { spaceLogoUrl } from "@/lib/entities";
+import type { SpaceTheme } from "@/lib/spaces";
 
 export type ClientViewer = { userId: number; name: string; clientId: number; clientName: string };
 
@@ -53,6 +54,19 @@ export async function clientBuilds(clientId: number) {
       revisions: d.revisions.map(r => ({ ...r, url: `/api/my-builds/files/${r.id}` })),
     })),
   }));
+}
+
+/**
+ * Whose brand the client sees: the company space building most of their builds (e.g. TWS).
+ * null = none of their builders has a space, so the page wears PSG's.
+ */
+export async function clientBrand(clientId: number): Promise<SpaceTheme | null> {
+  const rows = await prisma.job.groupBy({ by: ["entityId"], where: { clientId, status: { not: "cancelled" }, entityId: { not: null } }, _count: { _all: true } });
+  for (const r of rows.sort((a, b) => b._count._all - a._count._all)) {
+    const e = await prisma.entity.findUnique({ where: { id: r.entityId! }, select: { id: true, name: true, shortName: true, slug: true, color: true, logoMime: true, updatedAt: true, hasSpace: true, archived: true } });
+    if (e?.hasSpace && !e.archived && e.slug) return { id: e.id, name: e.name, shortName: e.shortName, slug: e.slug, color: e.color, logoUrl: spaceLogoUrl(e) };
+  }
+  return null;
 }
 
 /** Tell people something, skipping duplicates and nobody. */

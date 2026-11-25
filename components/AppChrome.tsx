@@ -7,7 +7,8 @@ import Sidebar from "@/components/Sidebar";
 
 export default function AppChrome({ header, children }: { header: React.ReactNode; children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
-  if (pathname.startsWith("/spaces/")) return <>{children}</>;
+  // Company spaces and the client builds page draw their own chrome in the builder's brand
+  if (pathname.startsWith("/spaces/") || pathname === "/my-builds") return <>{children}</>;
   return (
     <>
       {header}

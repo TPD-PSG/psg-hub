@@ -1,22 +1,28 @@
-// A client's builds and the drawings waiting for their sign-off
+// A client's builds and the drawings waiting for their sign-off, in the builder's brand
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { serverApi } from "@/lib/serverApi";
+import { spaceTokens } from "@/lib/spaceTheme";
+import ClientShell from "./ClientShell";
 import MyBuilds, { type MyBuildsData } from "./MyBuilds";
-
-export const metadata = { title: "My builds · PSG Hub" };
 
 export default async function MyBuildsPage() {
   const session = await auth();
   if (!session) redirect("/login?callbackUrl=/my-builds");
   const data = await serverApi<Partial<MyBuildsData> & { error?: string }>("/api/my-builds");
-  if (!data?.builds || !data.me) {
-    return (
-      <div className="max-w-xl rounded-xl border p-6" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
-        <h1 className="text-xl font-bold text-white mb-2">My builds</h1>
-        <p className="text-sm" style={{ color: "var(--psg-muted)" }}>Your builds couldn&apos;t be shown. This page is for client logins: if that&apos;s you, ask PSG to link your login to your company.</p>
-      </div>
-    );
-  }
-  return <MyBuilds initial={{ me: data.me, builds: data.builds }} />;
+  const brand = data?.brand ?? null;
+  return (
+    <div style={{ ...spaceTokens(brand?.color ?? null), fontFamily: "var(--tws-font), system-ui, sans-serif" } as React.CSSProperties}>
+      <ClientShell brand={brand} company={data?.me?.company ?? null}>
+        {data?.builds && data.me ? <MyBuilds initial={{ me: data.me, builds: data.builds, brand }} /> : (
+          <div className="px-4 sm:px-10 py-10">
+            <div className="max-w-xl p-6" style={{ background: "var(--tws-card)", border: "1px solid var(--tws-line)" }}>
+              <h1 style={{ margin: "0 0 8px", fontSize: 24, fontWeight: 800 }}>Your builds</h1>
+              <p className="text-sm" style={{ color: "var(--tws-muted)" }}>Your builds couldn&apos;t be shown. This page is for client logins: if that&apos;s you, ask PSG to link your login to your company.</p>
+            </div>
+          </div>
+        )}
+      </ClientShell>
+    </div>
+  );
 }

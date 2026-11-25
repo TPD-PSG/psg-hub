@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decide } from "@/lib/drawings";
-import { clientViewer, clientBuilds, notifyPsgOfDecision } from "@/lib/clientPortal";
+import { clientViewer, clientBuilds, clientBrand, notifyPsgOfDecision } from "@/lib/clientPortal";
 
 export async function POST(req: Request) {
   const v = await clientViewer();
@@ -19,5 +19,5 @@ export async function POST(req: Request) {
   const err = await decide([...new Set(ids)], decision, { id: v.userId, name: v.name }, { comment, onBehalf: false });
   if (err) return NextResponse.json({ error: err }, { status: 400 });
   await notifyPsgOfDecision(ids, decision, v.name, comment?.trim() || null).catch(() => {});
-  return NextResponse.json({ me: { name: v.name, company: v.clientName }, builds: await clientBuilds(v.clientId) });
+  return NextResponse.json({ me: { name: v.name, company: v.clientName }, builds: await clientBuilds(v.clientId), brand: await clientBrand(v.clientId) });
 }

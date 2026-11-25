@@ -114,6 +114,8 @@ export default function JobView({ initial, seeMoney, me, staff, productions }: {
           <div className="text-xs space-y-0.5" style={{ color: "var(--psg-muted)" }}>
             <div className="flex justify-between"><span>Staff time ({f.days} day{f.days === 1 ? "" : "s"})</span><span className="text-white tabular-nums">{gbp(f.timeCost)}</span></div>
             <div className="flex justify-between"><span>Costs logged</span><span className="text-white tabular-nums">{gbp(f.costs)}</span></div>
+            {(f.materials > 0 || f.committed > 0) && <div className="flex justify-between"><span>Materials (POs delivered, stock used)</span><span className="text-white tabular-nums">{gbp(f.materials)}</span></div>}
+            {f.committed > 0 && <div className="flex justify-between"><span>Committed on open POs</span><span className="tabular-nums" style={{ color: "#fbbf24" }}>{gbp(f.committed)}</span></div>}
             {job.production && <div className="flex justify-between"><span>PSG expenses on the budget</span><span className="text-white tabular-nums">{gbp(f.psgExpenses)}</span></div>}
             {f.unratedDays > 0 && <div style={{ color: "#fbbf24" }}>⚠ {f.unratedDays} day{f.unratedDays === 1 ? "" : "s"} logged by people with no day rate (costed at £0). Set rates in Admin → Users.</div>}
           </div>

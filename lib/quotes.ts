@@ -40,7 +40,7 @@ export function parseLines(raw: unknown): { lines: LineInput[] } | { error: stri
 }
 
 /** Next number like Q-2026-007 / J-2026-007, from the numbers already used this year. */
-export function nextNumber(prefix: "Q" | "J", year: number, existing: string[]): string {
+export function nextNumber(prefix: "Q" | "J" | "PO", year: number, existing: string[]): string {
   const re = new RegExp(`^${prefix}-${year}-(\\d+)$`);
   const max = existing.reduce((m, s) => Math.max(m, Number(re.exec(s)?.[1] ?? 0)), 0);
   return `${prefix}-${year}-${String(max + 1).padStart(3, "0")}`;

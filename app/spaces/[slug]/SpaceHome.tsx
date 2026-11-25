@@ -16,6 +16,7 @@ type Job = {
 type Part = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; done: boolean };
 export type SpaceData = {
   space: SpaceTheme; jobs: Job[]; parts?: Part[]; dueOut: Job[]; overdue: Job[]; canEdit?: boolean;
+  stock?: { id: number; name: string; quantity: number; unit: string; reorderLevel: number | null }[]; awaitingApproval?: number;
   schedule: { date: string; kind: string; jobId: number; title: string }[];
   team: { id: number; name: string; avatarUrl: string | null; role: string }[];
   news: string | null;
@@ -39,9 +40,13 @@ export default function SpaceHome({ data, firstName }: { data: SpaceData; firstN
   // Things that need someone
   const soonBehind = builds.filter(j => j.endDate && utcDay(j.endDate) >= today && utcDay(j.endDate) <= today + 7 * DAY && stageIndex(j.stage) < stageIndex("finish"));
   const toPlan = parts.filter(p => !p.done && (!p.userId || !p.startDate));
+  const stock = data.stock ?? [];
+  const low = stock.filter(s => s.reorderLevel != null && s.quantity <= s.reorderLevel);
   const attention = [
     ...overdue.map(j => ({ key: `o${j.id}`, href: `${base}/jobs/${j.id}`, text: `${j.title} is past its due-out date` })),
     ...soonBehind.map(j => ({ key: `s${j.id}`, href: `${base}/jobs/${j.id}`, text: `${j.title} goes out ${dayChip(j.endDate!).toLowerCase()} and is at ${buildStageLabel(j.stage)}` })),
+    ...(low.length ? [{ key: "low", href: `${base}/materials`, text: `${low.slice(0, 3).map(s => s.name).join(", ")}${low.length > 3 ? ` and ${low.length - 3} more` : ""} below reorder level` }] : []),
+    ...(data.awaitingApproval ? [{ key: "po", href: `${base}/materials`, text: `${data.awaitingApproval} purchase order${data.awaitingApproval === 1 ? "" : "s"} waiting for approval` }] : []),
     ...(toPlan.length ? [{ key: "plan", href: `${base}/planner`, text: `${toPlan.length} part${toPlan.length === 1 ? "" : "s"} still to plan` }] : []),
   ];
 
@@ -172,8 +177,23 @@ export default function SpaceHome({ data, firstName }: { data: SpaceData; firstN
           )}
         </section>
 
+        {/* Materials & kit (low first) */}
+        {data.canEdit && (
+          <section style={card} className="flex flex-col gap-3">
+            <div className="flex justify-between items-baseline gap-3"><h2 style={h2}>Materials &amp; kit</h2><Link href={`${base}/materials`} className="text-[13px]" style={link}>All →</Link></div>
+            {stock.length === 0 ? <p className="text-sm" style={muted}>No stock items yet. <Link href={`${base}/materials`} style={link}>Add what the workshop keeps</Link>.</p> : (
+              [...low, ...stock.filter(s => !low.includes(s))].slice(0, 5).map(s => (
+                <div key={s.id} className="flex justify-between gap-3 text-sm pb-2" style={{ borderBottom: "1px solid var(--tws-line-soft)" }}>
+                  <span className="min-w-0 truncate">{s.name}</span>
+                  {low.includes(s) ? <strong className="shrink-0" style={{ color: "var(--tws-bad-ink)" }}>Low · reorder</strong> : <span className="shrink-0" style={muted}>{Number.isInteger(s.quantity) ? s.quantity : s.quantity.toFixed(1)} {s.unit}</span>}
+                </div>
+              ))
+            )}
+          </section>
+        )}
+
         {/* Team */}
-        <section style={card} className="flex flex-col gap-3">
+        <section style={card} className={`flex flex-col gap-3 ${data.canEdit ? "lg:col-span-2" : ""}`}>
           <h2 style={h2}>Team <span className="font-medium text-sm" style={muted}>({team.length})</span></h2>
           {team.length === 0 ? <p className="text-sm" style={muted}>Nobody has {space.name} as their company yet (set it in Admin → Users).</p> : (
             <ul className="flex flex-wrap gap-2">

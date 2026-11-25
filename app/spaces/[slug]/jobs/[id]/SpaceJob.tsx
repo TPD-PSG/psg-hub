@@ -9,12 +9,18 @@ import { alertDialog, confirmDialog } from "@/components/Dialogs";
 import type { SpaceTheme } from "@/lib/spaces";
 import type { JobDetail } from "@/app/jobs/[id]/JobView";
 import { BUILD_STAGES, stageIndex } from "@/lib/buildStages";
+import { PO_STATUS } from "@/lib/poStatus";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
 
 export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; user: { id: number; name: string } | null };
 type Option = { id: number; name: string };
+export type JobMaterials = {
+  pos: { id: number; number: string; status: string; inSage: boolean; total: number; supplierName: string | null; supplier: { name: string } | null; lines: { id: number; description: string; quantity: number; unit: string | null; unitCost: number }[] }[];
+  moves: { id: number; change: number; kind: string; createdAt: string; item: { name: string; unit: string } }[];
+  items: { id: number; name: string; unit: string; quantity: number }[];
+};
 
 const gbp = (n: number | null | undefined) => (n == null ? "–" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(n));
 const ymd = (s: string | null) => (s ? s.slice(0, 10) : "");
@@ -28,9 +34,11 @@ const when = (p: PartRow) => {
 const th = "text-left font-semibold py-2 pr-3";
 const td = "py-2 pr-3 align-top";
 
-export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me }: {
-  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean };
+export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials }: {
+  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials;
 }) {
+  const [mat, setMat] = useState(initialMaterials);
+  const [fromStock, setFromStock] = useState({ itemId: "", quantity: "" });
   const [job, setJob] = useState(initial);
   const [parts, setParts] = useState(initialParts);
   const [busy, setBusy] = useState(false);
@@ -53,6 +61,11 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
   const reload = async () => { const d = await fetch(`/api/jobs/${job.id}`).then(r => (r.ok ? r.json() : null)).catch(() => null); if (d?.job) setJob(d.job); };
   const reloadParts = async () => { const d = await fetch(`/api/jobs/${job.id}/parts`).then(r => (r.ok ? r.json() : null)).catch(() => null); if (Array.isArray(d)) setParts(d); };
 
+  const reloadMat = async () => { const d = await fetch(`/api/jobs/${job.id}/materials`).then(r => (r.ok ? r.json() : null)).catch(() => null); if (d?.pos) setMat(d); };
+  async function bookOut(e: React.FormEvent) {
+    e.preventDefault();
+    if (await call(`/api/stock/${fromStock.itemId}/moves`, "POST", { kind: "book_out", quantity: fromStock.quantity, jobId: job.id })) { setFromStock({ itemId: "", quantity: "" }); reloadMat(); reload(); }
+  }
   async function setStage(stage: string) { const d = await call(`/api/jobs/${job.id}/build`, "PATCH", { stage }); if (d?.job) setJob(d.job); }
   async function saveOut(e: React.FormEvent) {
     e.preventDefault();
@@ -95,6 +108,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
           </div>
           <div className="flex gap-3 flex-wrap">
             <a href="#log-days" style={btnLine}>Log days</a>
+            <Link href={`${base}/materials?new=1&job=${job.id}`} style={btnLine}>Raise PO</Link>
             <Link href={`${base}/planner`} style={btnSolid}>Open in planner</Link>
           </div>
         </div>
@@ -125,6 +139,9 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 <div><div className="text-xs font-semibold" style={muted}>Spent so far</div><div className="text-2xl font-extrabold tabular-nums">{gbp(f.actual)}</div><div className="text-xs" style={muted}>{f.quotedCost != null ? `quoted cost ${gbp(f.quotedCost)}` : `${f.days} day${f.days === 1 ? "" : "s"} + costs`}</div></div>
                 <div><div className="text-xs font-semibold" style={muted}>Margin</div><div className="text-2xl font-extrabold tabular-nums" style={{ color: f.margin != null && f.margin < 0 ? "var(--tws-bad-ink)" : "var(--tws-ink)" }}>{gbp(f.margin)}{f.marginPct != null && <span className="text-sm"> · {Math.round(f.marginPct)}%</span>}</div></div>
               </div>
+              {(f.materials > 0 || f.committed > 0) && (
+                <p className="text-[13px]" style={muted}>Includes {gbp(f.materials)} of materials (delivered POs and stock).{f.committed > 0 && <> <strong style={{ color: "var(--tws-warn-ink)" }}>{gbp(f.committed)} more committed</strong> on open purchase orders.</>}</p>
+              )}
               {f.quotedCost != null && f.quotedCost > 0 && (
                 <div role="img" aria-label={`${Math.round((f.actual / f.quotedCost) * 100)}% of the quoted cost used`} className="h-2" style={{ background: "var(--tws-tint)" }}>
                   <div className="h-2" style={{ width: `${Math.min(100, (f.actual / f.quotedCost) * 100)}%`, background: f.actual > f.quotedCost ? "var(--tws-bad-ink)" : "var(--tws-char)" }} />
@@ -132,6 +149,45 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
               )}
             </section>
           )}
+
+          {/* Materials & purchase orders */}
+          <section style={card} className="flex flex-col gap-3.5 min-w-0" aria-label="Materials and purchase orders">
+            <div className="flex justify-between items-baseline gap-3 flex-wrap"><h2 style={h2}>Materials &amp; purchase orders</h2>
+              <Link href={`${base}/materials?new=1&job=${job.id}`} className="text-[13px]" style={link}>+ Raise PO</Link></div>
+            {mat.pos.length === 0 && mat.moves.length === 0 ? <p className="text-sm" style={muted}>Nothing ordered or booked out for this build yet.</p> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ borderCollapse: "collapse", minWidth: 560 }}>
+                  <thead><tr className="text-xs" style={{ ...muted, borderBottom: "1px solid var(--tws-line-soft)" }}><th className={th}>Item</th><th className={th}>Qty</th><th className={th}>Supplier</th><th className={th}>PO</th><th className={th}>Status</th></tr></thead>
+                  <tbody>
+                    {mat.pos.flatMap(p => p.lines.map(l => (
+                      <tr key={`l${l.id}`} style={{ borderBottom: "1px solid var(--tws-line-soft)" }}>
+                        <td className={td}>{l.description}</td><td className={td}>{l.quantity} {l.unit ?? ""}</td>
+                        <td className={td}>{p.supplier?.name ?? p.supplierName ?? "–"}</td>
+                        <td className={td}><Link href={`${base}/materials`} style={link}>{p.number}</Link></td>
+                        <td className={td}>{p.status === "awaiting_approval" ? <strong style={{ color: "var(--tws-warn-ink)" }}>Awaiting approval</strong> : `${PO_STATUS[p.status] ?? p.status}${p.inSage ? " · in Sage" : ""}`}</td>
+                      </tr>
+                    )))}
+                    {mat.moves.map(m => (
+                      <tr key={`m${m.id}`} style={{ borderBottom: "1px solid var(--tws-line-soft)" }}>
+                        <td className={td}>{m.item.name}</td><td className={td}>{Math.abs(m.change)} {m.item.unit}</td>
+                        <td className={td}>From stock</td><td className={td}>–</td><td className={td}>{m.kind === "return" ? "Returned to stock" : "Booked out"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {mat.items.length > 0 && (
+              <form onSubmit={bookOut} className="grid gap-2 items-end pt-3 sm:grid-cols-[2fr_100px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
+                <div><label htmlFor="fs-item" style={lbl}>Add from stock</label>
+                  <select id="fs-item" required style={input} value={fromStock.itemId} onChange={e => setFromStock({ ...fromStock, itemId: e.target.value })}>
+                    <option value="">Pick an item</option>{mat.items.map(i => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit} in stock)</option>)}
+                  </select></div>
+                <div><label htmlFor="fs-qty" style={lbl}>Quantity</label><input id="fs-qty" type="number" min={0} step="any" required style={input} value={fromStock.quantity} onChange={e => setFromStock({ ...fromStock, quantity: e.target.value })} /></div>
+                <button type="submit" disabled={busy} style={{ ...btnSolid, padding: "8px 14px" }}>Book out</button>
+              </form>
+            )}
+          </section>
 
           {/* Parts */}
           <section style={card} className="flex flex-col gap-3.5 min-w-0">

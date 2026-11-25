@@ -6,6 +6,7 @@ import { Fragment, useEffect, useState } from "react";
 import type { EntityRow } from "@/lib/entities";
 import { confirmDialog, alertDialog } from "@/components/Dialogs";
 import { spaceLogoUrl } from "@/lib/entities";
+import { DEFAULT_SPACE_ACCENT } from "@/lib/spaceTheme";
 
 const inp = "rounded px-2 py-1.5 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
@@ -19,15 +20,19 @@ export default function EntitiesPanel({ initial }: { initial: EntityRow[] | null
   // Space settings for one company at a time
   const [space, setSpace] = useState<{ id: number; hasSpace: boolean; slug: string; shortName: string; color: string } | null>(null);
   const openSpace = (en: EntityRow) => setSpace({
-    id: en.id, hasSpace: en.hasSpace, shortName: en.shortName ?? "", color: en.color ?? "#2a5de0",
+    // A company setting up its space for the first time starts switched on, in the workshop brass
+    id: en.id, hasSpace: en.hasSpace || !en.slug, shortName: en.shortName ?? "", color: en.color ?? DEFAULT_SPACE_ACCENT,
     slug: en.slug ?? en.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30),
   });
   async function saveSpace(e: React.FormEvent) {
     e.preventDefault();
     if (!space) return;
+    const was = entities.find(x => x.id === space.id);
+    let on = space.hasSpace;
+    if (!on && !was?.hasSpace && space.slug && await confirmDialog("The space isn't switched on yet, so nobody can open it. Switch it on now?")) on = true;
     // Address first, so switching the space on in the same save has one to use
     if (await call(`/api/entities/${space.id}`, "PUT", { slug: space.slug, shortName: space.shortName, color: space.color })
-      && await call(`/api/entities/${space.id}`, "PUT", { hasSpace: space.hasSpace })) { setSpace(null); reload(); }
+      && await call(`/api/entities/${space.id}`, "PUT", { hasSpace: on })) { setSpace(null); reload(); }
   }
   async function uploadLogo(id: number, file: File | undefined) {
     if (!file) return;
@@ -191,7 +196,7 @@ export default function EntitiesPanel({ initial }: { initial: EntityRow[] | null
                             </label>
                           </div></div>
                         {/* Preview of the top bar */}
-                        <div className="md:col-span-2 rounded h-10 flex items-center px-3 text-xs font-semibold tracking-widest uppercase" style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(space.color) ? space.color : "#2a5de0", color: "#fff" }}>
+                        <div className="md:col-span-2 rounded h-10 flex items-center px-3 text-xs font-semibold tracking-widest uppercase" style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(space.color) ? space.color : DEFAULT_SPACE_ACCENT, color: "#fff" }}>
                           {space.shortName || en.name} · PSG Hub <span className="ml-auto normal-case tracking-normal font-normal opacity-80">top bar preview</span>
                         </div>
                         <div className="md:col-span-2 flex gap-2 items-center">

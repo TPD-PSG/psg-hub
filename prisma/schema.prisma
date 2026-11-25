@@ -47,6 +47,9 @@ model User {
   bdActivities        BDActivity[]        @relation("BDActivityUser")
   targetClients       Client[]            @relation("ClientTargetOwner")
   buildParts          BuildPart[]         @relation("BuildParts")
+  posRaised           PurchaseOrder[]     @relation("PORaisedBy")
+  posApproved         PurchaseOrder[]     @relation("POApprovedBy")
+  stockMoves          StockMove[]         @relation("StockMoveUser")
 }
 
 model Production {
@@ -438,6 +441,8 @@ model Entity {
   quotes         Quote[]
   quoteTemplates QuoteTemplate[]
   jobs           Job[]
+  stockItems     StockItem[]
+  purchaseOrders PurchaseOrder[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1004,17 +1009,19 @@ model HelpTicket {
 }
 
 model Supplier {
-  id          Int      @id @default(autoincrement())
-  name        String
-  category    String   @default("other") // venue | contractor | equipment | transport | catering | marketing | legal | insurance | other
-  contactName String?
-  email       String?
-  phone       String?
-  website     String?
-  address     String?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             Int             @id @default(autoincrement())
+  name           String
+  category       String          @default("other") // venue | contractor | equipment | transport | catering | marketing | legal | insurance | other
+  contactName    String?
+  email          String?
+  phone          String?
+  website        String?
+  address        String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  stockItems     StockItem[]
+  purchaseOrders PurchaseOrder[]
 }
 
 model InvoiceTodo {
@@ -1224,19 +1231,19 @@ model QuoteTemplate {
 // A piece of work we're doing: a PM job (linked to its production), a Workshop build, a Night
 // Run move… Costs and staff time are logged against it; its price comes from the accepted quote.
 model Job {
-  id              Int          @id @default(autoincrement())
-  number          String       @unique // J-2026-001
+  id              Int             @id @default(autoincrement())
+  number          String          @unique // J-2026-001
   title           String
-  jobType         String       @default("pm")
-  status          String       @default("active") // active | complete | cancelled
+  jobType         String          @default("pm")
+  status          String          @default("active") // active | complete | cancelled
   entityId        Int?
-  entity          Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  entity          Entity?         @relation(fields: [entityId], references: [id], onDelete: SetNull)
   clientId        Int?
-  client          Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  opportunityId   Int?         @unique
-  opportunity     Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  productionId    Int?         @unique
-  production      Production?  @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  client          Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  opportunityId   Int?            @unique
+  opportunity     Opportunity?    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  productionId    Int?            @unique
+  production      Production?     @relation(fields: [productionId], references: [id], onDelete: SetNull)
   price           Float? // agreed price if there's no accepted quote
   startDate       DateTime?
   endDate         DateTime?
@@ -1247,14 +1254,16 @@ model Job {
   deliveryMethod  String? // collection | delivery
   deliveryNotes   String? // address, access, contact
   forProductionId Int? // the show a build is for (a show can have a PM job and builds)
-  forProduction   Production?  @relation("JobForProduction", fields: [forProductionId], references: [id], onDelete: SetNull)
+  forProduction   Production?     @relation("JobForProduction", fields: [forProductionId], references: [id], onDelete: SetNull)
   links           JobLink[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   quotes          Quote[]
   costs           JobCost[]
   time            TimeEntry[]
   parts           BuildPart[]
+  purchaseOrders  PurchaseOrder[]
+  stockMoves      StockMove[]
 }
 
 model JobCost {
@@ -1322,4 +1331,90 @@ model BuildPart {
 
   @@index([jobId])
   @@index([userId, startDate])
+}
+
+// TWS materials & kit: what the workshop holds, per company (space)
+model StockItem {
+  id           Int                 @id @default(autoincrement())
+  entityId     Int
+  entity       Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  name         String
+  unit         String              @default("each") // sheets, lengths, L, each…
+  quantity     Float               @default(0)
+  reorderLevel Float? // at or below this it shows as low
+  unitCost     Float? // ex VAT, for costing what's booked out to jobs
+  supplierId   Int?
+  supplier     Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  location     String?
+  archived     Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  moves        StockMove[]
+  poLines      PurchaseOrderLine[]
+
+  @@index([entityId])
+}
+
+// Every change to a stock level: deliveries (from POs), booked out to a job, returns, counts
+model StockMove {
+  id        Int            @id @default(autoincrement())
+  itemId    Int
+  item      StockItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  change    Float // + in, - out
+  kind      String // delivery | book_out | return | adjust
+  jobId     Int?
+  job       Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  poId      Int?
+  po        PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
+  unitCost  Float? // the item's cost when it moved
+  note      String?
+  userId    Int?
+  user      User?          @relation("StockMoveUser", fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime       @default(now())
+
+  @@index([itemId])
+  @@index([jobId])
+}
+
+// Purchase orders: draft → awaiting_approval (over the limit) / approved → ordered → delivered; or cancelled
+model PurchaseOrder {
+  id           Int                 @id @default(autoincrement())
+  number       String              @unique // PO-2026-001
+  entityId     Int?
+  entity       Entity?             @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  jobId        Int?
+  job          Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  supplierId   Int?
+  supplier     Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierName String? // when the supplier isn't in the Hub's list
+  status       String              @default("draft")
+  notes        String?
+  raisedById   Int?
+  raisedBy     User?               @relation("PORaisedBy", fields: [raisedById], references: [id], onDelete: SetNull)
+  approvedById Int?
+  approvedBy   User?               @relation("POApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt   DateTime?
+  orderedAt    DateTime?
+  deliveredAt  DateTime?
+  inSage       Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  lines        PurchaseOrderLine[]
+  stockMoves   StockMove[]
+
+  @@index([jobId])
+  @@index([entityId, status])
+}
+
+model PurchaseOrderLine {
+  id          Int           @id @default(autoincrement())
+  poId        Int
+  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float         @default(1)
+  unit        String?
+  unitCost    Float         @default(0) // ex VAT
+  stockItemId Int? // delivered quantity goes into this stock item
+  stockItem   StockItem?    @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
+  sortOrder   Int           @default(0)
 }

@@ -32,6 +32,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     prisma.user.findMany({ where: { homeEntityId: space.id }, select: { id: true, name: true, avatarUrl: true, role: true }, orderBy: { name: "asc" } }),
     prisma.setting.findUnique({ where: { key: "news" } }),
   ]);
+  // Materials: what's running low, and POs waiting for someone who can approve them
+  const staff = user.role === "admin" || user.role === "member";
+  const [stock, awaiting] = staff ? await Promise.all([
+    prisma.stockItem.findMany({ where: { entityId: space.id, archived: false }, select: { id: true, name: true, quantity: true, unit: true, reorderLevel: true }, orderBy: { name: "asc" } }),
+    prisma.purchaseOrder.count({ where: { entityId: space.id, status: "awaiting_approval" } }),
+  ]) : [[], 0];
   // Parts of the live builds (crew per build this week, and what's still to plan)
   const parts = await prisma.buildPart.findMany({
     where: { jobId: { in: jobs.map(j => j.id) } },
@@ -44,5 +50,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   ].flat()).sort((a, b) => a.date.getTime() - b.date.getTime());
   const dueOut = jobs.filter(j => j.endDate && j.endDate >= today && j.endDate < in28);
   const overdue = jobs.filter(j => j.endDate && j.endDate < today);
-  return NextResponse.json({ space, jobs, parts, schedule, dueOut, overdue, team, news: news?.value || null, canEdit: user.role === "admin" || user.role === "member" });
+  return NextResponse.json({ space, jobs, parts, schedule, dueOut, overdue, team, news: news?.value || null, canEdit: staff, stock, awaitingApproval: awaiting });
 }

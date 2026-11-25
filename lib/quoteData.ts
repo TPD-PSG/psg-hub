@@ -22,12 +22,14 @@ export async function requireStaff(): Promise<{ userId: number; role: string } |
   return { userId: Number((session.user as { id?: string }).id), role };
 }
 
-export async function newNumber(prefix: "Q" | "J") {
+export async function newNumber(prefix: "Q" | "J" | "PO") {
   const year = new Date().getFullYear();
   const like = { startsWith: `${prefix}-${year}-` };
   const used = prefix === "Q"
     ? (await prisma.quote.findMany({ where: { number: like }, select: { number: true } })).map(q => q.number)
-    : (await prisma.job.findMany({ where: { number: like }, select: { number: true } })).map(j => j.number);
+    : prefix === "PO"
+      ? (await prisma.purchaseOrder.findMany({ where: { number: like }, select: { number: true } })).map(p => p.number)
+      : (await prisma.job.findMany({ where: { number: like }, select: { number: true } })).map(j => j.number);
   return nextNumber(prefix, year, used);
 }
 

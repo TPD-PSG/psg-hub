@@ -3,7 +3,9 @@
 //            job, its production's PM fee.
 //   Actual = staff days × each person's day rate when logged
 //            + costs logged against the job
-//            + for a PM job, items marked "PSG expense" on its show's budget (spent, else committed).
+//            + for a PM job, items marked "PSG expense" on its show's budget (spent, else committed)
+//            + materials: delivered purchase orders and stock booked out to the job (TWS, 25 Nov).
+//   Committed = approved or ordered purchase orders not yet delivered (shown, not in actual).
 //   Margin = price − actual. Quoted cost/margin come from the accepted quote, to compare.
 import { quoteTotals } from "@/lib/quotes";
 
@@ -15,11 +17,13 @@ export type JobFiguresInput = {
   time: { days: number; dayRate: number | null }[];
   costs: { amount: number }[];
   psgExpenses: { spent: number; committed: number }[];
+  pos?: { status: string; total: number }[];
+  stockUsed?: number; // value of stock booked out, less returns
 };
 export type JobFigures = {
   price: number | null; priceFrom: "quote" | "agreed" | "pm fee" | null;
   quotedCost: number | null; quotedMargin: number | null;
-  days: number; timeCost: number; unratedDays: number; costs: number; psgExpenses: number; actual: number;
+  days: number; timeCost: number; unratedDays: number; costs: number; psgExpenses: number; materials: number; committed: number; actual: number;
   margin: number | null; marginPct: number | null;
 };
 
@@ -34,11 +38,14 @@ export function jobFigures(j: JobFiguresInput): JobFigures {
   const costs = j.costs.reduce((s, c) => s + c.amount, 0);
   const psgExpenses = j.psgExpenses.reduce((s, e) => s + (e.spent || e.committed || 0), 0);
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  const actual = r2(timeCost + costs + psgExpenses);
+  const pos = j.pos ?? [];
+  const materials = pos.filter(p => p.status === "delivered").reduce((s, p) => s + p.total, 0) + (j.stockUsed ?? 0);
+  const committed = pos.filter(p => p.status === "approved" || p.status === "ordered").reduce((s, p) => s + p.total, 0);
+  const actual = r2(timeCost + costs + psgExpenses + materials);
   const margin = price == null ? null : r2(price - actual);
   return {
     price, priceFrom, quotedCost: qt?.cost ?? null, quotedMargin: qt?.margin ?? null,
-    days, timeCost: r2(timeCost), unratedDays, costs: r2(costs), psgExpenses: r2(psgExpenses), actual,
+    days, timeCost: r2(timeCost), unratedDays, costs: r2(costs), psgExpenses: r2(psgExpenses), materials: r2(materials), committed: r2(committed), actual,
     margin, marginPct: price ? ((margin ?? 0) / price) * 100 : null,
   };
 }

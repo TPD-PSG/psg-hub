@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canAccess, parsePerms } from "@/lib/permissions";
+import { posByJob, stockUsedByJob } from "@/lib/purchaseOrders";
 import { jobFigures } from "@/lib/jobCosting";
 import { JOB_TYPES } from "@/lib/quotes";
 
@@ -43,8 +44,9 @@ export async function listJobs(v: JobViewer) {
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });
   const psg = await psgExpensesFor(jobs.map(j => j.productionId).filter((x): x is number => !!x));
+  const [pos, stock] = await Promise.all([posByJob(jobs.map(j => j.id)), stockUsedByJob(jobs.map(j => j.id))]);
   return jobs.map(j => {
-    const f = jobFigures({ price: j.price, productionPmFee: j.production?.pmFee, quotes: j.quotes, time: j.time, costs: j.costs, psgExpenses: j.productionId ? psg.get(j.productionId) ?? [] : [] });
+    const f = jobFigures({ price: j.price, productionPmFee: j.production?.pmFee, quotes: j.quotes, time: j.time, costs: j.costs, psgExpenses: j.productionId ? psg.get(j.productionId) ?? [] : [], pos: pos.get(j.id), stockUsed: stock.get(j.id) });
     const { quotes, time, costs, ...rest } = j;
     void quotes; void time; void costs;
     return {
@@ -71,7 +73,8 @@ export async function loadJob(id: number, v: JobViewer) {
   });
   if (!j) return null;
   const psg = j.productionId ? (await psgExpensesFor([j.productionId])).get(j.productionId) ?? [] : [];
-  const figures = jobFigures({ price: j.price, productionPmFee: j.production?.pmFee, quotes: j.quotes, time: j.time, costs: j.costs, psgExpenses: psg });
+  const [pos, stock] = await Promise.all([posByJob([j.id]), stockUsedByJob([j.id])]);
+  const figures = jobFigures({ price: j.price, productionPmFee: j.production?.pmFee, quotes: j.quotes, time: j.time, costs: j.costs, psgExpenses: psg, pos: pos.get(j.id), stockUsed: stock.get(j.id) });
   if (v.seeMoney) return { ...j, production: j.production && { id: j.production.id, name: j.production.name }, figures, psgExpenses: psg };
   // Without money access: no prices, rates, costs or quote figures; only your own days in detail
   return {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { spaceMember } from "@/lib/spaceBoard";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
@@ -29,6 +30,7 @@ export async function GET() {
       include: {
         author: { select: { id: true, name: true, avatarUrl: true } },
         media: { select: { id: true, name: true, mime: true } },
+        entity: { select: { id: true, name: true, shortName: true, slug: true, color: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -40,6 +42,7 @@ export async function GET() {
           include: {
             author: { select: { id: true, name: true, avatarUrl: true } },
             media: { select: { id: true, name: true, mime: true } },
+            entity: { select: { id: true, name: true, shortName: true, slug: true, color: true } },
           },
           orderBy: { createdAt: "asc" },
         },
@@ -59,6 +62,14 @@ export async function POST(req: NextRequest) {
   const title = formData.get("title") as string;
   const story = formData.get("story") as string;
   const files = formData.getAll("media") as File[];
+  // Posted from inside a company space (e.g. TWS): the story carries that company's badge
+  const spaceSlug = formData.get("spaceSlug");
+  let entityId: number | null = null;
+  if (typeof spaceSlug === "string" && spaceSlug) {
+    const m = await spaceMember(spaceSlug);
+    if ("error" in m) return m.error;
+    entityId = m.space.id;
+  }
 
   const MAX_FILE_MB = 150;
   const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
@@ -91,11 +102,13 @@ export async function POST(req: NextRequest) {
       title,
       story,
       monthYear,
+      entityId,
       media: { create: mediaData },
     },
     include: {
       author: { select: { id: true, name: true, avatarUrl: true } },
       media: { select: { id: true, name: true, mime: true } },
+      entity: { select: { id: true, name: true, shortName: true, slug: true, color: true } },
     },
   });
 

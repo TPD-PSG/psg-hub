@@ -24,10 +24,11 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
     { href: `${base}/quotes`, label: "Quotes" },
     { href: `${base}/materials`, label: "Materials & kit" },
     { href: `${base}/noticeboard`, label: "Noticeboard" },
+    { href: `${base}/fun`, label: "Fun Corner" },
   ];
   const shared = [
     { href: "/tasks", label: "My tasks" }, { href: "/calendar", label: "Calendar" },
-    { href: "/helpdesk", label: "Help desk" }, { href: "/fun", label: "Fun Corner" },
+    { href: "/helpdesk", label: "Help desk" },
   ];
   const active = (href: string) => (href === base ? pathname === base : pathname.startsWith(href));
   const name = space.name.toUpperCase();

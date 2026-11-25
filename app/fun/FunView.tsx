@@ -8,7 +8,7 @@ import { fmtMonthYear as fmtMonth, fmtDay as fmtDate } from "@/lib/format";
 
 type MediaRef = { id: number; name: string; mime: string };
 type Author = { id: number; name: string; avatarUrl?: string | null };
-export type Submission = { id: number; title: string; story: string; monthYear: string; approved: boolean; author: Author; media: MediaRef[]; createdAt: string };
+export type Submission = { id: number; title: string; story: string; monthYear: string; approved: boolean; author: Author; media: MediaRef[]; createdAt: string; entity?: { id: number; name: string; shortName: string | null; slug: string | null; color: string | null } | null };
 export type Roundup = { id: number; monthYear: string; sentAt: string; submissions: Submission[] };
 
 
@@ -47,6 +47,7 @@ function SubmissionCard({ sub, canDelete, onDelete, onApprove, onReject, isAdmin
             {isAdmin && sub.approved && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#16a34a22", color: "#4ade80" }}>✓ Approved</span>}
           </div>
           <h3 className="text-base font-bold text-white mt-0.5">{sub.title}</h3>
+          {sub.entity && <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5" style={{ backgroundColor: "#1f2226", color: "#fff", borderBottom: `2px solid ${sub.entity.color ?? "#c49a6c"}` }}>From {sub.entity.shortName ?? sub.entity.name}</span>}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {isAdmin && !sub.approved && onApprove && (

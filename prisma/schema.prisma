@@ -451,6 +451,7 @@ model Entity {
   spacePosts     SpacePost[]
   spacePhotos    SpacePhoto[]
   buildVotes     BuildVote[]
+  funSubmissions FunSubmission[]
 }
 
 // An entity's revenue target for a calendar year
@@ -699,6 +700,8 @@ model FunSubmission {
   approved  Boolean     @default(false)
   roundupId Int?
   roundup   FunRoundup? @relation(fields: [roundupId], references: [id], onDelete: SetNull)
+  entityId  Int? // posted from a company space (e.g. TWS): shown with that company's badge
+  entity    Entity?     @relation(fields: [entityId], references: [id], onDelete: SetNull)
   media     FunMedia[]
   createdAt DateTime    @default(now())
 }

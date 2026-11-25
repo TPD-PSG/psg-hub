@@ -61,7 +61,7 @@ const BLANK = { name: "", email: "", password: "", role: "member", color: "", co
 
 const MEMBER_COLORS = ["#f59e0b","#10b981","#3b82f6","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16","#f97316","#14b8a6"];
 
-const INVITE_BLANK = { name: "", email: "", role: "member" };
+const INVITE_BLANK = { name: "", email: "", role: "member", homeEntityId: "", clientId: "" };
 
 type Company = { id: number; name: string; hasSpace: boolean; archived: boolean };
 
@@ -593,6 +593,23 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                       <option value="freelancer">Freelancer</option>
                     </select>
                   </div>
+                  {inviteForm.role === "client" ? (
+                    <div>
+                      <label htmlFor="inv-client" className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Client company</label>
+                      <select id="inv-client" className={inp} style={inpStyle} value={inviteForm.clientId} onChange={e => setInviteForm(f => ({ ...f, clientId: e.target.value }))}>
+                        <option value="">— Link later —</option>{clientCos.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>They&apos;ll see this company&apos;s builds and sign off its drawings as soon as they set their password.</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label htmlFor="inv-home" className="block text-sm font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Home company</label>
+                      <select id="inv-home" className={inp} style={inpStyle} value={inviteForm.homeEntityId} onChange={e => setInviteForm(f => ({ ...f, homeEntityId: e.target.value }))}>
+                        <option value="">— None (PSG Hub home) —</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}{c.hasSpace ? " (has its own space)" : ""}</option>)}
+                      </select>
+                      <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>If their company has its own space (e.g. TWS), they land there when they sign in.</p>
+                    </div>
+                  )}
 
                   {inviteForm.role !== "admin" && (
                     <>

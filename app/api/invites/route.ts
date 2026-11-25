@@ -12,7 +12,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, email, role, permissions, productionIds } = await req.json();
+  const { name, email, role, permissions, productionIds, homeEntityId: rawHome, clientId: rawClient } = await req.json();
+  const homeEntityId = role !== "client" && rawHome ? Number(rawHome) : null;
+  if (homeEntityId && !(await prisma.entity.count({ where: { id: homeEntityId } }))) return NextResponse.json({ error: "Unknown company" }, { status: 400 });
+  const clientId = role === "client" && rawClient ? Number(rawClient) : null;
+  if (clientId && !(await prisma.client.count({ where: { id: clientId } }))) return NextResponse.json({ error: "Unknown client company" }, { status: 400 });
   if (!name || !email) return NextResponse.json({ error: "Name and email required" }, { status: 400 });
 
   // Check no existing user with that email
@@ -30,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   await prisma.userInvite.create({
     data: {
-      token, email, name, role: role ?? "member", expiresAt,
+      token, email, name, role: role ?? "member", expiresAt, homeEntityId, clientId,
       permissions: permissions ? JSON.stringify(permissions) : null,
       productionIds: productionIds?.length ? JSON.stringify(productionIds) : null,
     },

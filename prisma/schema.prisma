@@ -1185,6 +1185,8 @@ model UserInvite {
   role          String    @default("member")
   permissions   String?
   productionIds String?
+  homeEntityId  Int? // their company (its space becomes their home), set when they accept
+  clientId      Int? // client logins: the client company whose builds they sign off
   expiresAt     DateTime
   usedAt        DateTime?
   createdAt     DateTime  @default(now())

@@ -52,6 +52,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         role: invite.role,
         passwordHash,
         permissions: invite.permissions ?? null,
+        // Their company and (for client logins) client company, if still there
+        homeEntityId: invite.homeEntityId && (await tx.entity.count({ where: { id: invite.homeEntityId } })) ? invite.homeEntityId : null,
+        clientId: invite.clientId && (await tx.client.count({ where: { id: invite.clientId } })) ? invite.clientId : null,
       },
     });
     await tx.userInvite.update({ where: { token }, data: { usedAt: new Date() } });

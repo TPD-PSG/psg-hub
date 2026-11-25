@@ -111,6 +111,33 @@ async function runDaily(req: NextRequest): Promise<Response> {
     }
   }
 
+  // ── 4b. Overdue meeting actions, chased with whoever ran the meeting ──────
+  // People with a Hub login are already reminded of their own overdue tasks (section 1). Actions
+  // given to someone without one ("Sam (venue)") would otherwise never be chased, so the meeting's
+  // owner gets one reminder per meeting listing what's overdue and who has it.
+  const overdueActions = await prisma.task.findMany({
+    where: { meetingId: { not: null }, status: { not: "done" }, dueDate: { lt: startOfToday } },
+    select: { title: true, dueDate: true, assigneeName: true, assigneeUser: { select: { name: true } }, createdByUserId: true, meeting: { select: { id: true, title: true, meetingDate: true, productionId: true, createdByUserId: true } } },
+    orderBy: { dueDate: "asc" },
+  });
+  const byMeeting = new Map<number, typeof overdueActions>();
+  for (const t of overdueActions) if (t.meeting) byMeeting.set(t.meeting.id, [...(byMeeting.get(t.meeting.id) ?? []), t]);
+  for (const [meetingId, acts] of byMeeting) {
+    const mt = acts[0].meeting!;
+    const owner = mt.createdByUserId ?? acts[0].createdByUserId;
+    if (!owner) continue;
+    const link = `/productions/${mt.productionId}?section=meetings&meeting=${meetingId}`;
+    if (sentLinks.has(`${owner}|${link}`)) continue;
+    const day = (d: Date | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }) : "");
+    const lines = acts.slice(0, 8).map(t => `${t.title} (${t.assigneeUser?.name ?? t.assigneeName ?? "no owner"}, due ${day(t.dueDate)})`);
+    add({
+      userId: owner,
+      title: `${acts.length} overdue action${acts.length === 1 ? "" : "s"} from ${mt.title} (${day(mt.meetingDate)})`,
+      body: lines.join(" · ") + (acts.length > 8 ? ` · and ${acts.length - 8} more` : ""),
+      link,
+    }, `meeting-actions-${meetingId}`);
+  }
+
   if (queue.length) await prisma.notification.createMany({ data: queue });
 
   // ── 5. SQLite backup to Cloudflare R2 ────────────────────────────────────

@@ -29,6 +29,7 @@ jobs:
           echo "AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "NIGHT_RUN_SYNC_TOKEN=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
           echo "XOVER_SYNC_TOKEN=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+          echo "NOTIFY_SECRET=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
       - run: npm ci --no-audit --no-fund
       - run: npx prisma generate
       - name: Database (migrations, admin, test fixtures)

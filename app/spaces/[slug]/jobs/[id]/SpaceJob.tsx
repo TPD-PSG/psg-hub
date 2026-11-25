@@ -12,6 +12,7 @@ import type { JobDetail } from "@/app/jobs/[id]/JobView";
 import { BUILD_STAGES, stageIndex } from "@/lib/buildStages";
 import { PO_STATUS } from "@/lib/poStatus";
 import { shrinkPhoto } from "@/lib/shrinkPhoto";
+import BuildChecklist, { type Check } from "@/components/BuildChecklist";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
@@ -37,9 +38,11 @@ const when = (p: PartRow) => {
 const th = "text-left font-semibold py-2 pr-3";
 const td = "py-2 pr-3 align-top";
 
-export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos }: {
-  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[];
+export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks }: {
+  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[]; initialChecks: Check[];
 }) {
+  const [checks, setChecks] = useState(initialChecks);
+  const collect = checks.filter(c => c.kind === "collect");
   const [photos, setPhotos] = useState(initialPhotos);
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -133,7 +136,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
     <>
       <header style={pageHeader} className="px-4 sm:px-10 pt-5 pb-6 flex flex-col gap-4">
         <div className="text-[13px]" style={muted}>
-          <Link href={base} style={{ color: "var(--tws-accent-ink)" }}>{space.name}</Link> › <Link href={`${base}/board`} style={{ color: "var(--tws-accent-ink)" }}>Build board</Link> › {job.number}
+          <Link href={base} style={{ color: "var(--tws-accent-ink)" }}>{space.name}</Link> › <Link href={`${base}/jobs`} style={{ color: "var(--tws-accent-ink)" }}>Build jobs</Link> › {job.number}
         </div>
         <div className="flex flex-wrap justify-between items-start gap-4">
           <div className="flex flex-col gap-1.5 min-w-0">
@@ -313,6 +316,12 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 {job.startDate && <span className="text-[13px]" style={{ color: "var(--tws-night-muted)" }}>Build starts {fmtDate(job.startDate)}</span>}
                 {job.deliveryNotes && <span className="text-[13px] whitespace-pre-wrap" style={{ color: "var(--tws-night-muted)" }}>{job.deliveryNotes}</span>}
                 <span className="text-[13px]" style={{ color: "var(--tws-night-muted)" }}>Parts done: {parts.filter(p => p.done).length} of {parts.length}</span>
+                <div className="mt-2 pt-3 flex flex-col gap-2" style={{ borderTop: "1px solid var(--tws-char-hi)" }}>
+                  <span className="text-[13px] font-bold" style={{ color: collect.length && collect.every(c => c.done) ? "var(--tws-accent-light)" : "#fff" }}>
+                    Ready-to-{job.deliveryMethod === "delivery" ? "deliver" : "collect"} check{collect.length ? `: ${collect.filter(c => c.done).length} of ${collect.length} done` : ""}{collect.length && collect.every(c => c.done) ? " ✓" : ""}
+                  </span>
+                  <BuildChecklist jobId={job.id} kind="collect" checks={checks} onChange={setChecks} dark placeholder="Add a check" />
+                </div>
               </>
             ) : (
               <form onSubmit={saveOut} className="flex flex-col gap-2.5">
@@ -335,6 +344,12 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 <button type="submit" disabled={busy} style={{ ...btnSolid, background: "var(--tws-accent)", borderColor: "var(--tws-accent)", color: "var(--tws-ink)" }}>Save</button>
               </form>
             )}
+          </section>
+
+          {/* Snags & tasks */}
+          <section style={card} className="flex flex-col gap-2.5" aria-label="Snags and tasks">
+            <h2 style={h2}>Snags &amp; tasks <span className="text-sm font-medium" style={muted}>{checks.filter(c => c.kind === "snag").length ? `${checks.filter(c => c.kind === "snag" && c.done).length}/${checks.filter(c => c.kind === "snag").length}` : ""}</span></h2>
+            <BuildChecklist jobId={job.id} kind="snag" checks={checks} onChange={setChecks} placeholder="e.g. Trial fit of flats before paint" />
           </section>
 
           {/* Build photos */}

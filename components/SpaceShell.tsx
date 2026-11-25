@@ -19,6 +19,7 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
   const own = [
     { href: base, label: "Home" },
     { href: `${base}/board`, label: "Build board" },
+    { href: `${base}/jobs`, label: "Build jobs" },
     { href: `${base}/planner`, label: "Planner" },
     { href: `${base}/quotes`, label: "Quotes" },
     { href: `${base}/materials`, label: "Materials & kit" },
@@ -28,7 +29,7 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
     { href: "/tasks", label: "My tasks" }, { href: "/calendar", label: "Calendar" },
     { href: "/helpdesk", label: "Help desk" }, { href: "/fun", label: "Fun Corner" },
   ];
-  const active = (href: string) => (href === base ? pathname === base : pathname.startsWith(href)) || (href === `${base}/board` && pathname.startsWith(`${base}/jobs`));
+  const active = (href: string) => (href === base ? pathname === base : pathname.startsWith(href));
   const name = space.name.toUpperCase();
 
   const nav = (

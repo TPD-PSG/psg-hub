@@ -53,6 +53,7 @@ model User {
   spacePosts          SpacePost[]         @relation("SpacePostAuthor")
   spacePhotos         SpacePhoto[]        @relation("SpacePhotoUploader")
   buildVotes          BuildVote[]         @relation("BuildVotes")
+  buildChecksDone     BuildCheck[]        @relation("BuildCheckDoneBy")
 }
 
 model Production {
@@ -1273,6 +1274,7 @@ model Job {
   spacePosts      SpacePost[]
   photos          SpacePhoto[]
   buildVotes      BuildVote[]
+  checks          BuildCheck[]
 }
 
 model JobCost {
@@ -1483,4 +1485,21 @@ model BuildVote {
 
   @@unique([entityId, monthYear, userId])
   @@index([entityId, monthYear])
+}
+
+// TWS build page: snags and tasks, and the ready-to-collect checklist (kind "collect")
+model BuildCheck {
+  id        Int       @id @default(autoincrement())
+  jobId     Int
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  kind      String    @default("snag") // snag | collect
+  text      String
+  done      Boolean   @default(false)
+  doneById  Int?
+  doneBy    User?     @relation("BuildCheckDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
+  doneAt    DateTime?
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([jobId])
 }

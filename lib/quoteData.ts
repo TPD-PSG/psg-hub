@@ -50,6 +50,7 @@ export function quoteFields(body: Record<string, unknown>) {
   if (has("validUntil")) d.validUntil = typeof body.validUntil === "string" && body.validUntil ? new Date(body.validUntil) : null;
   if (has("terms")) d.terms = text(body.terms);
   if (has("internalNotes")) d.internalNotes = text(body.internalNotes);
+  if (has("showSubtotals")) d.showSubtotals = !!body.showSubtotals;
   if (has("status") && (QUOTE_STATUSES as readonly string[]).includes(body.status as string)) d.status = body.status;
   return d;
 }

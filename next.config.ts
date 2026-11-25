@@ -18,6 +18,8 @@ const securityHeaders = [
       "img-src 'self' data: blob:",
       "font-src 'self'",
       "connect-src 'self'",
+      // Quote preview shows the PDF the page itself just made (a blob: URL) in a frame
+      "frame-src 'self' blob:",
       "frame-ancestors 'none'",
     ].join("; "),
   },

@@ -27,7 +27,7 @@ const gbp = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", c
 const qty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, ""));
 
 export type QuoteForPdf = {
-  number: string; title: string; vatRate: number; validUntil: string | null; terms: string | null; createdAt: string; sentAt: string | null;
+  number: string; title: string; vatRate: number; showSubtotals?: boolean; validUntil: string | null; terms: string | null; createdAt: string; sentAt: string | null;
   entity: { name: string; hasSpace?: boolean; slug?: string | null; color?: string | null; logoMime?: string | null; updatedAt?: string | Date } | null;
   client: { name: string; billingName: string | null; billingAddress: string | null; address: string | null; billingEmail: string | null } | null;
   lines: { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number }[];
@@ -88,6 +88,10 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
     const ls = q.lines.filter(l => (l.section ?? "") === sec);
     if (sec) body.push([{ content: sec, colSpan: 4, styles: { fontStyle: "bold", fillColor: brand.tint, textColor: brand.accentInk } }]);
     for (const l of ls) body.push([l.description, `${qty(l.quantity)}${l.unit ? ` ${l.unit}` : ""}`, { content: gbp(l.unitPrice), styles: { halign: "right" } }, { content: gbp(l.quantity * l.unitPrice), styles: { halign: "right" } }]);
+    if (q.showSubtotals && sections.length > 1) {
+      const sub = ls.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+      body.push([{ content: `${sec || "Other"} subtotal`, colSpan: 3, styles: { halign: "right", fontStyle: "bold" } }, { content: gbp(sub), styles: { halign: "right", fontStyle: "bold" } }]);
+    }
   }
   const t = quoteTotals(q.lines, q.vatRate);
   const R = (s: string, bold = false) => ({ content: s, styles: { halign: "right" as const, fontStyle: bold ? "bold" as const : "normal" as const } });
@@ -124,6 +128,13 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
     doc.text(`Page ${i} of ${pages}`, W - M, 290, { align: "right" });
   }
   return doc;
+}
+
+/** The PDF as a blob URL, for previewing on screen without downloading. Revoke it when done. */
+export async function quotePdfUrl(q: QuoteForPdf) {
+  const brand = brandFor(q.entity);
+  const logo = await fetchLogoAsset(brand.logoUrl ?? undefined);
+  return URL.createObjectURL(buildQuotePDF(q, logo, brand).output("blob"));
 }
 
 export async function downloadQuotePDF(q: QuoteForPdf) {

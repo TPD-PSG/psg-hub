@@ -1209,6 +1209,7 @@ model Quote {
   validUntil    DateTime?
   terms         String? // shown on the PDF
   internalNotes String? // never on the PDF
+  showSubtotals Boolean      @default(false) // a subtotal after each section on the PDF
   sentAt        DateTime?
   decidedAt     DateTime?
   createdById   Int?

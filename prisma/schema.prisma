@@ -54,6 +54,7 @@ model User {
   spacePhotos         SpacePhoto[]        @relation("SpacePhotoUploader")
   buildVotes          BuildVote[]         @relation("BuildVotes")
   buildChecksDone     BuildCheck[]        @relation("BuildCheckDoneBy")
+  jobFilesUploaded    JobFile[]           @relation("JobFileUploader")
 }
 
 model Production {
@@ -1275,6 +1276,8 @@ model Job {
   photos          SpacePhoto[]
   buildVotes      BuildVote[]
   checks          BuildCheck[]
+  contacts        JobContact[]
+  files           JobFile[]
 }
 
 model JobCost {
@@ -1500,6 +1503,41 @@ model BuildCheck {
   doneAt    DateTime?
   sortOrder Int       @default(0)
   createdAt DateTime  @default(now())
+
+  @@index([jobId])
+}
+
+// People on a build: the set designer, production manager, client and venue contacts, haulier…
+model JobContact {
+  id        Int      @id @default(autoincrement())
+  jobId     Int
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  role      String // designer | assistant_designer | production_manager | client | venue | haulier | other
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([jobId])
+}
+
+// Files on a build: the designer's drawings (PDFs, images) and model box photos
+model JobFile {
+  id           Int      @id @default(autoincrement())
+  jobId        Int
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  kind         String // design | modelbox
+  name         String
+  mime         String
+  size         Int
+  fileKey      String?
+  data         String? // base64 when file storage isn't set up
+  caption      String?
+  uploadedById Int?
+  uploadedBy   User?    @relation("JobFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
 
   @@index([jobId])
 }

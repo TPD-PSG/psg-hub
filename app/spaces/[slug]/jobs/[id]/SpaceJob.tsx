@@ -13,6 +13,7 @@ import { BUILD_STAGES, stageIndex } from "@/lib/buildStages";
 import { PO_STATUS } from "@/lib/poStatus";
 import { shrinkPhoto } from "@/lib/shrinkPhoto";
 import BuildChecklist, { type Check } from "@/components/BuildChecklist";
+import BuildDesign, { type JobContactRow, type JobFileRow } from "@/components/BuildDesign";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
@@ -38,8 +39,8 @@ const when = (p: PartRow) => {
 const th = "text-left font-semibold py-2 pr-3";
 const td = "py-2 pr-3 align-top";
 
-export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks }: {
-  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[]; initialChecks: Check[];
+export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles }: {
+  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[]; initialChecks: Check[]; initialContacts: JobContactRow[]; initialFiles: JobFileRow[];
 }) {
   const [checks, setChecks] = useState(initialChecks);
   const collect = checks.filter(c => c.kind === "collect");
@@ -144,6 +145,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm" style={muted}>
               {job.forProduction && <span>Production: <Link href={`/productions/${job.forProduction.id}`} style={link}>{job.forProduction.name}</Link></span>}
               {job.client && <span>Client: {job.client.name}</span>}
+              {initialContacts.filter(c => c.role === "designer").map(c => <span key={c.id}>Designer: {c.name}</span>)}
               <span>{jobTypeLabel(job.jobType)}</span>
               {job.status !== "active" && <strong style={{ color: "var(--tws-warn-ink)" }}>{job.status === "complete" ? "Complete" : "Cancelled"}</strong>}
             </div>
@@ -203,6 +205,9 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
               )}
             </section>
           )}
+
+          {/* Design & contacts: the designer, drawings and model box */}
+          <BuildDesign jobId={initial.id} initialContacts={initialContacts} initialFiles={initialFiles} me={me} />
 
           {/* Materials & purchase orders */}
           <section style={card} className="flex flex-col gap-3.5 min-w-0" aria-label="Materials and purchase orders">

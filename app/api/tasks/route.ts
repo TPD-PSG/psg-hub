@@ -1,3 +1,4 @@
+import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/companyScope";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -37,6 +38,9 @@ export async function GET(req: NextRequest) {
     ];
   }
 
+  // Companies they can see: tasks on another company's production are left out
+  const limit = await myCompanyLimit();
+  if (limit) where.AND = [optionalProductionWhere(limit)];
   const tasks = await prisma.task.findMany({
     where,
     include: {

@@ -1,3 +1,4 @@
+import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/companyScope";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -21,6 +22,8 @@ export async function GET(req: NextRequest) {
     where.scheduledAt = { gte: start, lt: end };
   }
 
+  const limit = await myCompanyLimit(); // companies they can see
+  if (limit) Object.assign(where, optionalProductionWhere(limit));
   const posts = await prisma.marketingPost.findMany({
     where,
     orderBy: { scheduledAt: "asc" },

@@ -1,3 +1,4 @@
+import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/companyScope";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -8,7 +9,7 @@ export async function GET() {
 
   const crew = await prisma.crew.findMany({
     orderBy: { name: "asc" },
-    include: { productions: { include: { production: true } } },
+    include: { productions: { where: productionWhere(await myCompanyLimit()), include: { production: true } } }, // only bookings on shows of companies they can see
   });
   return NextResponse.json(crew);
 }

@@ -1,3 +1,4 @@
+import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -8,9 +9,10 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const limit = await myCompanyLimit(); // companies they can see
   const [psgExpenses, rechargeableMovements, productionExpenses] = await Promise.all([
     prisma.expense.findMany({
-      where: { isPSGExpense: true },
+      where: { isPSGExpense: true, ...(limit ? { budgetLine: productionWhere(limit) } : {}) },
       orderBy: { createdAt: "desc" },
       include: {
         budgetLine: {
@@ -28,14 +30,14 @@ export async function GET() {
       },
     }),
     prisma.haulageMovement.findMany({
-      where: { rechargeable: true },
+      where: { rechargeable: true, ...productionWhere(limit) },
       orderBy: { departureAt: "desc" },
       include: {
         production: { select: { id: true, name: true } },
       },
     }),
     prisma.productionExpense.findMany({
-      where: { productionId: { not: null } },
+      where: { productionId: { not: null }, ...(limit ? { productionLink: { entityId: { in: limit } } } : {}) },
       orderBy: { createdAt: "desc" },
       include: {
         productionLink: { select: { id: true, name: true } },

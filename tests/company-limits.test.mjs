@@ -59,6 +59,18 @@ export default () => run("company-limits", async ({ db, users, login, results })
     const rows = (await json(await m("/api/dashboard/entities"))).rows;
     ok(rows.some(x => x.entityId === made.P.id) && !rows.some(x => x.entityId === made.W.id) && !rows.some(x => x.entityId === null), "Home companies table: their companies only, no 'No entity' row");
 
+    // Lists across productions follow each production's company
+    await db.haulageMovement.create({ data: { productionId: pW.id, haulageCompany: "CL Haul", fromLocation: "Stoke", toLocation: "Leeds", departureAt: new Date() } });
+    await db.haulageMovement.create({ data: { productionId: pP.id, haulageCompany: "CL Haul P", fromLocation: "London", toLocation: "Bath", departureAt: new Date() } });
+    await db.staffAssignment.create({ data: { userId: member.id, productionId: pW.id, startDate: new Date(), endDate: new Date() } });
+    await db.task.create({ data: { title: "CL TWS task", productionId: pW.id, assigneeUserId: member.id } });
+    await db.task.create({ data: { title: "CL my own to-do", assigneeUserId: member.id } });
+    const haul = JSON.stringify(await json(await m("/api/haulage")));
+    ok(haul.includes("CL Haul P") && !haul.includes("\"CL Haul\""), "haulage: their company's shows only");
+    ok(!(await json(await m("/api/staff-assignments"))).some(x => x.productionId === pW.id), "staff bookings: not on the other company's shows");
+    const tasks = JSON.stringify(await json(await m(`/api/tasks?assigneeId=${member.id}`)));
+    ok(!tasks.includes("CL TWS task") && tasks.includes("CL my own to-do"), "tasks: not on the other company's shows; their own to-dos stay");
+
     ok((await json(await a("/api/productions"))).some(p => p.id === pW.id), "admins still see everything");
     await limit(undefined);
     ok((await json(await m("/api/productions"))).some(p => p.id === pW.id), "back to All companies: everything again");
@@ -69,6 +81,7 @@ export default () => run("company-limits", async ({ db, users, login, results })
     for (const x of made.jobs) await db.job.delete({ where: { id: x.id } }).catch(() => {});
     for (const x of made.quotes) await db.quote.delete({ where: { id: x.id } }).catch(() => {});
     for (const x of made.deals) await db.opportunity.delete({ where: { id: x.id } }).catch(() => {});
+    await db.task.deleteMany({ where: { title: { startsWith: "CL " } } }).catch(() => {});
     for (const x of made.prods) await db.production.delete({ where: { id: x.id } }).catch(() => {});
     for (const e of [made.P, made.W]) if (e) await db.entity.delete({ where: { id: e.id } }).catch(() => {});
   }

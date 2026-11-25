@@ -59,3 +59,9 @@ export function entityChangeError(limit: number[] | null, data: Record<string, u
   if (limit === null || !("entityId" in data)) return null;
   return inScope(limit, data.entityId as number | null) ? null : "You can't move this to that company";
 }
+
+/** Records that belong to a production follow that production's company. */
+export const productionWhere = (ids: number[] | null) => (ids === null ? {} : { production: { entityId: { in: ids } } });
+/** Records that may or may not belong to a production: ones with none stay visible. */
+export const optionalProductionWhere = (ids: number[] | null, rel = "production", key = "productionId") =>
+  ids === null ? {} : { OR: [{ [key]: null }, { [rel]: { entityId: { in: ids } } }] };

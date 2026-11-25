@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { exportBudgetPDF, exportBudgetXLSX, exportClientBudgetPDF } from "@/lib/budgetExport";
 import { buildBudgetReport, type ReportVariation } from "@/lib/budgetReport";
 import { confirmDialog } from "@/components/Dialogs";
+import NotesPeek from "@/components/NotesPeek";
 import { F, Modal, Btns, inp, inpStyle, fmt, fmtDate, fmtShortDate, sendJson, useList, toggled, type BudgetLine, type Expense, type HaulageMovement, type TabProps, type TourStop } from "../shared";
 import BudgetSpendModal, { PHASES } from "./BudgetSpendModal";
 
@@ -343,11 +344,11 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
                   >
                     {/* Department header */}
                     <div
-                      className="px-4 py-3 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-white/5 transition-colors"
+                      className="px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 cursor-pointer select-none hover:bg-white/5 transition-colors"
                       style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
                       onClick={toggleDept}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1 basis-[12rem]">
                         <span className="text-xs shrink-0 cursor-grab active:cursor-grabbing opacity-30 hover:opacity-70 transition-opacity" style={{ color: "var(--psg-muted)" }} onClick={e => e.stopPropagation()}>⠿</span>
                         <span className="text-xs shrink-0 transition-transform" style={{ color: "var(--psg-muted)", transform: isDeptExpanded ? "rotate(90deg)" : "none" }}>▸</span>
                         {renamingDept === dept ? (
@@ -367,7 +368,7 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
                         )}
                         <span className="text-xs shrink-0 px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{lines.length} line{lines.length !== 1 ? "s" : ""}</span>
                       </div>
-                      <div className="flex items-center gap-4 text-xs shrink-0">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs min-w-0">
                         <span className="font-semibold text-white">Alloc: {fmt(deptAlloc)}</span>
                         <span className={`font-semibold ${deptAlloc - deptCom < 0 ? "text-red-400" : "text-green-400"}`}>Remaining: {fmt(deptAlloc - deptCom)}</span>
                         <span className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
@@ -402,16 +403,17 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
                         <div key={line.id} className="border-t" style={{ borderColor: "var(--psg-card-border)" }}>
                           {/* Line row — click to expand expenses */}
                           <div
-                            className="px-4 py-2.5 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-white/5 transition-colors"
+                            className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 cursor-pointer select-none hover:bg-white/5 transition-colors"
                             style={{ paddingLeft: "2rem" }}
                             onClick={toggleLine}
                           >
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1 basis-[12rem]">
                               <span className="text-xs shrink-0" style={{ color: "var(--psg-muted)", transform: isLineExpanded ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s" }}>▸</span>
                               <span className="text-sm text-white truncate">{line.description}</span>
+                              {line.notes?.trim() && <NotesPeek notes={line.notes} label={`Notes: ${line.description}`} />}
                               {line.nominalCode && <span className="text-xs font-mono px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "var(--psg-muted)" }}>{line.nominalCode}</span>}
                             </div>
-                            <div className="flex items-center gap-3 text-xs shrink-0">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs min-w-0">
                               <span className="text-white">Alloc: {fmt(line.budgeted)}</span>
                               <span className={pct >= 100 ? "text-red-400" : ""}>{Math.round(pct)}%</span>
                               <span className="w-0.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: "var(--psg-card-border)" }} />
@@ -433,6 +435,11 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
 
                           {/* Expanded: expenses */}
                           {isLineExpanded && <>
+                            {line.notes?.trim() && (
+                              <div className="px-4 py-2 text-xs whitespace-pre-wrap border-t" style={{ paddingLeft: "2rem", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)", backgroundColor: "rgba(251,191,36,0.05)" }}>
+                                <span className="font-semibold" style={{ color: "#fbbf24" }}>Notes: </span>{line.notes}
+                              </div>
+                            )}
                             {/* Haulage movements linked to this budget line */}
                             {lineMovements.length > 0 && (
                               <div>

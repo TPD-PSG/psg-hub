@@ -2,8 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { staffInSpace } from "@/lib/spaceAccess";
-import { newNumber } from "@/lib/quoteData";
-import { PO_INCLUDE, poLines, poTotal, poApprovalLimit } from "@/lib/purchaseOrders";
+import { poLines, createPurchaseOrder } from "@/lib/purchaseOrders";
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const s = await staffInSpace((await params).slug);
@@ -17,17 +16,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   if (body.submit && !supplierId && !supplierName) return NextResponse.json({ error: "Who is it from? Pick or type the supplier" }, { status: 400 });
   const jobId = body.jobId ? Number(body.jobId) : null;
   if (jobId && !(await prisma.job.count({ where: { id: jobId, entityId: s.space.id } }))) return NextResponse.json({ error: "Pick one of this company's jobs" }, { status: 400 });
-  const total = poTotal(l.lines);
-  const limit = await poApprovalLimit();
-  const status = !body.submit ? "draft" : total <= limit ? "approved" : "awaiting_approval";
-  const po = await prisma.purchaseOrder.create({
-    data: {
-      number: await newNumber("PO"), entityId: s.space.id, jobId, supplierId, supplierName, status,
-      notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 1000) : null,
-      raisedById: s.user.userId, approvedAt: status === "approved" ? new Date() : null,
-      lines: { create: l.lines },
-    },
-    include: PO_INCLUDE,
+  const po = await createPurchaseOrder({
+    entityId: s.space.id, userId: s.user.userId, jobId, supplierId, supplierName, submit: !!body.submit, lines: l.lines,
+    notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 1000) : null,
   });
-  return NextResponse.json({ ...po, total }, { status: 201 });
+  return NextResponse.json(po, { status: 201 });
 }

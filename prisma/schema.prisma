@@ -1442,6 +1442,7 @@ model PurchaseOrder {
   updatedAt    DateTime            @updatedAt
   lines        PurchaseOrderLine[]
   stockMoves   StockMove[]
+  partMaterials BuildPartMaterial[]
 
   @@index([jobId])
   @@index([entityId, status])
@@ -1805,6 +1806,8 @@ model BuildPartMaterial {
   unit        String?
   unitCost    Float     @default(0) // ex VAT, what it costs us
   stockItemId Int? // picked from stock (kept as a link only; nothing is booked out)
+  poId        Int? // ordered on this purchase order (a cancelled or deleted PO frees it again)
+  po          PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
   sortOrder   Int       @default(0)
   createdAt   DateTime  @default(now())
 

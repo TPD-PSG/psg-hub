@@ -1,7 +1,7 @@
 // Parts of a build (TWS planner): validation shared by the create and update routes.
 import { prisma } from "@/lib/prisma";
 
-export const PART_SELECT = { id: true, jobId: true, label: true, userId: true, startDate: true, days: true, hours: true, done: true, pencilled: true, user: { select: { id: true, name: true } }, materials: { orderBy: { sortOrder: "asc" as const }, select: { id: true, section: true, description: true, quantity: true, unit: true, unitCost: true, stockItemId: true } } } as const;
+export const PART_SELECT = { id: true, jobId: true, label: true, userId: true, startDate: true, days: true, hours: true, done: true, pencilled: true, user: { select: { id: true, name: true } }, materials: { orderBy: { sortOrder: "asc" as const }, select: { id: true, section: true, description: true, quantity: true, unit: true, unitCost: true, stockItemId: true, po: { select: { id: true, number: true, status: true } } } } } as const;
 
 /** Midnight UTC of a YYYY-MM-DD day, or null. */
 export const dayUtc = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? new Date(`${s.slice(0, 10)}T00:00:00.000Z`) : null);

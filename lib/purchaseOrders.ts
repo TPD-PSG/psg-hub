@@ -59,6 +59,29 @@ export const PO_INCLUDE = {
   approvedBy: { select: { id: true, name: true } },
 };
 
+/**
+ * Raise a purchase order for a company (a draft, or submitted: approved at once up to the
+ * approval limit, otherwise waiting for approval). Lines must already be checked (poLines).
+ */
+export async function createPurchaseOrder(o: {
+  entityId: number; userId: number; jobId: number | null; supplierId: number | null; supplierName: string | null; notes: string | null; submit: boolean;
+  lines: { description: string; quantity: number; unit: string | null; unitCost: number; stockItemId: number | null; sortOrder: number }[];
+}) {
+  const { newNumber } = await import("@/lib/quoteData");
+  const total = poTotal(o.lines);
+  const limit = await poApprovalLimit();
+  const status = !o.submit ? "draft" : total <= limit ? "approved" : "awaiting_approval";
+  const po = await prisma.purchaseOrder.create({
+    data: {
+      number: await newNumber("PO"), entityId: o.entityId, jobId: o.jobId, supplierId: o.supplierId, supplierName: o.supplierName, status,
+      notes: o.notes, raisedById: o.userId, approvedAt: status === "approved" ? new Date() : null,
+      lines: { create: o.lines },
+    },
+    include: PO_INCLUDE,
+  });
+  return { ...po, total };
+}
+
 type LineIn = { description?: unknown; quantity?: unknown; unit?: unknown; unitCost?: unknown; stockItemId?: unknown };
 /** Check PO lines; stock items must belong to the same company. */
 export async function poLines(raw: unknown, entityId: number | null): Promise<{ lines: { description: string; quantity: number; unit: string | null; unitCost: number; stockItemId: number | null; sortOrder: number }[] } | { error: string }> {

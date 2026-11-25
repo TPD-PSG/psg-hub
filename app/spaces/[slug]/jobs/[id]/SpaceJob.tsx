@@ -18,7 +18,7 @@ import DrawingRegister, { type DrawingRow, type Blocker } from "@/components/Dra
 import Variations, { type VariationRow } from "@/components/Variations";
 import SetStorage, { type StorageData } from "@/components/SetStorage";
 import FrCertificates, { type CertRow } from "@/components/FrCertificates";
-import PartMaterials, { materialsCost, type PartMaterial } from "@/components/PartMaterials";
+import PartMaterials, { materialsCost, ordered, type PartMaterial } from "@/components/PartMaterials";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
@@ -108,6 +108,28 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
   const toggleMats = (id: number) => setOpenMats(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const setPartMaterials = (id: number, materials: PartMaterial[]) => setParts(ps => ps.map(x => (x.id === id ? { ...x, materials } : x)));
   const materialsTotal = parts.reduce((s, p) => s + materialsCost(p.materials ?? []), 0);
+  // Ordering the estimated materials: tick lines, pick a supplier, raise one PO for this build
+  const toOrder = parts.flatMap(p => (p.materials ?? []).filter(m => !ordered(m)).map(m => ({ ...m, partLabel: p.label })));
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [orderPick, setOrderPick] = useState<Set<number>>(new Set());
+  const [orderSup, setOrderSup] = useState({ supplierId: "", supplierName: "" });
+  const [suppliers, setSuppliers] = useState<{ id: number; name: string }[] | null>(null);
+  async function openOrder() {
+    setOrderOpen(true); setOrderPick(new Set(toOrder.filter(m => !m.stockItemId).map(m => m.id)));
+    if (!suppliers) { const d = await fetch(`/api/spaces/${space.slug}/materials`).then(r => (r.ok ? r.json() : null)).catch(() => null); setSuppliers(Array.isArray(d?.suppliers) ? d.suppliers : []); }
+  }
+  async function orderMaterials(submit: boolean) {
+    if (!orderPick.size) return alertDialog("Tick the materials to order.");
+    setBusy(true);
+    const res = await fetch(`/api/jobs/${job.id}/order-materials`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ materialIds: [...orderPick], submit, ...orderSup }) });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(d.error ?? "Couldn't raise the purchase order");
+    if (Array.isArray(d.parts)) setParts(d.parts);
+    setOrderOpen(false); setOrderPick(new Set());
+    reloadMat();
+    alertDialog(`${d.po.number} ${d.po.status === "draft" ? "saved as a draft" : d.po.status === "approved" ? "is approved and ready to send to the supplier" : "is waiting for approval"} (${gbp(d.po.total)}). It's in Materials & kit.`);
+  }
   const [time, setTime] = useState({ date: today(), days: "1", note: "" });
   const [link_, setLink] = useState({ label: "", url: "", kind: "vectorworks" });
   const base = `/spaces/${space.slug}`;
@@ -274,6 +296,45 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
           <section style={card} className="flex flex-col gap-3.5 min-w-0" aria-label="Materials and purchase orders">
             <div className="flex justify-between items-baseline gap-3 flex-wrap"><h2 style={h2}>Materials &amp; purchase orders</h2>
               <Link href={`${base}/materials?new=1&job=${job.id}`} className="text-[13px]" style={link}>+ Raise PO</Link></div>
+            {toOrder.length > 0 && !orderOpen && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5" style={{ background: "var(--tws-ground)" }}>
+                <span className="text-[13px]">{toOrder.length} estimated material{toOrder.length === 1 ? "" : "s"} on the parts not ordered yet ({gbp(materialsCost(toOrder))})</span>
+                <button type="button" onClick={openOrder} style={{ ...btnSolid, padding: "6px 12px", fontSize: 13 }}>Order from the estimates</button>
+              </div>
+            )}
+            {orderOpen && (
+              <div className="flex flex-col gap-2.5 p-3" style={{ background: "var(--tws-ground)", borderTop: "4px solid var(--tws-accent)" }}>
+                <div className="flex justify-between items-baseline gap-2 flex-wrap">
+                  <strong className="text-sm">Order from the estimates</strong>
+                  <span className="flex gap-3 text-xs">
+                    <button type="button" onClick={() => setOrderPick(new Set(toOrder.map(m => m.id)))} style={link}>Pick all</button>
+                    <button type="button" onClick={() => setOrderPick(new Set())} style={muted}>Clear</button>
+                  </span>
+                </div>
+                <ul className="flex flex-col m-0 p-0 list-none text-[13px]">
+                  {toOrder.map(m => (
+                    <li key={m.id} className="py-1.5 flex items-center gap-2" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
+                      <input type="checkbox" aria-label={`Order ${m.description}`} checked={orderPick.has(m.id)} onChange={() => setOrderPick(s => { const n = new Set(s); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return n; })} style={{ accentColor: "var(--tws-char)" }} />
+                      <span className="flex-1 min-w-0 break-words">{m.description} <span style={muted}>· {m.quantity} {m.unit ?? ""} · {m.partLabel}</span>{m.stockItemId && <span className="ml-1 text-[11px] font-bold" style={{ color: "var(--tws-warn-ink)" }}>in stock: book it out instead?</span>}</span>
+                      <span className="tabular-nums shrink-0">{gbp(m.quantity * m.unitCost)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div><label htmlFor="om-sup" style={lbl}>Supplier</label>
+                    <select id="om-sup" style={input} value={orderSup.supplierId} onChange={e => setOrderSup({ ...orderSup, supplierId: e.target.value })}>
+                      <option value="">Not in the list (type it)</option>{(suppliers ?? []).map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                    </select></div>
+                  {!orderSup.supplierId && <div><label htmlFor="om-supname" style={lbl}>Supplier name</label><input id="om-supname" style={input} value={orderSup.supplierName} onChange={e => setOrderSup({ ...orderSup, supplierName: e.target.value })} placeholder="e.g. Stoke Timber Ltd" /></div>}
+                </div>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <button type="button" disabled={busy || !orderPick.size} onClick={() => orderMaterials(true)} style={{ ...btnSolid, padding: "8px 14px" }}>Submit PO ({gbp(materialsCost(toOrder.filter(m => orderPick.has(m.id))))})</button>
+                  <button type="button" disabled={busy || !orderPick.size} onClick={() => orderMaterials(false)} style={{ ...btnLine, padding: "8px 14px" }}>Save as draft</button>
+                  <button type="button" onClick={() => setOrderOpen(false)} className="text-sm underline" style={muted}>Cancel</button>
+                </div>
+                <span className="text-xs" style={muted}>One purchase order for this build, at the estimated costs (change prices on the PO if the supplier&apos;s differ). Over the approval limit it waits for approval.</span>
+              </div>
+            )}
             {mat.pos.length === 0 && mat.moves.length === 0 ? <p className="text-sm" style={muted}>Nothing ordered or booked out for this build yet.</p> : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm" style={{ borderCollapse: "collapse", minWidth: 560 }}>

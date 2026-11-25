@@ -3,6 +3,7 @@ import type { Session } from "next-auth";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePerms, hiddenSectionsFor } from "@/lib/permissions";
+import { companyLimit, inScope } from "@/lib/companyScope";
 
 type Access = { session: Session; role: string; userId: number; hidden: Set<string> } | { error: NextResponse };
 
@@ -21,6 +22,14 @@ export async function requireProductionAccess(productionId: string | number, sec
   const hidden = hiddenSectionsFor(role, user.permissions);
   if (section && hidden.has(section)) {
     return { error: NextResponse.json({ error: "You don't have access to this section" }, { status: 403 }) };
+  }
+  // Companies they can see (Admin → Users): a production of another company, or with none, is off limits
+  if (role !== "admin") {
+    const limit = await companyLimit(userId);
+    if (limit) {
+      const p = await prisma.production.findUnique({ where: { id: pid }, select: { entityId: true } });
+      if (!p || !inScope(limit, p.entityId)) return { error: NextResponse.json({ error: "You don't have access to this production" }, { status: 403 }) };
+    }
   }
   if (role === "admin" || (role === "member" && parsePerms(user.permissions).allProductions)) {
     return { session, role, userId, hidden };

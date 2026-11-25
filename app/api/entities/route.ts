@@ -1,5 +1,6 @@
 // The group's companies (entities). Anyone with BD, productions or finance access can read them
 // (see proxy.ts); only admins add, rename, reorder or archive them.
+import { myCompanyLimit } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -8,7 +9,9 @@ import { ENTITY_SELECT } from "@/lib/entities";
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const entities = await prisma.entity.findMany({ select: ENTITY_SELECT, orderBy: [{ archived: "asc" }, { sortOrder: "asc" }, { name: "asc" }] });
+  // Someone limited to some companies only gets those (e.g. in "which company" pickers)
+  const limit = await myCompanyLimit();
+  const entities = await prisma.entity.findMany({ where: limit ? { id: { in: limit } } : {}, select: ENTITY_SELECT, orderBy: [{ archived: "asc" }, { sortOrder: "asc" }, { name: "asc" }] });
   return NextResponse.json(entities);
 }
 

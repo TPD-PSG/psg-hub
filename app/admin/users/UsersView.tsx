@@ -38,7 +38,7 @@ const MODULES = [
   { key: "fun", label: "Fun Corner" },
 ];
 
-type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[]; spaceEntityIds?: number[] };
+type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[]; entityIds?: number[]; spaceEntityIds?: number[] };
 export type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
   color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null; homeEntityId?: number | null;
@@ -66,39 +66,45 @@ const INVITE_BLANK = { name: "", email: "", role: "member" };
 type Company = { id: number; name: string; hasSpace: boolean; archived: boolean };
 
 /**
- * Which company spaces (e.g. The Workshop Stoke) a person can open: all, or only the ticked ones.
- * Stored as permissions.spaceEntityIds; missing means all. Admins always see every space.
+ * "Companies they can see": all (the default), or only the ticked companies. Limits productions,
+ * BD, quotes, jobs and company spaces to those companies; records with no company are hidden.
+ * Stored as permissions.entityIds (spaceEntityIds was the spaces-only first version). Admins
+ * always see everything. See lib/companyScope.
  */
 function SpaceAccessPicker({ perms, setPerms, companies, name }: { perms: Permissions; setPerms: (fn: (p: Permissions) => Permissions) => void; companies: Company[]; name: string }) {
-  const spaces = companies.filter(c => c.hasSpace);
-  if (!spaces.length) return null;
-  const limited = Array.isArray(perms.spaceEntityIds);
-  const ids = perms.spaceEntityIds ?? [];
+  if (!companies.length) return null;
+  const current = perms.entityIds ?? perms.spaceEntityIds;
+  const limited = Array.isArray(current);
+  const ids = current ?? [];
+  const set = (next: number[] | undefined) => setPerms(p => {
+    const { entityIds, spaceEntityIds, ...rest } = p; void entityIds; void spaceEntityIds;
+    return next === undefined ? rest : { ...rest, entityIds: next };
+  });
   return (
     <div className="border-t pt-4" style={{ borderColor: "var(--psg-card-border)" }}>
-      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Company spaces</div>
+      <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--psg-muted)" }}>Companies they can see</div>
       <div className="space-y-2">
         <label className="flex items-center gap-3 cursor-pointer">
-          <input type="radio" name={name} checked={!limited} onChange={() => setPerms(p => { const { spaceEntityIds, ...rest } = p; void spaceEntityIds; return rest; })} className="w-4 h-4" />
-          <span className="text-sm">All company spaces</span>
+          <input type="radio" name={name} checked={!limited} onChange={() => set(undefined)} className="w-4 h-4" />
+          <span className="text-sm">All companies</span>
         </label>
         <label className="flex items-center gap-3 cursor-pointer">
-          <input type="radio" name={name} checked={limited} onChange={() => setPerms(p => ({ ...p, spaceEntityIds: p.spaceEntityIds ?? [] }))} className="w-4 h-4" />
+          <input type="radio" name={name} checked={limited} onChange={() => set(ids)} className="w-4 h-4" />
           <span className="text-sm">Only these</span>
         </label>
         {limited && (
           <div className="ml-7 space-y-1">
-            {spaces.map(c => (
+            {companies.map(c => (
               <label key={c.id} className="flex items-center gap-2 cursor-pointer py-0.5">
                 <input type="checkbox" className="w-4 h-4 rounded" checked={ids.includes(c.id)}
-                  onChange={() => setPerms(p => { const cur = p.spaceEntityIds ?? []; return { ...p, spaceEntityIds: cur.includes(c.id) ? cur.filter(x => x !== c.id) : [...cur, c.id] }; })} />
-                <span className="text-sm">{c.name}</span>
+                  onChange={() => set(ids.includes(c.id) ? ids.filter(x => x !== c.id) : [...ids, c.id])} />
+                <span className="text-sm">{c.name}{c.hasSpace ? " (and its space)" : ""}</span>
               </label>
             ))}
-            {ids.length === 0 && <p className="text-xs" style={{ color: "#fbbf24" }}>Nothing ticked: they won&apos;t be able to open any company space.</p>}
+            {ids.length === 0 && <p className="text-xs" style={{ color: "#fbbf24" }}>Nothing ticked: they won&apos;t see any company&apos;s productions, deals, jobs or spaces.</p>}
           </div>
         )}
-        <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Only affects company spaces (build board, planner, materials, noticeboard). Productions, BD and jobs are unchanged.</p>
+        <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Limits productions, business development, quotes, jobs and company spaces to these companies. Records with no company set are hidden from them, so tag older productions and deals.</p>
       </div>
     </div>
   );
@@ -309,11 +315,14 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>
                     {isAdmin ? "All" : p.allProductions ? "All" : "Team only"}
-                    {!isAdmin && Array.isArray(p.spaceEntityIds) && (
-                      <div className="mt-1" style={{ color: "#fbbf24" }}>
-                        Spaces: {p.spaceEntityIds.length ? companies.filter(c => p.spaceEntityIds!.includes(c.id)).map(c => c.name).join(", ") || "—" : "none"}
-                      </div>
-                    )}
+                    {!isAdmin && Array.isArray(p.entityIds ?? p.spaceEntityIds) && (() => {
+                      const ids = (p.entityIds ?? p.spaceEntityIds)!;
+                      return (
+                        <div className="mt-1" style={{ color: "#fbbf24" }}>
+                          Only: {ids.length ? companies.filter(c => ids.includes(c.id)).map(c => c.name).join(", ") || "—" : "no companies"}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2 justify-end">

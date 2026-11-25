@@ -1,5 +1,6 @@
 // Server-side job loading. Money (day rates, costs, margins) only for admins and staff with BD or
 // finance access; other staff see the job and can log their own days.
+import { companyLimit, entityWhere } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -34,7 +35,9 @@ async function psgExpensesFor(productionIds: number[]) {
 }
 
 export async function listJobs(v: JobViewer) {
+  const limit = await companyLimit(v.userId); // companies they can see
   const jobs = await prisma.job.findMany({
+    where: entityWhere(limit),
     include: {
       entity: { select: { id: true, name: true } }, client: { select: { id: true, name: true } },
       production: { select: { id: true, name: true, pmFee: true } },

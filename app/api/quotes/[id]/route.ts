@@ -1,6 +1,8 @@
 // One quote (PSG staff). PUT changes the header fields sent and, if "lines" is sent, replaces
 // the lines. Status changes stamp when it was sent or decided. Only drafts can be deleted
 // (admins can delete any).
+import { myCompanyLimit, entityChangeError } from "@/lib/companyScope";
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseLines, quoteTotals } from "@/lib/quotes";
@@ -12,6 +14,8 @@ async function load(id: number) {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("quote", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const who = await requireStaff();
   if ("error" in who) return who.error;
   const q = await load(parseInt((await params).id));
@@ -19,6 +23,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("quote", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const who = await requireStaff();
   if ("error" in who) return who.error;
   const id = parseInt((await params).id);
@@ -26,6 +32,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json();
   const fields = quoteFields(body);
+  const moveErr = entityChangeError(await myCompanyLimit(), fields);
+  if (moveErr) return NextResponse.json({ error: moveErr }, { status: 400 });
   if (fields.status && fields.status !== existing.status) {
     if (fields.status === "sent") fields.sentAt = new Date();
     if (fields.status === "accepted" || fields.status === "declined") fields.decidedAt = new Date();
@@ -47,6 +55,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("quote", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const who = await requireStaff();
   if ("error" in who) return who.error;
   const id = parseInt((await params).id);

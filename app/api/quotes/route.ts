@@ -1,5 +1,6 @@
 // Quotes list and create (PSG staff). ?opportunityId= lists one deal's quotes. A new quote can
 // start from a template (templateId) or from a deal (opportunityId: takes its client, entity, type).
+import { myCompanyLimit, entityWhere, scopedEntityId, entityChangeError } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseLines, quoteTotals, type LineInput } from "@/lib/quotes";
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   if ("error" in who) return who.error;
   const opp = Number(new URL(req.url).searchParams.get("opportunityId"));
   const quotes = await prisma.quote.findMany({
-    where: Number.isInteger(opp) && opp > 0 ? { opportunityId: opp } : {},
+    where: { ...(Number.isInteger(opp) && opp > 0 ? { opportunityId: opp } : {}), ...entityWhere(await myCompanyLimit()) },
     include: QUOTE_INCLUDE,
     orderBy: { createdAt: "desc" },
   });
@@ -48,6 +49,9 @@ export async function POST(req: Request) {
     fields.jobType ??= deal.type === "scenic" ? "workshop" : "pm";
   }
   if (!fields.title) return NextResponse.json({ error: "Give the quote a title" }, { status: 400 });
+  const ent = scopedEntityId(await myCompanyLimit(), (fields.entityId as number | null | undefined) ?? null);
+  if ("error" in ent) return NextResponse.json({ error: ent.error }, { status: 400 });
+  if (ent.entityId != null) fields.entityId = ent.entityId;
 
   // Numbers are unique; if two people create a quote at once, try the next number
   for (let attempt = 0; attempt < 3; attempt++) {

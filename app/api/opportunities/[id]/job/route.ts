@@ -1,5 +1,6 @@
 // Won deal → job, for work that isn't a production (a Workshop build, a Night Run move…). PM work
 // gets its job when the deal becomes a production. Takes the deal's client, company and quotes.
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { newNumber } from "@/lib/quoteData";
@@ -7,6 +8,8 @@ import { requireJobViewer } from "@/lib/jobData";
 import { JOB_TYPES } from "@/lib/quotes";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("opportunity", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const v = await requireJobViewer();
   if ("error" in v) return v.error;
   if (!v.seeMoney) return NextResponse.json({ error: "Only directors, BD and finance can open jobs" }, { status: 403 });

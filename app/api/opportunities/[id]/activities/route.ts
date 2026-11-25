@@ -1,11 +1,14 @@
 // A deal's activity log: notes, calls, emails and meetings people add, plus stage changes the
 // API logs itself. Adding an activity can set the next follow-up date in the same step.
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { ACTIVITY_KINDS } from "@/lib/bdPipeline";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("opportunity", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const opportunityId = parseInt((await params).id);
@@ -18,6 +21,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("opportunity", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = (session.user as any).role;

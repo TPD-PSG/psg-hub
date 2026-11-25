@@ -1,5 +1,6 @@
 // Won deal → production. Creates the production with the deal's client and entity, its PM fee
 // and fee stages, puts the creator and the deal's owner on its team, and links deal ↔ production.
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -7,6 +8,8 @@ import { parseStages } from "@/lib/feeStages";
 import { newNumber } from "@/lib/quoteData";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("opportunity", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const session = await auth();
   const role = (session?.user as any)?.role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Only PSG staff can create productions" }, { status: 403 });

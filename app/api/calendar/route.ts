@@ -1,3 +1,4 @@
+import { companyLimit, entityWhere } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { parsePerms } from "@/lib/permissions";
@@ -56,9 +57,11 @@ export async function GET() {
   const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : undefined;
   const perms = parsePerms((session?.user as any)?.permissions ?? null);
 
-  const where = role !== "admin" && !perms.allProductions && userId
-    ? { team: { some: { userId } } }
-    : undefined;
+  const limit = role !== "admin" && userId ? await companyLimit(userId) : null;
+  const where = {
+    ...(role !== "admin" && !perms.allProductions && userId ? { team: { some: { userId } } } : {}),
+    ...entityWhere(limit), // companies they can see
+  };
 
   const productions = await prisma.production.findMany({
     where,

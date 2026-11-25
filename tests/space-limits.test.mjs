@@ -33,15 +33,15 @@ export default () => run("space-limits", async ({ db, users, login, results }) =
       ["stock move", `/api/stock/${made.item.id}/moves`, { method: "POST", body: JSON.stringify({ kind: "count", quantity: 1 }) }],
       ["purchase order", `/api/purchase-orders/${made.po.id}`, { method: "PATCH", body: JSON.stringify({ action: "cancel" }) }],
       ["build materials", `/api/jobs/${made.job.id}/materials`],
-    ]) ok((await m(url, opt)).status === 403, `A's ${label} refused`);
+    ]) ok([403, 404].includes((await m(url, opt)).status), `A's ${label} refused`);
     ok((await db.stockItem.findUnique({ where: { id: made.item.id } })).name === "A ply", "A's stock untouched");
     const list = await json(await m("/api/spaces"));
     ok(list.some(s => s.slug === "limit-b") && !list.some(s => s.slug === "limit-a"), "only B in their spaces list (Fun Corner)");
     const page = await (await m("/productions", { headers: { accept: "text/html" } })).text();
     ok(page.includes('href="/spaces/limit-b"') && !page.includes('href="/spaces/limit-a"'), "top bar only offers B");
     const rows = (await json(await m("/api/dashboard/entities"))).rows ?? [];
-    ok(rows.find(r => r.entityId === made.A.id)?.spaceSlug === null && rows.find(r => r.entityId === made.B.id)?.spaceSlug === "limit-b", "Home companies table only links B's space");
-    ok((await m(`/api/jobs/${made.job.id}`)).status === 200, "jobs themselves are unaffected");
+    ok(!rows.find(r => r.entityId === made.A.id)?.spaceSlug && rows.find(r => r.entityId === made.B.id)?.spaceSlug === "limit-b", "Home companies table only links B's space");
+    ok((await m(`/api/jobs/${made.job.id}`)).status === 404, "A's jobs are hidden too (companies they can see)");
 
     await setLimit(member.id, []);
     ok((await m("/api/spaces/limit-b")).status === 403, "nothing ticked: no spaces");

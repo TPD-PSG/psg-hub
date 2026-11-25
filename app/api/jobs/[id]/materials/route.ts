@@ -1,11 +1,14 @@
 // A build's materials: its purchase orders, stock booked out to it, and the company's stock
 // (for "add from stock"). PSG staff.
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePoUser, poTotal } from "@/lib/purchaseOrders";
 import { canSeeCompanyRecord } from "@/lib/spaces";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const u = await requirePoUser();
   if ("error" in u) return u.error;
   const id = parseInt((await params).id);

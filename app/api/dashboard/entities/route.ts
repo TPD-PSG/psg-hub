@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canAccess, parsePerms, hiddenSectionsFor } from "@/lib/permissions";
 import { buildEntityOverview, type OverviewProduction } from "@/lib/entityOverview";
-import { spaceLimitFor } from "@/lib/spaces";
+import { companyLimit, entityWhere } from "@/lib/companyScope";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +23,13 @@ export async function GET() {
     finance: canAccess(perms, "finance", role),
   };
 
-  const where: Record<string, unknown> = { archived: false };
+  const limit = role === "admin" ? null : await companyLimit(Number(user.id)); // companies they can see
+  const where: Record<string, unknown> = { archived: false, ...entityWhere(limit) };
   if (role !== "admin" && !perms.allProductions) where.team = { some: { userId: Number(user.id) } };
   const range = { startDate: true, endDate: true } as const;
 
   const [entities, productions, deals] = await Promise.all([
-    prisma.entity.findMany({ select: { id: true, name: true, archived: true, sortOrder: true, hasSpace: true, slug: true } }),
+    prisma.entity.findMany({ where: limit ? { id: { in: limit } } : {}, select: { id: true, name: true, archived: true, sortOrder: true, hasSpace: true, slug: true } }),
     see.productions || see.budget || see.finance
       ? prisma.production.findMany({
           where,
@@ -49,7 +50,7 @@ export async function GET() {
       : Promise.resolve([]),
     see.bd
       ? prisma.opportunity.findMany({
-          where: { stage: { notIn: ["won", "lost"] } },
+          where: { stage: { notIn: ["won", "lost"] }, ...entityWhere(limit) },
           select: { entityId: true, stage: true, value: true, probability: true, followUpDate: true, createdAt: true, activities: { orderBy: { at: "desc" }, take: 1, select: { at: true } } },
         })
       : Promise.resolve([]),
@@ -65,7 +66,6 @@ export async function GET() {
     see,
   );
   // No "Space →" link to a space this person isn't allowed into
-  const limit = role === "admin" ? null : (await spaceLimitFor(Number(user.id))).ids;
   if (limit) for (const r of rows) if (r.spaceSlug && (r.entityId == null || !limit.includes(r.entityId))) r.spaceSlug = null;
   return NextResponse.json({ see, rows });
 }

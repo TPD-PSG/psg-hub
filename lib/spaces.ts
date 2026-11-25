@@ -2,7 +2,7 @@
 // inside the Hub. People whose home company has a space land on it and see its theme.
 import { prisma } from "@/lib/prisma";
 import { spaceLogoUrl } from "@/lib/entities";
-import { parsePerms } from "@/lib/permissions";
+import { companyLimit } from "@/lib/companyScope";
 
 export type SpaceTheme = { id: number; name: string; shortName: string | null; slug: string; color: string | null; logoUrl: string | null };
 
@@ -29,10 +29,9 @@ export async function spaceBySlug(slug: string): Promise<SpaceTheme | null> {
  * Admin → Users applies straight away). null = no limit. Admins are never limited.
  */
 export async function spaceLimitFor(userId: number): Promise<{ role: string; homeEntityId: number | null; ids: number[] | null }> {
-  const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, permissions: true, homeEntityId: true } });
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, homeEntityId: true } });
   if (!u) return { role: "none", homeEntityId: null, ids: [] };
-  const ids = u.role === "admin" ? null : parsePerms(u.permissions).spaceEntityIds;
-  return { role: u.role, homeEntityId: u.homeEntityId, ids: Array.isArray(ids) ? ids.map(Number) : null };
+  return { role: u.role, homeEntityId: u.homeEntityId, ids: await companyLimit(userId) };
 }
 
 /**

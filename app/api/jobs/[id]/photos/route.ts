@@ -1,4 +1,5 @@
 // Build photos: list and add (anyone who can open the build's company space)
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { memberOfEntity, storePhotos, withUrl } from "@/lib/spaceBoard";
@@ -7,6 +8,8 @@ const jobOf = async (params: Promise<{ id: string }>) => prisma.job.findUnique({
 const SELECT = { id: true, caption: true, postId: true, createdAt: true, uploadedById: true, uploadedBy: { select: { name: true } } } as const;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const job = await jobOf(params);
   if (!job?.entityId) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const m = await memberOfEntity(job.entityId);
@@ -16,6 +19,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const job = await jobOf(params);
   if (!job?.entityId) return NextResponse.json({ error: "Only builds for a company with a space can have photos" }, { status: 404 });
   const m = await memberOfEntity(job.entityId);

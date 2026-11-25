@@ -1,11 +1,14 @@
 // A build's workshop details: stage, due-out date, collection or delivery, notes, and the show
 // it's for. Any PSG staff can change these (no money involved).
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireJobViewer, loadJob } from "@/lib/jobData";
 import { isBuildStage } from "@/lib/buildStages";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const v = await requireJobViewer();
   if ("error" in v) return v.error;
   const id = parseInt((await params).id);

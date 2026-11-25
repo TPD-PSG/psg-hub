@@ -1,5 +1,6 @@
 // The list of productions the signed-in user may see. Used by GET /api/productions and the
 // server-rendered productions pages, so both apply the same team restriction and budget hiding.
+import { companyLimit } from "@/lib/companyScope";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { parsePerms, hiddenSectionsFor } from "@/lib/permissions";
@@ -26,6 +27,9 @@ export async function loadProductionsForViewer(opts: { archived?: boolean } = {}
   if (role !== "admin" && (role === "client" || role === "freelancer" || !perms.allProductions)) {
     where.team = { some: { userId } };
   }
+  // Companies they can see (Admin → Users)
+  const limit = role === "admin" ? null : await companyLimit(userId);
+  if (limit) where.entityId = { in: limit };
   const productions = await prisma.production.findMany({
     where,
     orderBy: opts.archived ? { archivedAt: "desc" } : { createdAt: "desc" },

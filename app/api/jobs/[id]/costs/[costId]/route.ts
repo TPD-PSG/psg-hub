@@ -1,8 +1,11 @@
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireJobViewer } from "@/lib/jobData";
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string; costId: string }> }) {
+  const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const v = await requireJobViewer();
   if ("error" in v) return v.error;
   if (!v.seeMoney) return NextResponse.json({ error: "Only directors, BD and finance" }, { status: 403 });

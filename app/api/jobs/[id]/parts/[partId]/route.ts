@@ -1,4 +1,5 @@
 // One part of a build: plan it (person + start day), resize, rename, tick off or remove.
+import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireJobViewer } from "@/lib/jobData";
@@ -11,6 +12,8 @@ const find = async (params: P["params"]) => {
 };
 
 export async function PATCH(req: Request, { params }: P) {
+  const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const v = await requireJobViewer();
   if ("error" in v) return v.error;
   const part = await find(params);
@@ -21,6 +24,8 @@ export async function PATCH(req: Request, { params }: P) {
 }
 
 export async function DELETE(_req: Request, { params }: P) {
+  const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
+  if (outOfScope) return outOfScope;
   const v = await requireJobViewer();
   if ("error" in v) return v.error;
   const part = await find(params);

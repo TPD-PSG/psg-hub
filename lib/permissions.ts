@@ -1,5 +1,6 @@
-// spaceEntityIds: the company spaces this person may open (missing = all). Admins ignore it. (25 Nov 2026)
-export type UserPerms = { modules: string[]; allProductions: boolean; hiddenSections?: string[]; spaceEntityIds?: number[] };
+// entityIds: the companies this person may see (missing = all; see lib/companyScope). Admins ignore it.
+// spaceEntityIds was its first version (spaces only) and is still read.
+export type UserPerms = { modules: string[]; allProductions: boolean; hiddenSections?: string[]; entityIds?: number[]; spaceEntityIds?: number[] };
 
 // Modules a client can access regardless of stored permissions
 const CLIENT_MODULES = new Set(["productions", "venues"]);

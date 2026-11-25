@@ -118,7 +118,21 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
     setOrderOpen(true); setOrderPick(new Set(toOrder.filter(m => !m.stockItemId).map(m => m.id)));
     if (!suppliers) { const d = await fetch(`/api/spaces/${space.slug}/materials`).then(r => (r.ok ? r.json() : null)).catch(() => null); setSuppliers(Array.isArray(d?.suppliers) ? d.suppliers : []); }
   }
+  async function bookOutMaterials() {
+    const ids = toOrder.filter(m => m.stockItemId && orderPick.has(m.id)).map(m => m.id);
+    if (!ids.length) return alertDialog("Tick the lines picked from stock to book out.");
+    setBusy(true);
+    const res = await fetch(`/api/jobs/${job.id}/book-out-materials`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ materialIds: ids }) });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(d.error ?? "Couldn't book them out");
+    if (Array.isArray(d.parts)) setParts(d.parts);
+    setOrderPick(p => { const n = new Set(p); ids.forEach(i => n.delete(i)); return n; });
+    reloadMat(); reload();
+    if (toOrder.length === ids.length) setOrderOpen(false);
+  }
   async function orderMaterials(submit: boolean) {
+    if ([...orderPick].some(id => toOrder.find(m => m.id === id)?.stockItemId) && !(await confirmDialog("Some ticked lines are in stock. Order them anyway? (Use \"Book out from stock\" to use what's on the rack.)"))) return;
     if (!orderPick.size) return alertDialog("Tick the materials to order.");
     setBusy(true);
     const res = await fetch(`/api/jobs/${job.id}/order-materials`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ materialIds: [...orderPick], submit, ...orderSup }) });
@@ -315,7 +329,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                   {toOrder.map(m => (
                     <li key={m.id} className="py-1.5 flex items-center gap-2" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
                       <input type="checkbox" aria-label={`Order ${m.description}`} checked={orderPick.has(m.id)} onChange={() => setOrderPick(s => { const n = new Set(s); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return n; })} style={{ accentColor: "var(--tws-char)" }} />
-                      <span className="flex-1 min-w-0 break-words">{m.description} <span style={muted}>· {m.quantity} {m.unit ?? ""} · {m.partLabel}</span>{m.stockItemId && <span className="ml-1 text-[11px] font-bold" style={{ color: "var(--tws-warn-ink)" }}>in stock: book it out instead?</span>}</span>
+                      <span className="flex-1 min-w-0 break-words">{m.description} <span style={muted}>· {m.quantity} {m.unit ?? ""} · {m.partLabel}</span>{m.stockItemId && <span className="ml-1 text-[11px] font-bold" style={{ color: "var(--tws-warn-ink)" }}>in stock</span>}</span>
                       <span className="tabular-nums shrink-0">{gbp(m.quantity * m.unitCost)}</span>
                     </li>
                   ))}
@@ -330,9 +344,10 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 <div className="flex flex-wrap gap-2 items-center">
                   <button type="button" disabled={busy || !orderPick.size} onClick={() => orderMaterials(true)} style={{ ...btnSolid, padding: "8px 14px" }}>Submit PO ({gbp(materialsCost(toOrder.filter(m => orderPick.has(m.id))))})</button>
                   <button type="button" disabled={busy || !orderPick.size} onClick={() => orderMaterials(false)} style={{ ...btnLine, padding: "8px 14px" }}>Save as draft</button>
+                  {toOrder.some(m => m.stockItemId && orderPick.has(m.id)) && <button type="button" disabled={busy} onClick={bookOutMaterials} style={{ ...btnLine, padding: "8px 14px" }}>Book out from stock ({toOrder.filter(m => m.stockItemId && orderPick.has(m.id)).length})</button>}
                   <button type="button" onClick={() => setOrderOpen(false)} className="text-sm underline" style={muted}>Cancel</button>
                 </div>
-                <span className="text-xs" style={muted}>One purchase order for this build, at the estimated costs (change prices on the PO if the supplier&apos;s differ). Over the approval limit it waits for approval.</span>
+                <span className="text-xs" style={muted}>Submit or save makes one purchase order for this build at the estimated costs (change prices on the PO if the supplier&apos;s differ); over the approval limit it waits for approval. Lines marked &ldquo;in stock&rdquo; can be booked out from stock instead.</span>
               </div>
             )}
             {mat.pos.length === 0 && mat.moves.length === 0 ? <p className="text-sm" style={muted}>Nothing ordered or booked out for this build yet.</p> : (

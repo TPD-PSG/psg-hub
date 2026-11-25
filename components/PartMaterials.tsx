@@ -8,9 +8,9 @@ import { alertDialog } from "@/components/Dialogs";
 import { QUOTE_SECTIONS, unitsFor } from "@/lib/quoteUnits";
 import { muted, btnSolid, input } from "@/lib/twsUi";
 
-export type PartMaterial = { id: number; section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; stockItemId: number | null; po?: { id: number; number: string; status: string } | null };
-/** On a live purchase order (a cancelled one frees it again). */
-export const ordered = (m: PartMaterial) => !!m.po && m.po.status !== "cancelled";
+export type PartMaterial = { id: number; section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; stockItemId: number | null; po?: { id: number; number: string; status: string } | null; stockMoveId?: number | null };
+/** Sorted: on a live purchase order (a cancelled one frees it again), or booked out of stock. */
+export const ordered = (m: PartMaterial) => (!!m.po && m.po.status !== "cancelled") || !!m.stockMoveId;
 type Lookup = { stock: { id: number; name: string; unit: string; quantity: number; unitCost: number | null; section: string | null }[]; recent: { description: string; unit: string | null; unitCost: number; supplier: string | null; poNumber: string; date: string }[] };
 type Row = { section: string; description: string; quantity: string; unit: string; unitCost: string; stockItemId: number | null };
 
@@ -72,13 +72,13 @@ export default function PartMaterials({ jobId, partId, entityId, materials, onCh
               {materials.map(m => (
                 <tr key={m.id} style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
                   <td className="py-1 pr-1">{m.description}{m.section ? <span style={muted}> · {m.section}</span> : null}
-                    {ordered(m) && <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5" style={{ background: "var(--tws-char)", color: "#fff" }}>On {m.po!.number}</span>}
+                    {ordered(m) && <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5" style={{ background: "var(--tws-char)", color: "#fff" }}>{m.stockMoveId ? "Booked out of stock" : `On ${m.po!.number}`}</span>}
                     {!ordered(m) && m.stockItemId && <span className="ml-1.5 text-[11px]" style={muted}>(from stock)</span>}</td>
                   <td className="py-1 pr-1"><input aria-label={`Quantity of ${m.description}`} type="number" step="any" min={0} disabled={ordered(m)} style={cell} defaultValue={m.quantity} onBlur={e => Number(e.target.value) !== m.quantity && update(m, { quantity: e.target.value })} /></td>
                   <td className="py-1 pr-1">{m.unit ?? ""}</td>
                   <td className="py-1 pr-1"><input aria-label={`Cost each of ${m.description}`} type="number" step="any" min={0} disabled={ordered(m)} style={cell} defaultValue={m.unitCost} onBlur={e => Number(e.target.value) !== m.unitCost && update(m, { unitCost: e.target.value })} /></td>
                   <td className="py-1 pr-1 text-right tabular-nums">{gbp(m.quantity * m.unitCost)}</td>
-                  <td><button type="button" aria-label={`Remove ${m.description}`} disabled={busy || ordered(m)} title={ordered(m) ? `On ${m.po!.number}: change the purchase order instead` : undefined} onClick={() => call(`${url}/${m.id}`, "DELETE")} style={{ color: "var(--tws-bad-ink)" }}>✕</button></td>
+                  <td><button type="button" aria-label={`Remove ${m.description}`} disabled={busy || ordered(m)} title={ordered(m) ? (m.stockMoveId ? "Booked out of stock: return it in Materials & kit if it isn't used" : `On ${m.po!.number}: change the purchase order instead`) : undefined} onClick={() => call(`${url}/${m.id}`, "DELETE")} style={{ color: "var(--tws-bad-ink)" }}>✕</button></td>
                 </tr>
               ))}
               <tr className="font-bold" style={{ borderTop: "2px solid var(--tws-char)" }}><td className="py-1" colSpan={4}>Materials for this part</td><td className="py-1 pr-1 text-right tabular-nums">{gbp(total)}</td><td /></tr>

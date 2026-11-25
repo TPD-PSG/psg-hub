@@ -22,12 +22,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!ids.length) return NextResponse.json({ error: "Tick the materials to order" }, { status: 400 });
   const mats = await prisma.buildPartMaterial.findMany({
     where: { id: { in: ids }, part: { jobId: job.id } },
-    select: { id: true, description: true, quantity: true, unit: true, unitCost: true, part: { select: { label: true } }, po: { select: { number: true, status: true } } },
+    select: { id: true, description: true, quantity: true, unit: true, unitCost: true, stockMoveId: true, part: { select: { label: true } }, po: { select: { number: true, status: true } } },
     orderBy: [{ partId: "asc" }, { sortOrder: "asc" }],
   });
   if (mats.length !== ids.length) return NextResponse.json({ error: "Some of those aren't on this build" }, { status: 400 });
-  const already = mats.find(m => m.po && m.po.status !== "cancelled");
-  if (already) return NextResponse.json({ error: `${already.description} is already on ${already.po!.number}` }, { status: 409 });
+  const already = mats.find(m => (m.po && m.po.status !== "cancelled") || m.stockMoveId);
+  if (already) return NextResponse.json({ error: already.stockMoveId ? `${already.description} has been booked out of stock` : `${already.description} is already on ${already.po!.number}` }, { status: 409 });
   const supplierId = body.supplierId ? Number(body.supplierId) : null;
   if (supplierId && !(await prisma.supplier.count({ where: { id: supplierId } }))) return NextResponse.json({ error: "Unknown supplier" }, { status: 400 });
   const supplierName = !supplierId && typeof body.supplierName === "string" && body.supplierName.trim() ? body.supplierName.trim().slice(0, 120) : null;

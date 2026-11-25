@@ -40,6 +40,23 @@ export default () => run("order-materials", async ({ db, users, login, results }
     d = await json(r);
     ok(r.status === 201 && d.po.status === "awaiting_approval" && d.po.total === 378, "after cancelling, the ply can be ordered again");
     ok((await a(`/api/jobs/${J}/parts/${part.id}/materials/${mdf.id}`, { method: "PATCH", body: JSON.stringify({ quantity: 7 }) })).status === 200, "lines on a cancelled PO can be edited again");
+    // From stock: book out instead of ordering
+    const item = await db.stockItem.create({ data: { entityId: made.e.id, name: "OM ply stock", unit: "sheets", quantity: 5, unitCost: 30 } });
+    const fromStock = await db.buildPartMaterial.create({ data: { partId: part.id, description: "OM ply stock", quantity: 4, unit: "sheets", unitCost: 30, stockItemId: item.id } });
+    const tooMany = await db.buildPartMaterial.create({ data: { partId: part.id, description: "OM ply stock (more)", quantity: 3, unit: "sheets", unitCost: 30, stockItemId: item.id } });
+    const B = `/api/jobs/${J}/book-out-materials`;
+    ok((await a(B, { method: "POST", body: JSON.stringify({ materialIds: [mdf.id] }) })).status === 400, "only lines picked from stock can be booked out");
+    r = await a(B, { method: "POST", body: JSON.stringify({ materialIds: [fromStock.id, tooMany.id] }) });
+    ok(r.status === 400 && (await json(r)).error.includes("Only 5"), "it won't book out more than is in stock (4 + 3 > 5)");
+    r = await a(B, { method: "POST", body: JSON.stringify({ materialIds: [fromStock.id] }) });
+    d = await json(r);
+    const after = await db.stockItem.findUnique({ where: { id: item.id } });
+    const mv = await db.stockMove.findFirst({ where: { itemId: item.id, jobId: J } });
+    ok(r.status === 201 && after.quantity === 1 && mv?.change === -4 && mv.unitCost === 30, "4 sheets booked out to the build at stock cost; 1 left");
+    ok(d.parts[0].materials.find(m => m.id === fromStock.id).stockMoveId === mv.id, "the line is marked as booked out");
+    ok((await a(B, { method: "POST", body: JSON.stringify({ materialIds: [fromStock.id] }) })).status === 409, "and can't be booked out twice");
+    ok((await order(a, { materialIds: [fromStock.id], supplierName: "X" })).status === 409, "or ordered as well");
+
     // Normal PO route still works after the refactor
     r = await a("/api/spaces/om-test/purchase-orders", { method: "POST", body: JSON.stringify({ submit: true, supplierName: "Castors Ltd", jobId: J, lines: [{ description: "Castors", quantity: 4, unitCost: 10 }] }) });
     d = await json(r);

@@ -1415,6 +1415,7 @@ model StockMove {
 
   @@index([itemId])
   @@index([jobId])
+  partMaterial BuildPartMaterial?
 }
 
 // Purchase orders: draft → awaiting_approval (over the limit) / approved → ordered → delivered; or cancelled
@@ -1808,6 +1809,8 @@ model BuildPartMaterial {
   stockItemId Int? // picked from stock (kept as a link only; nothing is booked out)
   poId        Int? // ordered on this purchase order (a cancelled or deleted PO frees it again)
   po          PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
+  stockMoveId Int?      @unique // booked out of stock to the build instead of ordered
+  stockMove   StockMove? @relation(fields: [stockMoveId], references: [id], onDelete: SetNull)
   sortOrder   Int       @default(0)
   createdAt   DateTime  @default(now())
 

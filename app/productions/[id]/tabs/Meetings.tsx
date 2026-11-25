@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { exportMeetingMinutesPDF } from "@/lib/exports";
 import { confirmDialog, alertDialog } from "@/components/Dialogs";
+import MeetingActions from "@/components/MeetingActions";
 import { inp, inpStyle, sendJson, useList, type ProdContact, type TabProps } from "../shared";
 
 export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boolean }) {
@@ -289,6 +290,9 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
                     )}
                   </div>
                 )}
+
+                {/* Action items from the minutes, and the tasks made from them */}
+                <MeetingActions meetingId={m.id} hasMinutes={!!m.minutes?.trim()} canEdit={canEdit} />
               </div>
             );
           })}

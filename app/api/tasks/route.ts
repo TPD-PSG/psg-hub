@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
       signoffUser: { select: { id: true, name: true, email: true, avatarUrl: true } },
       createdByUser: { select: { id: true, name: true, avatarUrl: true } },
       production: { select: { id: true, name: true } },
+      meeting: { select: { id: true, title: true, meetingDate: true } },
     },
     orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
   });

@@ -23,6 +23,7 @@ export type Task = {
   signoffUser: User | null;
   signoffAt: string | null;
   production?: { id: number; name: string } | null;
+  meeting?: { id: number; title: string; meetingDate: string } | null;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -170,6 +171,11 @@ function TaskCard({
               </span>
             )}
             {showProduction && task.production && <span>{task.production.name}</span>}
+            {task.meeting && task.production && (
+              <a href={`/productions/${task.production.id}?section=meetings`} onClick={e => e.stopPropagation()} className="hover:underline" title="Open the meeting this action came from">
+                From: {task.meeting.title}
+              </a>
+            )}
           </div>
         </div>
 

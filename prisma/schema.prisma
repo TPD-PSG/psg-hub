@@ -641,6 +641,8 @@ model Task {
   signoffUserId   Int?
   signoffUser     User?       @relation("TaskSignoff", fields: [signoffUserId], references: [id], onDelete: SetNull)
   signoffAt       DateTime?
+  meetingId       Int? // the meeting whose minutes this action came from
+  meeting         Meeting?    @relation(fields: [meetingId], references: [id], onDelete: SetNull)
   createdByUserId Int?
   createdByUser   User?       @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt       DateTime    @default(now())
@@ -649,6 +651,7 @@ model Task {
   @@index([productionId])
   @@index([assigneeUserId])
   @@index([createdByUserId])
+  @@index([meetingId])
   @@index([status])
 }
 
@@ -1109,6 +1112,7 @@ model Meeting {
   createdByUser   User?      @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+  tasks           Task[]
 
   @@index([productionId])
 }

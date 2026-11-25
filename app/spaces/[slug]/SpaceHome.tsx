@@ -6,6 +6,8 @@ import type { SpaceTheme } from "@/lib/spaces";
 import { BUILD_STAGES, buildStageLabel, stageIndex, usesBuildStages } from "@/lib/buildStages";
 import { jobTypeLabel } from "@/lib/quotes";
 import { caps, card, darkCard, h2, muted, link, btnSolid, btnLine, pageHeader, dayChip } from "@/lib/twsUi";
+import BuildOfMonth from "@/components/BuildOfMonth";
+import type { BoardData } from "./noticeboard/Noticeboard";
 
 type Job = {
   id: number; number: string; title: string; jobType: string; startDate: string | null; endDate: string | null;
@@ -26,7 +28,7 @@ const DAY = 86400e3;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 const utcDay = (s: string) => new Date(`${s.slice(0, 10)}T00:00:00Z`).getTime();
 
-export default function SpaceHome({ data, firstName }: { data: SpaceData; firstName: string }) {
+export default function SpaceHome({ data, firstName, board }: { data: SpaceData; firstName: string; board?: BoardData | null }) {
   const { space, jobs, dueOut, overdue, team, news } = data;
   const parts = data.parts ?? [];
   const base = `/spaces/${space.slug}`;
@@ -149,7 +151,7 @@ export default function SpaceHome({ data, firstName }: { data: SpaceData; firstN
         </section>
 
         {/* This week */}
-        <section style={card} className="lg:col-span-2 flex flex-col gap-3 min-w-0">
+        <section style={card} className={`${data.canEdit ? "lg:col-span-2" : "lg:col-span-3"} flex flex-col gap-3 min-w-0`}>
           <div className="flex justify-between items-baseline gap-3"><h2 style={h2}>Build schedule · this week</h2><Link href={`${base}/planner`} className="text-[13px]" style={link}>Open planner →</Link></div>
           {weekRows.length === 0 ? <p className="text-sm" style={muted}>Nothing scheduled this week. Give builds a start and due-out date, or plan their parts in the planner.</p> : (
             <div className="overflow-x-auto">
@@ -192,8 +194,34 @@ export default function SpaceHome({ data, firstName }: { data: SpaceData; firstN
           </section>
         )}
 
+        {/* Noticeboard and build of the month */}
+        {board && (
+          <>
+            <section style={card} className="lg:col-span-2 flex flex-col gap-3 min-w-0">
+              <div className="flex justify-between items-baseline gap-3"><h2 style={h2}>Workshop noticeboard</h2><Link href={`${base}/noticeboard`} className="text-[13px]" style={link}>Post a photo →</Link></div>
+              {board.posts.length === 0 ? <p className="text-sm" style={muted}>Nothing posted yet. Share build photos, finished sets and workshop notices.</p> : (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {board.posts.slice(0, 3).map(p => p.photos[0] ? (
+                    <Link key={p.id} href={`${base}/noticeboard`} className="flex flex-col gap-1.5 min-w-0" style={{ color: "var(--tws-ink)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- served by our own API with access checks */}
+                      <img src={p.photos[0].url} alt={p.title ?? "Build photo"} loading="lazy" className="w-full h-[110px] object-cover" style={{ background: "var(--tws-tint)" }} />
+                      <span className="text-xs truncate">{p.kind === "showcase" ? "Showcase: " : ""}{p.title ?? p.job?.title ?? "Photo"}</span>
+                    </Link>
+                  ) : (
+                    <Link key={p.id} href={`${base}/noticeboard`} className="flex flex-col gap-1.5 p-3 text-[13px] min-w-0" style={{ background: "var(--tws-ground)", color: "var(--tws-ink)" }}>
+                      <strong>{p.pinned ? "📌 " : ""}{p.title ?? "Notice"}</strong>
+                      {p.body && <span className="line-clamp-4" style={muted}>{p.body}</span>}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </section>
+            <BuildOfMonth slug={space.slug} initial={board.botm} compact canOpenBuilds={board.me.staff} />
+          </>
+        )}
+
         {/* Team */}
-        <section style={card} className={`flex flex-col gap-3 ${data.canEdit ? "lg:col-span-2" : ""}`}>
+        <section style={card} className="flex flex-col gap-3 lg:col-span-3">
           <h2 style={h2}>Team <span className="font-medium text-sm" style={muted}>({team.length})</span></h2>
           {team.length === 0 ? <p className="text-sm" style={muted}>Nobody has {space.name} as their company yet (set it in Admin → Users).</p> : (
             <ul className="flex flex-wrap gap-2">

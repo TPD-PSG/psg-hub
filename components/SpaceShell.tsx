@@ -21,6 +21,7 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
     { href: `${base}/board`, label: "Build board" },
     { href: `${base}/planner`, label: "Planner" },
     { href: `${base}/materials`, label: "Materials & kit" },
+    { href: `${base}/noticeboard`, label: "Noticeboard" },
   ];
   const shared = [
     { href: "/tasks", label: "My tasks" }, { href: "/calendar", label: "Calendar" },
@@ -56,7 +57,7 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
   );
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--tws-ground)", color: "var(--tws-ink)" }}>
+    <div className="tws-shell min-h-screen flex flex-col" style={{ background: "var(--tws-ground)", color: "var(--tws-ink)" }}>
       {/* Top bar */}
       <header className="h-16 shrink-0 sticky top-0 z-40 flex items-center justify-between gap-3 px-3 sm:px-6"
         style={{ background: "var(--tws-night)", borderBottom: "4px solid var(--tws-accent)" }}>

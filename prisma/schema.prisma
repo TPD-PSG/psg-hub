@@ -50,6 +50,9 @@ model User {
   posRaised           PurchaseOrder[]     @relation("PORaisedBy")
   posApproved         PurchaseOrder[]     @relation("POApprovedBy")
   stockMoves          StockMove[]         @relation("StockMoveUser")
+  spacePosts          SpacePost[]         @relation("SpacePostAuthor")
+  spacePhotos         SpacePhoto[]        @relation("SpacePhotoUploader")
+  buildVotes          BuildVote[]         @relation("BuildVotes")
 }
 
 model Production {
@@ -443,6 +446,9 @@ model Entity {
   jobs           Job[]
   stockItems     StockItem[]
   purchaseOrders PurchaseOrder[]
+  spacePosts     SpacePost[]
+  spacePhotos    SpacePhoto[]
+  buildVotes     BuildVote[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1264,6 +1270,9 @@ model Job {
   parts           BuildPart[]
   purchaseOrders  PurchaseOrder[]
   stockMoves      StockMove[]
+  spacePosts      SpacePost[]
+  photos          SpacePhoto[]
+  buildVotes      BuildVote[]
 }
 
 model JobCost {
@@ -1417,4 +1426,61 @@ model PurchaseOrderLine {
   stockItemId Int? // delivered quantity goes into this stock item
   stockItem   StockItem?    @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
   sortOrder   Int           @default(0)
+}
+
+// TWS noticeboard: notices, photos and showcases posted in a company space
+model SpacePost {
+  id        Int          @id @default(autoincrement())
+  entityId  Int
+  entity    Entity       @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  authorId  Int?
+  author    User?        @relation("SpacePostAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  kind      String       @default("notice") // notice | photo | showcase
+  title     String?
+  body      String?
+  jobId     Int?
+  job       Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  pinned    Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  photos    SpacePhoto[]
+
+  @@index([entityId, createdAt])
+}
+
+// A photo in a space: of a build (jobId), on a noticeboard post (postId), or both once shared
+model SpacePhoto {
+  id           Int        @id @default(autoincrement())
+  entityId     Int
+  entity       Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  jobId        Int?
+  job          Job?       @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  postId       Int?
+  post         SpacePost? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  uploadedById Int?
+  uploadedBy   User?      @relation("SpacePhotoUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  fileKey      String?
+  data         String? // base64 when file storage isn't set up
+  mime         String
+  caption      String?
+  createdAt    DateTime   @default(now())
+
+  @@index([jobId])
+  @@index([entityId, createdAt])
+}
+
+// Build of the month: one vote per person per month in a space (can be changed until the month ends)
+model BuildVote {
+  id        Int      @id @default(autoincrement())
+  entityId  Int
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  monthYear String // "2026-11"
+  jobId     Int
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation("BuildVotes", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([entityId, monthYear, userId])
+  @@index([entityId, monthYear])
 }

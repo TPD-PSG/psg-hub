@@ -10,12 +10,14 @@ import type { SpaceTheme } from "@/lib/spaces";
 import type { JobDetail } from "@/app/jobs/[id]/JobView";
 import { BUILD_STAGES, stageIndex } from "@/lib/buildStages";
 import { PO_STATUS } from "@/lib/poStatus";
+import { shrinkPhoto } from "@/lib/shrinkPhoto";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
 
 export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; user: { id: number; name: string } | null };
 type Option = { id: number; name: string };
+export type JobPhoto = { id: number; url: string; caption: string | null; postId: number | null; createdAt: string; uploadedById: number | null; uploadedBy: { name: string } | null };
 export type JobMaterials = {
   pos: { id: number; number: string; status: string; inSage: boolean; total: number; supplierName: string | null; supplier: { name: string } | null; lines: { id: number; description: string; quantity: number; unit: string | null; unitCost: number }[] }[];
   moves: { id: number; change: number; kind: string; createdAt: string; item: { name: string; unit: string } }[];
@@ -34,9 +36,35 @@ const when = (p: PartRow) => {
 const th = "text-left font-semibold py-2 pr-3";
 const td = "py-2 pr-3 align-top";
 
-export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials }: {
-  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials;
+export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos }: {
+  space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[];
 }) {
+  const [photos, setPhotos] = useState(initialPhotos);
+  const [photoCaption, setPhotoCaption] = useState("");
+  const [uploading, setUploading] = useState(false);
+  async function addPhotos(list: FileList | null) {
+    if (!list?.length) return;
+    setUploading(true);
+    const fd = new FormData();
+    for (const f of [...list].slice(0, 12)) fd.append("photos", await shrinkPhoto(f));
+    if (photoCaption.trim()) fd.append("caption", photoCaption.trim());
+    const res = await fetch(`/api/jobs/${initial.id}/photos`, { method: "POST", body: fd });
+    setUploading(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(d.error ?? "Couldn't add the photos");
+    setPhotos(d); setPhotoCaption("");
+  }
+  async function sharePhoto(p: JobPhoto) {
+    const res = await fetch(`/api/space-photos/${p.id}/share`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+    if (!res.ok) return alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't share it");
+    setPhotos(ps => ps.map(x => (x.id === p.id ? { ...x, postId: -1 } : x)));
+  }
+  async function deletePhoto(p: JobPhoto) {
+    if (!(await confirmDialog("Delete this photo?"))) return;
+    const res = await fetch(`/api/space-photos/${p.id}`, { method: "DELETE" });
+    if (res.ok) setPhotos(ps => ps.filter(x => x.id !== p.id));
+    else alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't delete it");
+  }
   const [mat, setMat] = useState(initialMaterials);
   const [fromStock, setFromStock] = useState({ itemId: "", quantity: "" });
   const [job, setJob] = useState(initial);
@@ -284,6 +312,38 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 <button type="submit" disabled={busy} style={{ ...btnSolid, background: "var(--tws-accent)", borderColor: "var(--tws-accent)", color: "var(--tws-ink)" }}>Save</button>
               </form>
             )}
+          </section>
+
+          {/* Build photos */}
+          <section style={card} className="flex flex-col gap-2.5" aria-label="Build photos">
+            <h2 style={h2}>Build photos</h2>
+            {photos.length === 0 ? <p className="text-sm" style={muted}>No photos yet. Photos added this month put the build up for build of the month.</p> : (
+              <div className="grid grid-cols-2 gap-2">
+                {photos.map(p => (
+                  <figure key={p.id} className="flex flex-col gap-1 group" style={{ margin: 0 }}>
+                    <a href={p.url} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- served by our own API with access checks */}
+                      <img src={p.url} alt={p.caption ?? `${job.title} build photo`} loading="lazy" className="w-full h-24 object-cover" style={{ background: "var(--tws-tint)" }} />
+                    </a>
+                    <figcaption className="text-[11px] flex justify-between gap-1" style={muted}>
+                      <span className="truncate">{p.caption ?? p.uploadedBy?.name ?? ""}</span>
+                      <span className="flex gap-2 shrink-0">
+                        {p.postId ? <span>On board</span> : <button type="button" onClick={() => sharePhoto(p)} className="font-semibold" style={{ color: "var(--tws-accent-ink)" }}>Share</button>}
+                        {(p.uploadedById === me.id || me.isAdmin) && <button type="button" onClick={() => deletePhoto(p)} aria-label="Delete photo" style={{ color: "var(--tws-bad-ink)" }}>✕</button>}
+                      </span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-col gap-2 pt-2" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
+              <div><label htmlFor="ph-cap" style={lbl}>Caption (optional)</label><input id="ph-cap" style={input} value={photoCaption} onChange={e => setPhotoCaption(e.target.value)} placeholder="e.g. Truck frames welded" /></div>
+              <label className="text-center cursor-pointer text-sm font-bold py-2.5" style={{ border: "2px solid var(--tws-char)", opacity: uploading ? 0.5 : 1 }}>
+                {uploading ? "Uploading…" : "+ Add photos"}
+                <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" disabled={uploading} onChange={e => { addPhotos(e.target.files); e.target.value = ""; }} />
+              </label>
+              <Link href={`${base}/noticeboard`} className="text-[13px] font-semibold" style={link}>Noticeboard →</Link>
+            </div>
           </section>
 
           {/* Drawings & files */}

@@ -11,7 +11,7 @@ export async function GET() {
   // enough for pickers (assign task, add to team): no roles or permissions,
   // and clients/freelancers don't see staff email addresses.
   const select = role === "admin"
-    ? { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true, color: true, costDayRate: true, homeEntityId: true }
+    ? { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true, color: true, costDayRate: true, homeEntityId: true, clientId: true }
     : role === "member"
       ? { id: true, name: true, email: true, avatarUrl: true, color: true }
       : { id: true, name: true, avatarUrl: true, color: true };
@@ -31,8 +31,12 @@ export async function POST(req: NextRequest) {
   const existing = await prisma.user.findUnique({ where: { email: body.email } });
   if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 400 });
 
+  // A client login can be linked to its client company straight away
+  const clientId = body.clientId ? Number(body.clientId) : null;
+  if (clientId !== null && !(await prisma.client.count({ where: { id: clientId } }))) return NextResponse.json({ error: "Unknown client company" }, { status: 400 });
   const user = await prisma.user.create({
     data: {
+      clientId,
       name: body.name,
       email: body.email,
       passwordHash: await hash(body.password, 12),

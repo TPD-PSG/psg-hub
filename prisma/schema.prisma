@@ -20,6 +20,8 @@ model User {
   costDayRate  Float? // internal cost per day, for job costing (admins set it)
   homeEntityId Int? // the company this person works for; its space (if any) is their home page
   homeEntity   Entity?  @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
+  clientId     Int? // client accounts: the client company whose builds they see and sign off
+  client       Client?  @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -374,6 +376,7 @@ model Client {
   productions    Production[]  @relation("ProductionBDClient")
   quotes         Quote[]
   jobs           Job[]
+  users          User[]        @relation("ClientUsers")
 }
 
 model Contact {

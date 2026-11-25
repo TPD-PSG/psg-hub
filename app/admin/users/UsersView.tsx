@@ -41,7 +41,7 @@ const MODULES = [
 type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[]; entityIds?: number[]; spaceEntityIds?: number[] };
 export type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
-  color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null; homeEntityId?: number | null;
+  color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null; homeEntityId?: number | null; clientId?: number | null;
 };
 export type Production = { id: number; name: string; status: string };
 export type Invite = { id: number; email: string; name: string; role: string; expiresAt: string; createdAt: string; expired: boolean };
@@ -57,7 +57,7 @@ function parsePerms(raw: string | null): Permissions {
   try { return JSON.parse(raw); } catch { return defaultPerms(); }
 }
 
-const BLANK = { name: "", email: "", password: "", role: "member", color: "", costDayRate: "", homeEntityId: "" };
+const BLANK = { name: "", email: "", password: "", role: "member", color: "", costDayRate: "", homeEntityId: "", clientId: "" };
 
 const MEMBER_COLORS = ["#f59e0b","#10b981","#3b82f6","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16","#f97316","#14b8a6"];
 
@@ -148,6 +148,11 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
     fetch("/api/entities").then(r => r.json()).then(d => { if (Array.isArray(d)) setCompanies(d.filter((e: { archived: boolean }) => !e.archived)); }).catch(() => {});
   }, []);
   const [selectedProductions, setSelectedProductions] = useState<number[]>([]);
+  // Client companies (BD), for linking a client login to the builds it signs off
+  const [clientCos, setClientCos] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    fetch("/api/clients").then(r => (r.ok ? r.json() : [])).then(d => { if (Array.isArray(d)) setClientCos(d.map((c: { id: number; name: string }) => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name))); }).catch(() => {});
+  }, []);
 
   // Users and productions arrive with the page; fetch them here only if that failed
   useEffect(() => {
@@ -172,7 +177,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
 
   async function openEdit(u: User) {
     setEditUser(u);
-    setForm({ name: u.name, email: u.email, password: "", role: u.role, color: u.color ?? "", costDayRate: u.costDayRate != null ? String(u.costDayRate) : "", homeEntityId: u.homeEntityId ? String(u.homeEntityId) : "" });
+    setForm({ name: u.name, email: u.email, password: "", role: u.role, color: u.color ?? "", costDayRate: u.costDayRate != null ? String(u.costDayRate) : "", homeEntityId: u.homeEntityId ? String(u.homeEntityId) : "", clientId: u.clientId ? String(u.clientId) : "" });
     setPerms(parsePerms(u.permissions));
     setError("");
     setShowForm(true);
@@ -439,6 +444,18 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                   </select>
                   <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>If their company has its own space, it becomes their home page and the top bar takes its colours.</p>
                 </div>
+                {form.role === "client" && (
+                  <div>
+                    <label htmlFor="user-client-co" className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Client company</label>
+                    <select id="user-client-co" className="w-64 rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" }}
+                      value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))}>
+                      <option value="">— Not linked —</option>
+                      {clientCos.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>They see this company&apos;s builds in My builds and sign off its drawings.</p>
+                  </div>
+                )}
                 {(form.role === "admin" || form.role === "member") && (
                   <div>
                     <label htmlFor="user-day-rate" className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Cost per day (£, for job costing)</label>

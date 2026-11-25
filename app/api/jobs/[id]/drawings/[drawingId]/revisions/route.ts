@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { saveFile } from "@/lib/storage";
 import { jobAccess, FILE_KINDS, FILE_MAX } from "@/lib/jobDesign";
 import { gateOverrides, drawingsFor, gateBlockers, nextRev } from "@/lib/drawings";
+import { notifyClientOfDrawing } from "@/lib/clientPortal";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; drawingId: string }> }) {
   const a = await jobAccess((await params).id);
@@ -24,5 +25,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       data: { drawing: { connect: { id: drawing.id } }, rev, note, file: { create: { jobId: a.id, kind: "design", name: file.name.slice(0, 200), mime: file.type, size: file.size, fileKey: stored.key, data: stored.base64, uploadedById: a.v.userId } } },
     }),
   ]);
+  await notifyClientOfDrawing(a.id, `${drawing.number ? `${drawing.number} ` : ""}${drawing.title}, rev ${rev}`).catch(() => {});
   return NextResponse.json({ rev, drawings: await drawingsFor(a.id), blockers: await gateBlockers(a.id), overrides: await gateOverrides(a.id) }, { status: 201 });
 }

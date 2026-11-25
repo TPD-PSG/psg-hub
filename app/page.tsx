@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { serverApi } from "@/lib/serverApi";
+import { prisma } from "@/lib/prisma";
 import DashboardView, { type DashboardData } from "./DashboardView";
 import type { EntityOverviewRow, Visibility } from "@/lib/entityOverview";
 import { homeSpaceFor, spacesFor } from "@/lib/spaces";
@@ -17,6 +18,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   if (!(await searchParams).all) {
     const space = await homeSpaceFor(Number(user.id));
     if (space) redirect(`/spaces/${space.slug}`);
+    // Client logins linked to a client company land on their builds
+    if (user.role === "client" && (await prisma.user.count({ where: { id: Number(user.id), clientId: { not: null } } }))) redirect("/my-builds");
   }
   const viewer = { id: Number(user.id), name: user.name ?? "", role: user.role ?? "member", permissions: user.permissions ?? null };
 

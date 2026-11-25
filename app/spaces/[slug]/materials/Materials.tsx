@@ -7,6 +7,7 @@ import Link from "next/link";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
 import type { SpaceTheme } from "@/lib/spaces";
 import { PO_STATUS } from "@/lib/poStatus";
+import { downloadPoPDF } from "@/lib/poPdf";
 import { fmtDate } from "@/lib/format";
 import { caps, card, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader } from "@/lib/twsUi";
 
@@ -319,6 +320,8 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
                             {[p.approvedAt && `Approved ${fmtDate(p.approvedAt)}${p.approvedBy ? ` by ${p.approvedBy.name}` : " (under the limit)"}`, p.orderedAt && `ordered ${fmtDate(p.orderedAt)}`, p.deliveredAt && `delivered ${fmtDate(p.deliveredAt)}`, p.supplier?.email, p.supplier?.phone].filter(Boolean).join(" · ")}
                           </p>
                           <div className="flex gap-2 flex-wrap">
+                            <button type="button" onClick={() => downloadPoPDF(p, { name: space.name, color: space.color, logoUrl: space.logoUrl })}
+                              style={{ ...btnLine, padding: "6px 12px", fontSize: 13 }} title={["draft", "awaiting_approval", "cancelled"].includes(p.status) ? "Marked “not for ordering” until it's approved" : undefined}>PDF for supplier</button>
                             {p.status === "draft" && <><button type="button" disabled={busy} onClick={() => editPo(p)} style={{ ...btnLine, padding: "6px 12px", fontSize: 13 }}>Edit</button>
                               <button type="button" disabled={busy} onClick={() => act(p, "submit")} style={{ ...btnSolid, padding: "6px 12px", fontSize: 13 }}>Submit</button>
                               <button type="button" disabled={busy} onClick={() => removeDraft(p)} className="text-[13px] font-semibold px-2" style={{ color: "var(--tws-bad-ink)" }}>Delete draft</button></>}

@@ -1365,6 +1365,7 @@ model BuildPart {
   hours     Float? // planned hours
   done      Boolean   @default(false)
   pencilled Boolean   @default(false) // tentative: held while the build is still being quoted
+  materials BuildPartMaterial[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -1790,4 +1791,22 @@ model ClockEntry {
 
   @@index([userId, endAt])
   @@index([jobId])
+}
+
+// Estimated materials for a part of a build (27 Nov 2026), added before pricing: what the part
+// needs and what it should cost. "Quote this build" prices each part's labour and materials.
+model BuildPartMaterial {
+  id          Int       @id @default(autoincrement())
+  partId      Int
+  part        BuildPart @relation(fields: [partId], references: [id], onDelete: Cascade)
+  section     String? // Timber, Sheet materials… (sets the units offered)
+  description String
+  quantity    Float     @default(1)
+  unit        String?
+  unitCost    Float     @default(0) // ex VAT, what it costs us
+  stockItemId Int? // picked from stock (kept as a link only; nothing is booked out)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([partId])
 }

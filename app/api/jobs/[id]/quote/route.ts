@@ -1,5 +1,6 @@
 // "Quote this build": start a quote attached to this job, its lines drafted from the build's
-// parts (labour) and materials (POs and stock), each priced at cost plus the chosen markup.
+// parts: labour and each part's estimated materials (or, without estimates, its POs and stock),
+// each priced at cost plus the chosen markup, grouped by part or by Labour / Materials.
 // For people who see money (directors, BD, finance), like the rest of quoting and pricing.
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -20,7 +21,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = await req.json().catch(() => ({}));
   const markup = Number(body.markupPct ?? 30);
   if (!isFinite(markup) || markup < 0 || markup > 1000) return NextResponse.json({ error: "Markup should be a percentage, e.g. 30" }, { status: 400 });
-  const { lines, notes } = body.fromPlan === false ? { lines: [], notes: [] } : await draftBuildLines(id, markup);
+  const group = body.group === "part" ? "part" : "type"; // the build page asks for "part" by default
+  const { lines, notes } = body.fromPlan === false ? { lines: [], notes: [] } : await draftBuildLines(id, markup, group);
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const q = await prisma.quote.create({

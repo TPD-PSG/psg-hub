@@ -3,7 +3,7 @@
 // One build in the space's own look: stage band, parts of the build (who, when, planned hours),
 // days logged, collection or delivery, drawings and files, and (for those who see money) the
 // quote against actual cost. Uses the same APIs as the Hub's job page.
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
@@ -18,11 +18,12 @@ import DrawingRegister, { type DrawingRow, type Blocker } from "@/components/Dra
 import Variations, { type VariationRow } from "@/components/Variations";
 import SetStorage, { type StorageData } from "@/components/SetStorage";
 import FrCertificates, { type CertRow } from "@/components/FrCertificates";
+import PartMaterials, { materialsCost, type PartMaterial } from "@/components/PartMaterials";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
 
-export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled?: boolean; user: { id: number; name: string } | null };
+export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled?: boolean; materials?: PartMaterial[]; user: { id: number; name: string } | null };
 type Option = { id: number; name: string };
 export type JobPhoto = { id: number; url: string; caption: string | null; postId: number | null; clientVisible?: boolean; createdAt: string; uploadedById: number | null; uploadedBy: { name: string } | null };
 export type JobMaterials = {
@@ -89,7 +90,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
   const [markup, setMarkup] = useState("30");
   async function quoteThisBuild(e: React.FormEvent) {
     e.preventDefault();
-    const res = await fetch(`/api/jobs/${initial.id}/quote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markupPct: markup }) });
+    const res = await fetch(`/api/jobs/${initial.id}/quote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markupPct: markup, group }) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) return alertDialog(d.error ?? "Couldn't start the quote");
     if (d.notes?.length) await alertDialog(`Quote ${d.number} started with ${d.lines} lines. Check: ${d.notes.join("; ")}.`);
@@ -102,6 +103,11 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
   const [editOut, setEditOut] = useState(false);
   const [out, setOut] = useState({ startDate: ymd(job.startDate), dueOut: ymd(job.endDate), deliveryMethod: job.deliveryMethod ?? "", deliveryNotes: job.deliveryNotes ?? "", forProductionId: job.forProduction ? String(job.forProduction.id) : "" });
   const [part, setPart] = useState({ label: "", userId: "", startDate: "", days: "1", hours: "" });
+  const [openMats, setOpenMats] = useState<Set<number>>(new Set());
+  const [group, setGroup] = useState<"part" | "type">("part");
+  const toggleMats = (id: number) => setOpenMats(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const setPartMaterials = (id: number, materials: PartMaterial[]) => setParts(ps => ps.map(x => (x.id === id ? { ...x, materials } : x)));
+  const materialsTotal = parts.reduce((s, p) => s + materialsCost(p.materials ?? []), 0);
   const [time, setTime] = useState({ date: today(), days: "1", note: "" });
   const [link_, setLink] = useState({ label: "", url: "", kind: "vectorworks" });
   const base = `/spaces/${space.slug}`;
@@ -232,7 +238,9 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                   {job.quotes.length === 0 ? <span style={muted}>No quote yet. Draft one from this build&apos;s parts (labour) and materials, at cost plus your markup.</span>
                     : job.quotes.map(q => <Link key={q.id} href={`/spaces/${space.slug}/quotes/${q.id}`} style={link}>Quote {q.number} · {q.status}</Link>)}
                 </div>
-                <form onSubmit={quoteThisBuild} className="flex items-end gap-2">
+                <form onSubmit={quoteThisBuild} className="flex items-end gap-2 flex-wrap">
+                  <div><label htmlFor="qb-group" style={lbl}>Lines</label>
+                    <select id="qb-group" style={{ ...input, width: "auto" }} value={group} onChange={e => setGroup(e.target.value as "part" | "type")}><option value="part">By part</option><option value="type">Labour / Materials</option></select></div>
                   <div><label htmlFor="qb-markup" style={lbl}>Markup %</label>
                     <input id="qb-markup" type="number" min={0} max={1000} step="1" style={{ ...input, width: 80 }} value={markup} onChange={e => setMarkup(e.target.value)} /></div>
                   <button type="submit" disabled={busy} style={{ ...btnSolid, padding: "8px 14px" }}>{job.quotes.length ? "New quote from plan" : "Quote this build"}</button>
@@ -310,24 +318,43 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                   <thead><tr className="text-xs" style={{ ...muted, borderBottom: "1px solid var(--tws-line-soft)" }}><th className={th}>Done</th><th className={th}>Part</th><th className={th}>Who</th><th className={th}>When</th><th className={th}>Planned hours</th><th /></tr></thead>
                   <tbody>
                     {parts.map(p => (
-                      <tr key={p.id} style={{ borderBottom: "1px solid var(--tws-line-soft)", opacity: p.done ? 0.6 : 1 }}>
+                      <Fragment key={p.id}>
+                      <tr style={{ borderBottom: "1px solid var(--tws-line-soft)", opacity: p.done ? 0.6 : 1 }}>
                         <td className={td}><input type="checkbox" checked={p.done} onChange={() => togglePart(p)} aria-label={`${p.label} done`} className="w-4 h-4 mt-0.5" /></td>
-                        <td className={td} style={{ textDecoration: p.done ? "line-through" : undefined }}>{p.label}</td>
+                        <td className={td}>
+                          <span style={{ textDecoration: p.done ? "line-through" : undefined }}>{p.label}</span>
+                          <button type="button" onClick={() => toggleMats(p.id)} aria-expanded={openMats.has(p.id)} className="block text-xs font-semibold mt-0.5 whitespace-nowrap" style={link}>
+                            {p.materials?.length ? `Materials: ${p.materials.length} · ${gbp(materialsCost(p.materials))}` : "+ Materials"} {openMats.has(p.id) ? "▴" : "▾"}
+                          </button>
+                        </td>
                         <td className={td}>{p.user?.name ?? <span style={muted}>Nobody yet</span>}</td>
                         <td className={td}>{when(p)}{p.days > 1 ? ` (${p.days}d)` : ""}
                           {p.pencilled && <button type="button" onClick={() => pencilPart(p)} title="Pencilled while the build is being quoted. Click to confirm these dates now."
                             className="ml-2 text-[11px] font-bold px-1.5 py-0.5" style={{ border: "2px dashed var(--tws-night)", fontStyle: "italic" }}>✎ Pencilled</button>}</td>
                         <td className={`${td} tabular-nums`}>{p.hours ?? "–"}</td>
+
                         <td className={`${td} text-right`}><button type="button" onClick={() => removePart(p)} aria-label={`Delete part ${p.label}`} className="text-xs font-semibold" style={{ color: "var(--tws-bad-ink)" }}>Delete</button></td>
                       </tr>
+                      </Fragment>
                     ))}
                     <tr className="font-extrabold"><td /><td className={td}>Total</td><td /><td className={td}>{loggedDays} day{loggedDays === 1 ? "" : "s"} logged</td><td className={`${td} tabular-nums`}>{plannedHours || "–"}</td><td /></tr>
                   </tbody>
                 </table>
               </div>
             )}
+            {materialsTotal > 0 && <p className="text-[13px] m-0">Estimated materials for this build: <strong className="tabular-nums">{gbp(materialsTotal)}</strong> <span style={muted}>(at cost; &ldquo;Quote this build&rdquo; adds your markup)</span></p>}
+            {/* Materials for the parts opened above (full width, so the add-a-line form has room) */}
+            {parts.filter(p => openMats.has(p.id)).map(p => (
+              <div key={p.id} className="flex flex-col gap-1.5">
+                <div className="flex justify-between items-baseline gap-2">
+                  <strong className="text-sm">Materials: {p.label}</strong>
+                  <button type="button" onClick={() => toggleMats(p.id)} className="text-xs underline" style={muted}>Close</button>
+                </div>
+                <PartMaterials jobId={job.id} partId={p.id} entityId={space.id} materials={p.materials ?? []} onChange={ms => setPartMaterials(p.id, ms)} />
+              </div>
+            ))}
             {job.stage === "quote" && <p className="text-xs m-0 pt-2" style={muted}>✎ This build is still being quoted, so parts added now are pencilled in. They&apos;re confirmed when the quote&apos;s accepted.</p>}
-            <form onSubmit={addPart} className="grid gap-2 items-end pt-3 sm:grid-cols-[1.5fr_1.2fr_1fr_70px_80px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
+            <form onSubmit={addPart} className="grid gap-2 items-end pt-3 grid-cols-2 xl:grid-cols-[1.5fr_1.2fr_1fr_70px_80px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
               <div><label htmlFor="p-label" style={lbl}>Part</label><input id="p-label" required style={input} value={part.label} onChange={e => setPart({ ...part, label: e.target.value })} placeholder="e.g. Flats and doors" /></div>
               <div><label htmlFor="p-who" style={lbl}>Who</label>
                 <select id="p-who" style={input} value={part.userId} onChange={e => setPart({ ...part, userId: e.target.value })}><option value="">Plan later</option>{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>

@@ -1293,6 +1293,7 @@ model Job {
   contacts        JobContact[]
   files           JobFile[]
   drawings        Drawing[]
+  variations      JobVariation[]
   logs            JobLog[]
 }
 
@@ -1620,4 +1621,44 @@ model JobLog {
   createdAt DateTime @default(now())
 
   @@index([jobId])
+}
+
+// Variations on a build (27 Nov 2026): extra or changed work after the quote, priced in lines like
+// a quote. Draft → sent to the client → approved or declined (by the client in My builds, or
+// recorded by a PSG admin). Approved variations add to the job's price and quoted cost.
+model JobVariation {
+  id              Int             @id @default(autoincrement())
+  jobId           Int
+  job             Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  number          Int // V1, V2… within the job
+  title           String
+  notes           String? // shown to the client
+  vatRate         Float           @default(20)
+  status          String          @default("draft") // draft | sent | approved | declined
+  sentAt          DateTime?
+  decidedAt       DateTime?
+  decidedByName   String?
+  decidedOnBehalf Boolean         @default(false) // recorded by PSG for the client
+  decisionComment String?
+  createdById     Int?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  lines           VariationLine[]
+
+  @@unique([jobId, number])
+}
+
+model VariationLine {
+  id          Int          @id @default(autoincrement())
+  variationId Int
+  variation   JobVariation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  section     String?
+  description String
+  quantity    Float        @default(1)
+  unit        String?
+  unitCost    Float        @default(0)
+  unitPrice   Float        @default(0)
+  sortOrder   Int          @default(0)
+
+  @@index([variationId])
 }

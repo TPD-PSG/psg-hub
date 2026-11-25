@@ -15,6 +15,7 @@ import { shrinkPhoto } from "@/lib/shrinkPhoto";
 import BuildChecklist, { type Check } from "@/components/BuildChecklist";
 import BuildDesign, { type JobContactRow, type JobFileRow } from "@/components/BuildDesign";
 import DrawingRegister, { type DrawingRow, type Blocker } from "@/components/DrawingRegister";
+import Variations, { type VariationRow } from "@/components/Variations";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
@@ -40,8 +41,9 @@ const when = (p: PartRow) => {
 const th = "text-left font-semibold py-2 pr-3";
 const td = "py-2 pr-3 align-top";
 
-export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles, initialDrawings }: {
+export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles, initialDrawings, initialVariations = [] }: {
   space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[]; initialChecks: Check[]; initialContacts: JobContactRow[]; initialFiles: JobFileRow[]; initialDrawings: { drawings: DrawingRow[]; blockers: Blocker[]; overrides?: { id: number; text: string; createdAt: string }[] };
+  initialVariations?: VariationRow[];
 }) {
   const [blockers, setBlockers] = useState(initialDrawings.blockers);
   const [gate, setGate] = useState<null | { stage: string; message: string; canOverride: boolean; reason: string }>(null);
@@ -227,7 +229,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 </form>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
-                <div><div className="text-xs font-semibold" style={muted}>Price</div><div className="text-2xl font-extrabold tabular-nums">{gbp(f.price)}</div><div className="text-xs" style={muted}>{f.priceFrom === "quote" ? "accepted quote, ex VAT" : f.priceFrom === "agreed" ? "agreed price" : "no accepted quote yet"}</div></div>
+                <div><div className="text-xs font-semibold" style={muted}>Price</div><div className="text-2xl font-extrabold tabular-nums">{gbp(f.price)}</div><div className="text-xs" style={muted}>{f.priceFrom === "quote" ? "accepted quote, ex VAT" : f.priceFrom === "agreed" ? "agreed price" : "no accepted quote yet"}{f.variationsApproved > 0 ? ` + ${f.variationsApproved} variation${f.variationsApproved === 1 ? "" : "s"} (${gbp(f.variationsPrice)})` : ""}</div></div>
                 <div><div className="text-xs font-semibold" style={muted}>Spent so far</div><div className="text-2xl font-extrabold tabular-nums">{gbp(f.actual)}</div><div className="text-xs" style={muted}>{f.quotedCost != null ? `quoted cost ${gbp(f.quotedCost)}` : `${f.days} day${f.days === 1 ? "" : "s"} + costs`}</div></div>
                 <div><div className="text-xs font-semibold" style={muted}>Margin</div><div className="text-2xl font-extrabold tabular-nums" style={{ color: f.margin != null && f.margin < 0 ? "var(--tws-bad-ink)" : "var(--tws-ink)" }}>{gbp(f.margin)}{f.marginPct != null && <span className="text-sm"> · {Math.round(f.marginPct)}%</span>}</div></div>
               </div>
@@ -241,6 +243,8 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
               )}
             </section>
           )}
+
+          {seeMoney && <Variations jobId={job.id} entityId={space.id} isAdmin={me.isAdmin} hasClient={!!job.client} initial={initialVariations} onChange={reload} />}
 
           {/* Drawings for client sign-off (the build gate) */}
           <DrawingRegister jobId={initial.id} initial={initialDrawings} isAdmin={me.isAdmin} onBlockers={setBlockers} />

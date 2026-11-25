@@ -110,7 +110,7 @@ export default function DrawingRegister({ jobId, initial, isAdmin, onBlockers }:
               <li key={d.id} className="py-2.5 flex flex-col gap-2" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
                   {isAdmin && r.status !== "approved" && <input type="checkbox" aria-label={`Pick ${d.number ?? d.title} rev ${r.rev}`} checked={picked.includes(r.id)} onChange={() => toggle(r.id)} className="w-4 h-4" />}
-                  <span className="min-w-0 flex-1"><strong>{d.number ? `${d.number} · ` : ""}{d.title}</strong> <span style={muted}>rev {r.rev}</span></span>
+                  <span className="min-w-0 flex-1 basis-[calc(100%-2rem)] sm:basis-[14rem] break-words"><strong>{d.number ? `${d.number} · ` : ""}{d.title}</strong> <span style={muted}>rev {r.rev}</span></span>
                   <span className="text-[11px] font-bold px-2 py-1" style={st.style}>{st.label}</span>
                   <a href={r.file.url} target="_blank" rel="noopener noreferrer" className="text-[13px]" style={link}>Open</a>
                   <label className="text-[13px] cursor-pointer" style={link}>New revision

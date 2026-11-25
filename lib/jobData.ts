@@ -22,6 +22,7 @@ export async function requireJobViewer(): Promise<JobViewer | { error: NextRespo
 }
 
 const QUOTE_LINES = { select: { id: true, number: true, status: true, vatRate: true, lines: { select: { quantity: true, unitCost: true, unitPrice: true } } } };
+const VARIATION_LINES = { where: { status: "approved" }, select: { status: true, lines: { select: { quantity: true, unitCost: true, unitPrice: true } } } };
 
 async function psgExpensesFor(productionIds: number[]) {
   if (!productionIds.length) return new Map<number, { spent: number; committed: number; description: string; supplier: string | null }[]>();
@@ -41,7 +42,7 @@ export async function listJobs(v: JobViewer) {
     include: {
       entity: { select: { id: true, name: true } }, client: { select: { id: true, name: true } },
       production: { select: { id: true, name: true, pmFee: true } },
-      quotes: QUOTE_LINES, time: { select: { days: true, dayRate: true } }, costs: { select: { amount: true } },
+      quotes: QUOTE_LINES, time: { select: { days: true, dayRate: true } }, costs: { select: { amount: true } }, variations: VARIATION_LINES,
       forProduction: { select: { id: true, name: true } },
     },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
@@ -49,9 +50,9 @@ export async function listJobs(v: JobViewer) {
   const psg = await psgExpensesFor(jobs.map(j => j.productionId).filter((x): x is number => !!x));
   const [pos, stock] = await Promise.all([posByJob(jobs.map(j => j.id)), stockUsedByJob(jobs.map(j => j.id))]);
   return jobs.map(j => {
-    const f = jobFigures({ price: j.price, productionPmFee: j.production?.pmFee, quotes: j.quotes, time: j.time, costs: j.costs, psgExpenses: j.productionId ? psg.get(j.productionId) ?? [] : [], pos: pos.get(j.id), stockUsed: stock.get(j.id) });
-    const { quotes, time, costs, ...rest } = j;
-    void quotes; void time; void costs;
+    const f = jobFigures({ price: j.price, productionPmFee: j.production?.pmFee, quotes: j.quotes, time: j.time, costs: j.costs, psgExpenses: j.productionId ? psg.get(j.productionId) ?? [] : [], pos: pos.get(j.id), stockUsed: stock.get(j.id), variations: j.variations });
+    const { quotes, time, costs, variations, ...rest } = j;
+    void quotes; void time; void costs; void variations;
     return {
       ...rest, price: v.seeMoney ? rest.price : null,
       production: rest.production && { id: rest.production.id, name: rest.production.name },
@@ -72,16 +73,18 @@ export async function loadJob(id: number, v: JobViewer) {
       costs: { include: { createdBy: { select: { name: true } } }, orderBy: { date: "desc" } },
       links: { orderBy: { createdAt: "asc" } },
       forProduction: { select: { id: true, name: true } },
+      variations: VARIATION_LINES,
     },
   });
   if (!j) return null;
   const psg = j.productionId ? (await psgExpensesFor([j.productionId])).get(j.productionId) ?? [] : [];
   const [pos, stock] = await Promise.all([posByJob([j.id]), stockUsedByJob([j.id])]);
-  const figures = jobFigures({ price: j.price, productionPmFee: j.production?.pmFee, quotes: j.quotes, time: j.time, costs: j.costs, psgExpenses: psg, pos: pos.get(j.id), stockUsed: stock.get(j.id) });
-  if (v.seeMoney) return { ...j, production: j.production && { id: j.production.id, name: j.production.name }, figures, psgExpenses: psg };
+  const figures = jobFigures({ price: j.price, productionPmFee: j.production?.pmFee, quotes: j.quotes, time: j.time, costs: j.costs, psgExpenses: psg, pos: pos.get(j.id), stockUsed: stock.get(j.id), variations: j.variations });
+  // (variation lines are only used for the figures; the variations themselves come from their own route)
+  if (v.seeMoney) return { ...j, variations: undefined, production: j.production && { id: j.production.id, name: j.production.name }, figures, psgExpenses: psg };
   // Without money access: no prices, rates, costs or quote figures; only your own days in detail
   return {
-    ...j, price: null, figures: null, psgExpenses: [], costs: [],
+    ...j, variations: undefined, price: null, figures: null, psgExpenses: [], costs: [],
     production: j.production && { id: j.production.id, name: j.production.name },
     quotes: j.quotes.map(q => ({ id: q.id, number: q.number, status: q.status, title: q.title, vatRate: 0, lines: [] })),
     time: j.time.map(t => ({ ...t, dayRate: null })),

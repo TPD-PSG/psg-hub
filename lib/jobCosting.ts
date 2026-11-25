@@ -7,6 +7,7 @@
 //            + materials: delivered purchase orders and stock booked out to the job (TWS, 25 Nov).
 //   Committed = approved or ordered purchase orders not yet delivered (shown, not in actual).
 //   Margin = price − actual. Quoted cost/margin come from the accepted quote, to compare.
+//   Variations (27 Nov): approved variations add their price to Price and their cost to quoted cost.
 import { quoteTotals } from "@/lib/quotes";
 
 type QuoteLike = { status: string; vatRate: number; lines: { quantity: number; unitCost: number; unitPrice: number }[] };
@@ -19,9 +20,11 @@ export type JobFiguresInput = {
   psgExpenses: { spent: number; committed: number }[];
   pos?: { status: string; total: number }[];
   stockUsed?: number; // value of stock booked out, less returns
+  variations?: { status: string; lines: { quantity: number; unitCost: number; unitPrice: number }[] }[];
 };
 export type JobFigures = {
   price: number | null; priceFrom: "quote" | "agreed" | "pm fee" | null;
+  basePrice: number | null; variationsPrice: number; variationsCost: number; variationsApproved: number;
   quotedCost: number | null; quotedMargin: number | null;
   days: number; timeCost: number; unratedDays: number; costs: number; psgExpenses: number; materials: number; committed: number; actual: number;
   margin: number | null; marginPct: number | null;
@@ -30,7 +33,11 @@ export type JobFigures = {
 export function jobFigures(j: JobFiguresInput): JobFigures {
   const accepted = j.quotes.find(q => q.status === "accepted");
   const qt = accepted ? quoteTotals(accepted.lines, accepted.vatRate) : null;
-  const price = qt ? qt.net : j.price ?? j.productionPmFee ?? null;
+  const basePrice = qt ? qt.net : j.price ?? j.productionPmFee ?? null;
+  const approved = (j.variations ?? []).filter(v => v.status === "approved");
+  const variationsPrice = approved.reduce((s, v) => s + v.lines.reduce((a, l) => a + l.quantity * l.unitPrice, 0), 0);
+  const variationsCost = approved.reduce((s, v) => s + v.lines.reduce((a, l) => a + l.quantity * l.unitCost, 0), 0);
+  const price = basePrice == null && !approved.length ? null : (basePrice ?? 0) + variationsPrice;
   const priceFrom = qt ? "quote" : j.price != null ? "agreed" : j.productionPmFee != null ? "pm fee" : null;
   const days = j.time.reduce((s, t) => s + t.days, 0);
   const timeCost = j.time.reduce((s, t) => s + t.days * (t.dayRate ?? 0), 0);
@@ -44,7 +51,10 @@ export function jobFigures(j: JobFiguresInput): JobFigures {
   const actual = r2(timeCost + costs + psgExpenses + materials);
   const margin = price == null ? null : r2(price - actual);
   return {
-    price, priceFrom, quotedCost: qt?.cost ?? null, quotedMargin: qt?.margin ?? null,
+    price: price == null ? null : r2(price), priceFrom, basePrice,
+    variationsPrice: r2(variationsPrice), variationsCost: r2(variationsCost), variationsApproved: approved.length,
+    quotedCost: qt || approved.length ? r2((qt?.cost ?? 0) + variationsCost) : null,
+    quotedMargin: qt || approved.length ? r2((qt?.margin ?? 0) + variationsPrice - variationsCost) : null,
     days, timeCost: r2(timeCost), unratedDays, costs: r2(costs), psgExpenses: r2(psgExpenses), materials: r2(materials), committed: r2(committed), actual,
     margin, marginPct: price ? ((margin ?? 0) / price) * 100 : null,
   };

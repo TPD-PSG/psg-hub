@@ -3,7 +3,7 @@
 // Client view, in the builder's brand: each build's progress and its drawings. The latest revision
 // of each drawing can be approved one at a time or several at once, or sent back with a comment.
 import { useState } from "react";
-import { alertDialog } from "@/components/Dialogs";
+import { alertDialog, confirmDialog } from "@/components/Dialogs";
 import { BUILD_STAGES, stageIndex } from "@/lib/buildStages";
 import { fmtDate } from "@/lib/format";
 import type { SpaceTheme } from "@/lib/spaces";
@@ -17,7 +17,15 @@ type Build = {
   builder: { name: string; shortName: string | null; color: string | null; logoUrl: string | null } | null;
   drawings: Drawing[];
   photos: { id: number; caption: string | null; createdAt: string; url: string }[];
+  variations: ClientVariation[];
 };
+type ClientVariation = {
+  id: number; label: string; title: string; notes: string | null; vatRate: number; status: string; sentAt: string | null; decidedAt: string | null;
+  decidedByName: string | null; decidedOnBehalf: boolean; decisionComment: string | null;
+  lines: { id: number; section: string | null; description: string; quantity: number; unit: string | null; unitPrice: number }[];
+  totals: { net: number; vat: number; gross: number };
+};
+const gbp = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 export type MyBuildsData = { me: { name: string; company: string }; builds: Build[]; brand: SpaceTheme | null };
 
 const STATUS: Record<string, { label: string; style: React.CSSProperties }> = {
@@ -38,9 +46,22 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<Set<number>>(new Set());
   const [showAll, setShowAll] = useState<Set<number>>(new Set());
+  const [declining, setDeclining] = useState<{ id: number; comment: string } | null>(null);
+  const [openVar, setOpenVar] = useState<Set<number>>(new Set());
+  async function decideVar(v: ClientVariation, decision: "approved" | "declined", comment?: string) {
+    if (decision === "approved" && !(await confirmDialog(`Approve ${v.label}, ${v.title}, for ${gbp(v.totals.net)} + VAT (${gbp(v.totals.gross)})? It's added to the price of this build.`))) return;
+    setBusy(true);
+    const res = await fetch(`/api/my-builds/variations/${v.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision, comment }) });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { alertDialog(d.error ?? "That didn't go through. Try again."); return; }
+    setData(d); setDeclining(null);
+    alertDialog(decision === "approved" ? `${v.label} approved. ${builderName} has been told.` : `${v.label} declined. ${builderName} has been told why.`);
+  }
 
   const latest = (d: Drawing) => d.revisions[0];
   const waiting = data.builds.flatMap(b => b.drawings.filter(d => latest(d)?.status === "pending"));
+  const varsWaiting = data.builds.flatMap(b => b.variations.filter(v => v.status === "sent"));
   const label = (d: Drawing) => `${d.number ? `${d.number} ` : ""}${d.title}`;
   const builderName = data.brand ? data.brand.shortName ?? data.brand.name : "PSG";
 
@@ -68,7 +89,8 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
         <span style={caps}>{data.me.company}</span>
         <h1 style={{ margin: 0, fontSize: 30, lineHeight: "36px", fontWeight: 800 }}>Your builds</h1>
         <span className="text-sm" style={muted}>
-          {waiting.length === 0 ? "Nothing waiting for your sign-off." : `${waiting.length} drawing${waiting.length === 1 ? "" : "s"} waiting for your sign-off. Open each one, then approve it or tell us what to change.`}
+          {waiting.length === 0 && varsWaiting.length === 0 ? "Nothing waiting for your sign-off."
+            : [waiting.length ? `${waiting.length} drawing${waiting.length === 1 ? "" : "s"}` : null, varsWaiting.length ? `${varsWaiting.length} variation${varsWaiting.length === 1 ? "" : "s"}` : null].filter(Boolean).join(" and ") + " waiting for your sign-off."}
         </span>
       </header>
 
@@ -130,6 +152,64 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
                       </li>
                     ))}
                   </ol>
+                )}
+
+                {/* Variations: extra or changed work, priced, for the client to approve */}
+                {b.variations.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <h3 style={{ ...caps, margin: 0 }}>Variations</h3>
+                    <ul className="flex flex-col m-0 p-0 list-none" style={{ borderTop: "2px solid var(--tws-char)" }}>
+                      {b.variations.map(v => {
+                        const sent = v.status === "sent";
+                        const shown = sent || openVar.has(v.id);
+                        return (
+                          <li key={v.id} className="py-3 flex flex-col gap-2" style={{ borderBottom: "1px solid var(--tws-line-soft)" }}>
+                            <button type="button" onClick={() => !sent && setOpenVar(o => { const n = new Set(o); if (n.has(v.id)) n.delete(v.id); else n.add(v.id); return n; })} aria-expanded={sent ? undefined : shown}
+                              className="flex flex-wrap items-center gap-x-3 gap-y-1 text-left" style={{ background: "none", border: 0, padding: 0, color: "inherit", cursor: sent ? "default" : "pointer" }}>
+                              <strong className="text-[15px]">{v.label}</strong>
+                              <span className="text-[15px] font-bold flex-1 min-w-0 break-words">{v.title}</span>
+                              <span className="text-[15px] font-bold tabular-nums">{gbp(v.totals.net)} <span className="text-xs font-medium" style={muted}>+ VAT</span></span>
+                              <span style={{ ...chip, ...(sent ? STATUS.pending.style : v.status === "approved" ? STATUS.approved.style : STATUS.changes.style) }}>{sent ? "Awaiting your approval" : v.status === "approved" ? "Approved" : "Declined"}</span>
+                            </button>
+                            {!sent && <p className="text-xs m-0" style={muted}>{v.status === "approved" ? "Approved" : "Declined"} by {v.decidedByName}{v.decidedOnBehalf ? ` (recorded by ${builderName})` : ""}{v.decidedAt ? ` · ${fmtDate(v.decidedAt)}` : ""}{v.decisionComment ? `: “${v.decisionComment}”` : ""}</p>}
+                            {shown && (
+                              <div className="flex flex-col gap-2 p-3" style={{ background: "var(--tws-ground)" }}>
+                                {v.notes && <p className="text-[13px] m-0 whitespace-pre-wrap">{v.notes}</p>}
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-[13px]" style={{ borderCollapse: "collapse", minWidth: 420 }}>
+                                    <thead><tr className="text-xs text-left" style={muted}><th className="py-1 pr-2 font-semibold">Item</th><th className="py-1 pr-2 font-semibold">Qty</th><th className="py-1 pr-2 font-semibold text-right">Rate</th><th className="py-1 font-semibold text-right">Amount</th></tr></thead>
+                                    <tbody>
+                                      {v.lines.map(l => (
+                                        <tr key={l.id} style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
+                                          <td className="py-1 pr-2">{l.description}</td><td className="py-1 pr-2 whitespace-nowrap">{l.quantity} {l.unit ?? ""}</td>
+                                          <td className="py-1 pr-2 text-right tabular-nums">{gbp(l.unitPrice)}</td><td className="py-1 text-right tabular-nums">{gbp(l.quantity * l.unitPrice)}</td>
+                                        </tr>
+                                      ))}
+                                      <tr style={{ borderTop: "2px solid var(--tws-char)" }}><td colSpan={3} className="py-1 pr-2 text-right">Total ex VAT</td><td className="py-1 text-right tabular-nums font-bold">{gbp(v.totals.net)}</td></tr>
+                                      <tr><td colSpan={3} className="py-0.5 pr-2 text-right" style={muted}>VAT {v.vatRate}%</td><td className="py-0.5 text-right tabular-nums" style={muted}>{gbp(v.totals.vat)}</td></tr>
+                                      <tr><td colSpan={3} className="py-0.5 pr-2 text-right font-bold">Total</td><td className="py-0.5 text-right tabular-nums font-bold">{gbp(v.totals.gross)}</td></tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+                                {sent && (declining?.id === v.id ? (
+                                  <form onSubmit={e => { e.preventDefault(); decideVar(v, "declined", declining.comment); }} className="flex flex-col gap-2">
+                                    <label htmlFor={`dec-${v.id}`} style={lbl}>Why not? {builderName} sees exactly this.</label>
+                                    <textarea id={`dec-${v.id}`} required autoFocus rows={2} style={input} value={declining.comment} onChange={e => setDeclining({ id: v.id, comment: e.target.value })} placeholder="e.g. Over budget: can we keep the original design?" />
+                                    <div className="flex gap-2 flex-wrap"><button type="submit" disabled={busy || !declining.comment.trim()} style={{ ...small, background: "var(--tws-bad-ink)", borderColor: "var(--tws-bad-ink)" }}>Decline</button><button type="button" onClick={() => setDeclining(null)} style={smallLine}>Cancel</button></div>
+                                  </form>
+                                ) : (
+                                  <div className="flex gap-2 flex-wrap">
+                                    <button type="button" disabled={busy} onClick={() => decideVar(v, "approved")} style={small}>Approve {v.label}</button>
+                                    <button type="button" disabled={busy} onClick={() => setDeclining({ id: v.id, comment: "" })} style={badLine}>Decline</button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 )}
 
                 {/* Progress photos (staff choose which) */}

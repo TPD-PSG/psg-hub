@@ -98,6 +98,12 @@ export default function Variations({ jobId, entityId, isAdmin, hasClient, initia
     const d = await call(`/api/jobs/${jobId}/variations/${v.id}`, "PATCH", { action, ...extra });
     if (d) { after(d); setRecord(null); }
   }
+  async function pdf(v: VariationRow) {
+    const d = await fetch(`/api/jobs/${jobId}/variations/${v.id}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (!d) return alertDialog("Couldn't make the PDF");
+    const { downloadVariationPDF } = await import("@/lib/quotePdf");
+    await downloadVariationPDF(d);
+  }
   async function remove(v: VariationRow) {
     if (!(await confirmDialog(`Delete ${v.label} (${v.title})? This can't be undone.`))) return;
     const d = await call(`/api/jobs/${jobId}/variations/${v.id}`, "DELETE");
@@ -164,6 +170,7 @@ export default function Variations({ jobId, entityId, isAdmin, hasClient, initia
                         <button type="button" disabled={busy || !v.lines.length} onClick={async () => { if (await confirmDialog(hasClient ? `Send ${v.label} to the client to approve?` : `Mark ${v.label} as sent?`)) act(v, "send"); }} style={{ ...small, ...btnSolid, padding: "6px 10px", fontSize: 13 }}>{hasClient ? "Send to client" : "Mark sent"}</button>
                       </>}
                       {v.status === "sent" && <button type="button" disabled={busy} onClick={() => act(v, "withdraw")} style={small}>Withdraw</button>}
+                      {v.lines.length > 0 && <button type="button" disabled={busy} onClick={() => pdf(v)} style={small}>PDF</button>}
                       {isAdmin && (v.status === "draft" || v.status === "sent") && v.lines.length > 0 && <>
                         <button type="button" disabled={busy} onClick={() => setRecord({ id: v.id, decision: "approved", comment: "" })} style={small}>Record approval</button>
                         <button type="button" disabled={busy} onClick={() => setRecord({ id: v.id, decision: "declined", comment: "" })} style={small}>Record declined</button>

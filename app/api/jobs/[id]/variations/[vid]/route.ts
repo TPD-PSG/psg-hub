@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseLines } from "@/lib/quotes";
 import { notify } from "@/lib/clientPortal";
-import { variationStaff, variationsFor, decideVariation } from "@/lib/variations";
+import { variationStaff, variationsFor, decideVariation, variationPdfData } from "@/lib/variations";
 
 type P = { params: Promise<{ id: string; vid: string }> };
 
@@ -16,6 +16,13 @@ async function load(p: P) {
   const v = await prisma.jobVariation.findFirst({ where: { id: parseInt(vid) || 0, jobId: a.id }, include: { lines: true, job: { select: { title: true, clientId: true } } } });
   if (!v) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   return { ...a, variation: v };
+}
+
+// The variation as PDF data (prices only)
+export async function GET(_req: Request, p: P) {
+  const r = await load(p);
+  if ("error" in r) return r.error;
+  return NextResponse.json(await variationPdfData(r.variation.id));
 }
 
 export async function PATCH(req: Request, p: P) {

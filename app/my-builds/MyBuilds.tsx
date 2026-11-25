@@ -67,6 +67,12 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
     alertDialog(`Thanks. ${builderName} has been told and will be in touch.`);
   }
   const [openVar, setOpenVar] = useState<Set<number>>(new Set());
+  async function varPdf(v: ClientVariation) {
+    const d = await fetch(`/api/my-builds/variations/${v.id}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (!d) return alertDialog("Couldn't make the PDF. Try again.");
+    const { downloadVariationPDF } = await import("@/lib/quotePdf");
+    await downloadVariationPDF(d);
+  }
   async function decideVar(v: ClientVariation, decision: "approved" | "declined", comment?: string) {
     if (decision === "approved" && !(await confirmDialog(`Approve ${v.label}, ${v.title}, for ${gbp(v.totals.net)} + VAT (${gbp(v.totals.gross)})? It's added to the price of this build.`))) return;
     setBusy(true);
@@ -194,6 +200,7 @@ export default function MyBuilds({ initial }: { initial: MyBuildsData }) {
                             {shown && (
                               <div className="flex flex-col gap-2 p-3" style={{ background: "var(--tws-ground)" }}>
                                 {v.notes && <p className="text-[13px] m-0 whitespace-pre-wrap">{v.notes}</p>}
+                                <button type="button" onClick={() => varPdf(v)} className="self-start text-[13px]" style={link}>Download as PDF</button>
                                 <div className="overflow-x-auto">
                                   <table className="w-full text-[13px]" style={{ borderCollapse: "collapse", minWidth: 420 }}>
                                     <thead><tr className="text-xs text-left" style={muted}><th className="py-1 pr-2 font-semibold">Item</th><th className="py-1 pr-2 font-semibold">Qty</th><th className="py-1 pr-2 font-semibold text-right">Rate</th><th className="py-1 font-semibold text-right">Amount</th></tr></thead>

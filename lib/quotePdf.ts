@@ -27,7 +27,10 @@ const gbp = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", c
 const qty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, ""));
 
 export type QuoteForPdf = {
-  number: string; title: string; vatRate: number; showSubtotals?: boolean; validUntil: string | null; terms: string | null; createdAt: string; sentAt: string | null;
+  number: string; title: string; vatRate: number; showSubtotals?: boolean;
+  kind?: string; // what the document is called (default "Quote"; a variation says "Variation")
+  extraLines?: string[]; // small lines under the dates, e.g. "Approved by …"
+  validUntil: string | null; terms: string | null; createdAt: string; sentAt: string | null;
   entity: { name: string; hasSpace?: boolean; slug?: string | null; color?: string | null; logoMime?: string | null; updatedAt?: string | Date } | null;
   client: { name: string; billingName: string | null; billingAddress: string | null; address: string | null; billingEmail: string | null } | null;
   lines: { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number }[];
@@ -55,7 +58,7 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
   doc.setFont("helvetica", "bold"); doc.setFontSize(13);
   doc.text(q.entity?.name ?? "Production Solutions Group", x, 13);
   doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-  doc.text(`Quote ${q.number}`, W - M, 13, { align: "right" });
+  doc.text(`${q.kind ?? "Quote"} ${q.number}`, W - M, 13, { align: "right" });
 
   // To / details
   doc.setTextColor(0, 0, 0);
@@ -65,9 +68,10 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
   doc.text(titleLines, M, y);
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(90, 90, 100);
   const right = [
-    `Quote ${q.number}`,
+    `${q.kind ?? "Quote"} ${q.number}`,
     `Date ${fmtDate(q.sentAt ?? q.createdAt)}`,
     q.validUntil ? `Valid until ${fmtDate(q.validUntil)}` : null,
+    ...(q.extraLines ?? []),
   ].filter(Boolean) as string[];
   right.forEach((t, i) => doc.text(t, W - M, y - 4 + i * 4.5, { align: "right" }));
   y += Math.max(titleLines.length * 7, 12) + 2;
@@ -124,7 +128,7 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
     doc.setFontSize(8); doc.setTextColor(140, 140, 160);
-    doc.text(`${q.entity?.name ?? "Production Solutions Group"} · Quote ${q.number}`, M, 290);
+    doc.text(`${q.entity?.name ?? "Production Solutions Group"} · ${q.kind ?? "Quote"} ${q.number}`, M, 290);
     doc.text(`Page ${i} of ${pages}`, W - M, 290, { align: "right" });
   }
   return doc;
@@ -136,6 +140,25 @@ export async function quotePdfUrl(q: QuoteForPdf) {
   const logo = await fetchLogoAsset(brand.logoUrl ?? undefined);
   return URL.createObjectURL(buildQuotePDF(q, logo, brand).output("blob"));
 }
+
+/** A variation on a build as a PDF, in the builder's look (like its quotes). */
+export async function downloadVariationPDF(v: VariationForPdf) {
+  const q: QuoteForPdf = {
+    kind: "Variation", number: `${v.jobNumber}-${v.label}`, title: `${v.label}: ${v.title}`, vatRate: v.vatRate, validUntil: null, createdAt: v.createdAt, sentAt: v.sentAt,
+    terms: [v.notes, `This variation is to ${v.jobTitle} (${v.jobNumber}). Once approved, it is added to the price of the build.`].filter(Boolean).join("\n\n"),
+    extraLines: v.decidedAt ? [`${v.status === "approved" ? "Approved" : "Declined"} ${fmtDate(v.decidedAt)}${v.decidedByName ? ` by ${v.decidedByName}` : ""}`] : [],
+    entity: v.entity, client: v.client,
+    lines: v.lines.map(l => ({ ...l, unitCost: 0 })),
+  };
+  const brand = brandFor(q.entity);
+  const logo = await fetchLogoAsset(brand.logoUrl ?? undefined);
+  buildQuotePDF(q, logo, brand).save(`${q.number} ${v.title}.pdf`.replace(/[\\/:*?"<>|]/g, "-"));
+}
+export type VariationForPdf = {
+  label: string; title: string; notes: string | null; vatRate: number; status: string; createdAt: string; sentAt: string | null; decidedAt: string | null; decidedByName: string | null;
+  jobNumber: string; jobTitle: string; entity: QuoteForPdf["entity"]; client: QuoteForPdf["client"];
+  lines: { section: string | null; description: string; quantity: number; unit: string | null; unitPrice: number }[];
+};
 
 export async function downloadQuotePDF(q: QuoteForPdf) {
   const brand = brandFor(q.entity);

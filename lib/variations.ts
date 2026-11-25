@@ -63,3 +63,19 @@ export async function decideVariation(id: number, decision: "approved" | "declin
   }
   return null;
 }
+
+/** What the variation PDF needs (prices only, never costs). */
+export async function variationPdfData(id: number) {
+  const v = await prisma.jobVariation.findUnique({
+    where: { id },
+    include: {
+      lines: { orderBy: { sortOrder: "asc" }, select: { section: true, description: true, quantity: true, unit: true, unitPrice: true } },
+      job: { select: { number: true, title: true, entity: { select: { name: true, hasSpace: true, slug: true, color: true, logoMime: true, updatedAt: true } }, client: { select: { name: true, billingName: true, billingAddress: true, address: true, billingEmail: true } } } },
+    },
+  });
+  if (!v) return null;
+  return {
+    label: `V${v.number}`, title: v.title, notes: v.notes, vatRate: v.vatRate, status: v.status, createdAt: v.createdAt, sentAt: v.sentAt, decidedAt: v.decidedAt, decidedByName: v.decidedByName,
+    jobNumber: v.job.number, jobTitle: v.job.title, entity: v.job.entity, client: v.job.client, lines: v.lines,
+  };
+}

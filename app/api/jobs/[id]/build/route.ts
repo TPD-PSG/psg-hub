@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireJobViewer, loadJob } from "@/lib/jobData";
 import { isBuildStage } from "@/lib/buildStages";
 import { gateBlockers, GATED_STAGES } from "@/lib/drawings";
+import { confirmPencils } from "@/lib/buildParts";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
@@ -51,5 +52,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.forProductionId = pid;
   }
   await prisma.job.update({ where: { id }, data });
+  // Past the Quote stage, pencilled dates become bookings
+  if (data.stage && data.stage !== "quote" && job.stage === "quote") await confirmPencils(id);
   return NextResponse.json({ seeMoney: v.seeMoney, job: await loadJob(id, v) });
 }

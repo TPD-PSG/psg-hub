@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseLines, quoteTotals } from "@/lib/quotes";
 import { QUOTE_INCLUDE, requireStaff, quoteFields } from "@/lib/quoteData";
+import { confirmPencils } from "@/lib/buildParts";
 
 async function load(id: number) {
   const q = await prisma.quote.findUnique({ where: { id }, include: QUOTE_INCLUDE });
@@ -54,7 +55,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // A build still at the Quote stage moves on to Confirmation once its quote is accepted
   if (fields.status === "accepted") {
     const jq = await prisma.quote.findUnique({ where: { id }, select: { jobId: true } });
-    if (jq?.jobId) await prisma.job.updateMany({ where: { id: jq.jobId, stage: "quote" }, data: { stage: "confirmation", stageChangedAt: new Date() } });
+    if (jq?.jobId) {
+      const moved = await prisma.job.updateMany({ where: { id: jq.jobId, stage: "quote" }, data: { stage: "confirmation", stageChangedAt: new Date() } });
+      if (moved.count) await confirmPencils(jq.jobId); // pencilled dates become bookings
+    }
   }
   return NextResponse.json(await load(id));
 }

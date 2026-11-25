@@ -20,9 +20,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const v = await requireJobViewer();
   if ("error" in v) return v.error;
   const jobId = parseInt((await params).id);
-  if (!(await prisma.job.count({ where: { id: jobId } }))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const job = await prisma.job.findUnique({ where: { id: jobId }, select: { stage: true } });
+  if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const f = await partFields(await req.json(), true);
   if ("error" in f) return NextResponse.json({ error: f.error }, { status: 400 });
+  if (f.data.pencilled === undefined && job.stage === "quote") f.data.pencilled = true; // still being quoted
   const part = await prisma.buildPart.create({ data: { ...f.data, label: f.data.label as string, jobId }, select: PART_SELECT });
   return NextResponse.json(part, { status: 201 });
 }

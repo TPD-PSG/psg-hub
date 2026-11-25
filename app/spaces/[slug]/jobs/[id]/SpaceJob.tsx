@@ -19,7 +19,7 @@ import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
 
-export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; user: { id: number; name: string } | null };
+export type PartRow = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled?: boolean; user: { id: number; name: string } | null };
 type Option = { id: number; name: string };
 export type JobPhoto = { id: number; url: string; caption: string | null; postId: number | null; clientVisible?: boolean; createdAt: string; uploadedById: number | null; uploadedBy: { name: string } | null };
 export type JobMaterials = {
@@ -141,6 +141,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
     }
   }
   async function togglePart(p: PartRow) { if (await call(`/api/jobs/${job.id}/parts/${p.id}`, "PATCH", { done: !p.done })) reloadParts(); }
+  async function pencilPart(p: PartRow) { if (await call(`/api/jobs/${job.id}/parts/${p.id}`, "PATCH", { pencilled: !p.pencilled })) reloadParts(); }
   async function removePart(p: PartRow) { if (await confirmDialog(`Delete the part "${p.label}"?`) && await call(`/api/jobs/${job.id}/parts/${p.id}`, "DELETE")) reloadParts(); }
   async function logTime(e: React.FormEvent) { e.preventDefault(); if (await call(`/api/jobs/${job.id}/time`, "POST", time)) { setTime(t => ({ ...t, note: "" })); reload(); } }
   async function removeTime(id: number) { if (await confirmDialog("Remove this time entry?") && await call(`/api/jobs/${job.id}/time/${id}`, "DELETE")) reload(); }
@@ -299,7 +300,9 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                         <td className={td}><input type="checkbox" checked={p.done} onChange={() => togglePart(p)} aria-label={`${p.label} done`} className="w-4 h-4 mt-0.5" /></td>
                         <td className={td} style={{ textDecoration: p.done ? "line-through" : undefined }}>{p.label}</td>
                         <td className={td}>{p.user?.name ?? <span style={muted}>Nobody yet</span>}</td>
-                        <td className={td}>{when(p)}{p.days > 1 ? ` (${p.days}d)` : ""}</td>
+                        <td className={td}>{when(p)}{p.days > 1 ? ` (${p.days}d)` : ""}
+                          {p.pencilled && <button type="button" onClick={() => pencilPart(p)} title="Pencilled while the build is being quoted. Click to confirm these dates now."
+                            className="ml-2 text-[11px] font-bold px-1.5 py-0.5" style={{ border: "2px dashed var(--tws-night)", fontStyle: "italic" }}>✎ Pencilled</button>}</td>
                         <td className={`${td} tabular-nums`}>{p.hours ?? "–"}</td>
                         <td className={`${td} text-right`}><button type="button" onClick={() => removePart(p)} aria-label={`Delete part ${p.label}`} className="text-xs font-semibold" style={{ color: "var(--tws-bad-ink)" }}>Delete</button></td>
                       </tr>
@@ -309,6 +312,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                 </table>
               </div>
             )}
+            {job.stage === "quote" && <p className="text-xs m-0 pt-2" style={muted}>✎ This build is still being quoted, so parts added now are pencilled in. They&apos;re confirmed when the quote&apos;s accepted.</p>}
             <form onSubmit={addPart} className="grid gap-2 items-end pt-3 sm:grid-cols-[1.5fr_1.2fr_1fr_70px_80px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
               <div><label htmlFor="p-label" style={lbl}>Part</label><input id="p-label" required style={input} value={part.label} onChange={e => setPart({ ...part, label: e.target.value })} placeholder="e.g. Flats and doors" /></div>
               <div><label htmlFor="p-who" style={lbl}>Who</label>

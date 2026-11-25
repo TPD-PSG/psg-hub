@@ -1356,6 +1356,7 @@ model BuildPart {
   days      Int       @default(1) // consecutive calendar days
   hours     Float? // planned hours
   done      Boolean   @default(false)
+  pencilled Boolean   @default(false) // tentative: held while the build is still being quoted
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

@@ -3,6 +3,8 @@
 // Workshop planner: parts of each build placed on a person and a run of days. Drag a part onto a
 // person's day, or click a part and then a slot. Parts with no one or no date wait in "To plan".
 // Clashes (two parts at once, or a part while booked on a show elsewhere in the Hub) show in red.
+// Pencilled parts (tentative, while a build is being quoted) are hatched with a dashed edge; a
+// clash that involves one is a possible clash, in amber. They're confirmed when the quote's accepted.
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,7 +13,7 @@ import type { SpaceTheme } from "@/lib/spaces";
 import { buildStageLabel } from "@/lib/buildStages";
 import { caps, card, h2, muted, btnSolid, btnLine, input, label as lbl, pageHeader, JOB_FILLS } from "@/lib/twsUi";
 
-type Part = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; user: { id: number; name: string } | null };
+type Part = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled?: boolean; user: { id: number; name: string } | null };
 type Job = { id: number; number: string; title: string; stage: string | null; startDate: string | null; endDate: string | null; deliveryMethod: string | null; client: { name: string } | null };
 export type PlannerData = {
   space: SpaceTheme; from: string; days: number; jobs: Job[]; parts: Part[];
@@ -32,34 +34,44 @@ export default function Planner({ initial }: { initial: PlannerData }) {
   const [extraRows, setExtraRows] = useState<{ id: number; name: string; team: boolean }[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
-  const [adding, setAdding] = useState({ jobId: initial.jobs[0]?.id ? String(initial.jobs[0].id) : "", label: "", days: "1", hours: "" });
+  const [adding, setAdding] = useState({ jobId: initial.jobs[0]?.id ? String(initial.jobs[0].id) : "", label: "", days: "1", hours: "", pencilled: initial.jobs[0]?.stage === "quote" });
   const { space, jobs, elsewhere, canEdit } = initial;
   const base = `/spaces/${space.slug}`;
   const from = t(initial.from), N = initial.days;
   const days = Array.from({ length: N }, (_, i) => from + i * DAY);
   const today = t(new Date().toISOString());
   const fill = (jobId: number) => JOB_FILLS[Math.max(0, jobs.findIndex(j => j.id === jobId)) % JOB_FILLS.length];
+  // Pencilled: the build's colour washed out with pencil hatching and a dashed edge
+  const PENCIL: React.CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.65) 0 5px, rgba(255,255,255,0.15) 5px 10px)", borderStyle: "dashed", borderWidth: 2, borderColor: "var(--tws-night)", fontStyle: "italic" };
+  const look = (p: { jobId: number; pencilled?: boolean }) => ({ ...fill(p.jobId), ...(p.pencilled ? PENCIL : {}) });
+  const quoting = (jobId: number) => jobs.find(j => j.id === jobId)?.stage === "quote";
   const jobName = (jobId: number) => jobs.find(j => j.id === jobId)?.title ?? "";
   const crew = useMemo(() => [...initial.crew, ...extraRows.filter(r => !initial.crew.some(c => c.id === r.id))], [initial.crew, extraRows]);
 
   // Clashes per person: overlapping parts, or a part during a show booking elsewhere
-  const { clashIds, clashText } = useMemo(() => {
-    const ids = new Set<number>(), text: string[] = [];
+  const { clashIds, clashText, maybeIds, maybeText } = useMemo(() => {
+    const ids = new Set<number>(), text: string[] = [], mIds = new Set<number>(), mText: string[] = [];
     for (const c of crew) {
       const mine = parts.filter(p => p.userId === c.id && p.startDate && !p.done);
       mine.forEach((a, i) => mine.slice(i + 1).forEach(b => {
         const a0 = t(a.startDate!), b0 = t(b.startDate!);
-        if (a0 < b0 + b.days * DAY && b0 < a0 + a.days * DAY) { ids.add(a.id); ids.add(b.id); text.push(`${c.name} has ${a.label} and ${b.label} on ${dname(Math.max(a0, b0))}`); }
+        if (a0 < b0 + b.days * DAY && b0 < a0 + a.days * DAY) {
+          const msg = `${c.name} has ${a.label} and ${b.label} on ${dname(Math.max(a0, b0))}`;
+          if (a.pencilled || b.pencilled) { mIds.add(a.id); mIds.add(b.id); mText.push(msg); } else { ids.add(a.id); ids.add(b.id); text.push(msg); }
+        }
       }));
       for (const p of mine) for (const e of elsewhere.filter(e => e.userId === c.id)) {
         const p0 = t(p.startDate!), e0 = t(e.startDate), e1 = t(e.endDate) + DAY;
-        if (p0 < e1 && e0 < p0 + p.days * DAY) { ids.add(p.id); text.push(`${c.name} is on ${e.production.name} during ${p.label}`); }
+        if (p0 < e1 && e0 < p0 + p.days * DAY) {
+          const msg = `${c.name} is on ${e.production.name} during ${p.label}`;
+          if (p.pencilled) { mIds.add(p.id); mText.push(msg); } else { ids.add(p.id); text.push(msg); }
+        }
       }
     }
-    return { clashIds: ids, clashText: text };
+    return { clashIds: ids, clashText: text, maybeIds: mIds, maybeText: mText };
   }, [parts, crew, elsewhere]);
 
-  async function save(p: Part, patch: Partial<Pick<Part, "userId" | "startDate" | "days" | "done">>) {
+  async function save(p: Part, patch: Partial<Pick<Part, "userId" | "startDate" | "days" | "done" | "pencilled">>) {
     const before = parts;
     setParts(ps => ps.map(x => (x.id === p.id ? { ...x, ...patch, user: patch.userId === undefined ? x.user : crew.find(c => c.id === patch.userId) ?? null } : x)));
     const res = await fetch(`/api/jobs/${p.jobId}/parts/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
@@ -74,7 +86,7 @@ export default function Planner({ initial }: { initial: PlannerData }) {
   async function addPart(e: React.FormEvent) {
     e.preventDefault();
     if (!adding.jobId) return alertDialog("Pick the build this part belongs to.");
-    const res = await fetch(`/api/jobs/${adding.jobId}/parts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: adding.label, days: Number(adding.days), hours: adding.hours }) });
+    const res = await fetch(`/api/jobs/${adding.jobId}/parts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: adding.label, days: Number(adding.days), hours: adding.hours, pencilled: adding.pencilled }) });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return alertDialog(body.error ?? "Couldn't add the part");
     setParts(ps => [...ps, body]); setAdding(a => ({ ...a, label: "", hours: "" })); setSel(body.id);
@@ -108,6 +120,7 @@ export default function Planner({ initial }: { initial: PlannerData }) {
           <div className="flex flex-col gap-1 min-w-0">
             <h1 style={{ margin: 0, fontSize: 30, lineHeight: "36px", fontWeight: 800 }}>Workshop planner</h1>
             <span className="text-sm" style={muted}>{range(from, N)} · weekends shaded{canEdit ? " · drag a part onto a person and day, or click a part then click a slot" : ""}</span>
+            <span className="text-[13px] flex items-center gap-2" style={muted}><span aria-hidden="true" className="inline-block w-8 h-4 box-border" style={{ ...look({ jobId: jobs[0]?.id ?? 0, pencilled: true }) }} />✎ Pencilled: held while the build is being quoted, confirmed when the quote&apos;s accepted</span>
           </div>
           <div className="flex gap-2 flex-wrap">
             <button type="button" onClick={() => go(from - 14 * DAY)} style={btnLine} aria-label="Previous fortnight">←</button>
@@ -128,6 +141,11 @@ export default function Planner({ initial }: { initial: PlannerData }) {
             <strong>Clash:</strong> {clashText.join(" · ")}
           </div>
         )}
+        {maybeText.length > 0 && (
+          <div role="status" className="px-4 py-3 text-sm" style={{ background: "var(--tws-warn-bg)", border: "1px solid var(--tws-warn-line)", color: "var(--tws-warn-ink)" }}>
+            <strong>Possible clash (pencilled):</strong> {maybeText.join(" · ")}
+          </div>
+        )}
 
         {/* To plan */}
         <section aria-label="Parts not yet planned" className="p-4 flex flex-col gap-3" style={{ background: "var(--tws-card)", border: "2px dashed #b5ac9c" }}
@@ -136,10 +154,11 @@ export default function Planner({ initial }: { initial: PlannerData }) {
             <h2 style={{ ...h2, fontSize: 16 }}>To plan</h2>
             {selPart && canEdit && (
               <div className="flex gap-2 flex-wrap items-center text-[13px]">
-                <span className="font-semibold">{selPart.label}:</span>
+                <span className="font-semibold">{selPart.label}{selPart.pencilled ? " (pencilled)" : ""}:</span>
                 <button type="button" onClick={() => save(selPart, { days: Math.max(1, selPart.days - 1) })} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }} aria-label="One day shorter">− day</button>
                 <span>{selPart.days}d</span>
                 <button type="button" onClick={() => save(selPart, { days: selPart.days + 1 })} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }} aria-label="One day longer">+ day</button>
+                <button type="button" onClick={() => save(selPart, { pencilled: !selPart.pencilled })} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }}>{selPart.pencilled ? "Confirm dates" : "Pencil in"}</button>
                 {selPart.userId && <button type="button" onClick={() => place(selPart.id, null, null)} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }}>Back to To plan</button>}
                 <button type="button" onClick={() => { save(selPart, { done: true }); setSel(null); }} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }}>Mark done</button>
                 <button type="button" onClick={() => remove(selPart)} style={{ ...btnLine, padding: "4px 10px", fontSize: 13, color: "var(--tws-bad-ink)", borderColor: "var(--tws-bad-line)" }}>Delete</button>
@@ -150,8 +169,8 @@ export default function Planner({ initial }: { initial: PlannerData }) {
           <div className="flex flex-wrap gap-2 min-h-11">
             {tray.map(p => (
               <button key={p.id} type="button" {...dragProps(p)} onClick={() => canEdit && setSel(sel === p.id ? null : p.id)} aria-pressed={sel === p.id}
-                className="text-[13px] font-semibold text-left min-h-11 px-3 py-1.5" style={{ ...fill(p.jobId), cursor: canEdit ? "grab" : "default", outline: sel === p.id ? "3px solid var(--tws-night)" : "none" }}>
-                {p.label} ({jobName(p.jobId)}) · {p.days}d{p.user ? ` · ${p.user.name}` : ""}
+                className="text-[13px] font-semibold text-left min-h-11 px-3 py-1.5" style={{ ...look(p), cursor: canEdit ? "grab" : "default", outline: sel === p.id ? "3px solid var(--tws-night)" : "none" }}>
+                {p.pencilled ? "✎ " : ""}{p.label} ({jobName(p.jobId)}) · {p.days}d{p.user ? ` · ${p.user.name}` : ""}
               </button>
             ))}
             {tray.length === 0 && <span className="text-[13px] self-center" style={muted}>{parts.length ? "Everything is planned." : "No parts yet. Add the parts of each build below."}</span>}
@@ -159,14 +178,19 @@ export default function Planner({ initial }: { initial: PlannerData }) {
           {canEdit && jobs.length > 0 && (
             <form onSubmit={addPart} className="grid gap-2 items-end pt-3 sm:grid-cols-[1.4fr_1.6fr_80px_90px_auto]" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
               <div><label htmlFor="np-job" style={lbl}>Build</label>
-                <select id="np-job" style={input} value={adding.jobId} onChange={e => setAdding({ ...adding, jobId: e.target.value })}>{jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}</select></div>
+                <select id="np-job" style={input} value={adding.jobId} onChange={e => setAdding({ ...adding, jobId: e.target.value, pencilled: quoting(Number(e.target.value)) })}>{jobs.map(j => <option key={j.id} value={j.id}>{j.title}{j.stage === "quote" ? " (quoting)" : ""}</option>)}</select></div>
               <div><label htmlFor="np-label" style={lbl}>Part</label>
                 <input id="np-label" required style={input} value={adding.label} onChange={e => setAdding({ ...adding, label: e.target.value })} placeholder="e.g. Truck frames" /></div>
               <div><label htmlFor="np-days" style={lbl}>Days</label>
                 <input id="np-days" type="number" min={1} max={60} required style={input} value={adding.days} onChange={e => setAdding({ ...adding, days: e.target.value })} /></div>
               <div><label htmlFor="np-hours" style={lbl}>Hours</label>
                 <input id="np-hours" type="number" min={0} step="0.5" style={input} value={adding.hours} onChange={e => setAdding({ ...adding, hours: e.target.value })} placeholder="opt." /></div>
-              <button type="submit" style={{ ...btnSolid, padding: "8px 14px" }}>Add part</button>
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center gap-1.5 text-[12px] font-semibold cursor-pointer" title="Tentative: hold the dates while the build is being quoted">
+                  <input type="checkbox" checked={adding.pencilled} onChange={e => setAdding({ ...adding, pencilled: e.target.checked })} style={{ accentColor: "var(--tws-char)" }} />Pencil in
+                </label>
+                <button type="submit" style={{ ...btnSolid, padding: "8px 14px" }}>Add part</button>
+              </div>
             </form>
           )}
         </section>
@@ -223,10 +247,11 @@ export default function Planner({ initial }: { initial: PlannerData }) {
                       return (
                         <button key={p.id} type="button" {...dragProps(p)} onClick={() => canEdit && setSel(sel === p.id ? null : p.id)} aria-pressed={sel === p.id}
                           className="text-xs font-bold text-left px-2 py-1 overflow-hidden whitespace-nowrap text-ellipsis"
-                          style={{ ...fill(p.jobId), gridRow: (laneOf.get(p.id) ?? 0) + 1, gridColumn: `${s + 1} / span ${en - s}`, zIndex: 2,
+                          title={`${p.pencilled ? "Pencilled (not confirmed): " : ""}${p.label} · ${jobName(p.jobId)}`}
+                          style={{ ...look(p), gridRow: (laneOf.get(p.id) ?? 0) + 1, gridColumn: `${s + 1} / span ${en - s}`, zIndex: 2,
                             pointerEvents: drag ? "none" : "auto", cursor: canEdit ? "grab" : "default",
-                            outline: clashIds.has(p.id) ? "3px solid #b3261e" : sel === p.id ? "3px solid var(--tws-night)" : "none", outlineOffset: -3 }}>
-                          {p.label}{L === 1 && <span className="block font-medium text-[11px] truncate">{jobName(p.jobId)}</span>}
+                            outline: clashIds.has(p.id) ? "3px solid #b3261e" : maybeIds.has(p.id) ? "3px solid #d08a1e" : sel === p.id ? "3px solid var(--tws-night)" : "none", outlineOffset: -3 }}>
+                          {p.pencilled ? "✎ " : ""}{p.label}{L === 1 && <span className="block font-medium text-[11px] truncate">{jobName(p.jobId)}</span>}
                         </button>
                       );
                     })}
@@ -263,8 +288,8 @@ export default function Planner({ initial }: { initial: PlannerData }) {
                     {visible ? (
                       <>
                         {s > 0 && <span style={{ gridColumn: `span ${s}` }} />}
-                        <span className="px-2 py-1 font-semibold truncate" style={{ ...fill(j.id), gridColumn: `span ${e - s + 1}` }} title={`${buildStageLabel(j.stage)}${j.endDate ? ` · out ${dname(t(j.endDate))}` : ""}`}>
-                          {buildStageLabel(j.stage)}{j.endDate && e0 - from < tlDays * DAY ? ` · out ${dname(e0)}` : ""}
+                        <span className="px-2 py-1 font-semibold truncate" style={{ ...look({ jobId: j.id, pencilled: j.stage === "quote" }), gridColumn: `span ${e - s + 1}` }} title={`${j.stage === "quote" ? "Pencilled while quoting · " : ""}${buildStageLabel(j.stage)}${j.endDate ? ` · out ${dname(t(j.endDate))}` : ""}`}>
+                          {j.stage === "quote" ? "✎ Pencilled · " : ""}{buildStageLabel(j.stage)}{j.endDate && e0 - from < tlDays * DAY ? ` · out ${dname(e0)}` : ""}
                         </span>
                         {e < tlDays - 1 && <span style={{ gridColumn: `span ${tlDays - 1 - e}` }} />}
                       </>

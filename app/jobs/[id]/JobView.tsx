@@ -9,6 +9,9 @@ import { jobTypeLabel } from "@/lib/quotes";
 import { COST_CATEGORIES, type JobFigures } from "@/lib/jobCosting";
 import { fmtDate } from "@/lib/format";
 import { JOB_STATUS } from "../JobsView";
+import BuildPanel, { type BuildInfo } from "@/components/BuildPanel";
+import StageChip from "@/components/StageChip";
+import { usesBuildStages } from "@/lib/buildStages";
 
 type Option = { id: number; name: string };
 export type JobDetail = {
@@ -20,7 +23,7 @@ export type JobDetail = {
   costs: { id: number; date: string; description: string; supplier: string | null; category: string | null; amount: number; createdBy: { name: string } | null }[];
   psgExpenses: { description: string; supplier: string | null; spent: number; committed: number }[];
   figures: JobFigures | null;
-};
+} & Omit<BuildInfo, "id" | "startDate" | "endDate">;
 
 const gbp = (n: number | null | undefined) => (n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n));
 const inp = "w-full rounded px-2 py-1.5 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -29,7 +32,7 @@ const card = { backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-ca
 const today = () => new Date().toISOString().slice(0, 10);
 const DAY_OPTIONS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 
-export default function JobView({ initial, seeMoney, me, staff }: { initial: JobDetail; seeMoney: boolean; me: { id: number; isAdmin: boolean }; staff: Option[] }) {
+export default function JobView({ initial, seeMoney, me, staff, productions }: { initial: JobDetail; seeMoney: boolean; me: { id: number; isAdmin: boolean }; staff: Option[]; productions: Option[] }) {
   const [job, setJob] = useState(initial);
   const [time, setTime] = useState({ date: today(), days: "1", note: "", userId: "" });
   const [cost, setCost] = useState({ date: today(), description: "", supplier: "", category: "", amount: "" });
@@ -71,7 +74,7 @@ export default function JobView({ initial, seeMoney, me, staff }: { initial: Job
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
           <Link href="/jobs" className="text-xs" style={{ color: "var(--psg-muted)" }}>← Jobs</Link>
-          <h1 className="text-2xl font-bold text-white mt-1 break-words">{job.title}</h1>
+          <h1 className="text-2xl font-bold text-white mt-1 break-words">{job.title} {job.stage && <span className="align-middle"><StageChip stage={job.stage} /></span>}</h1>
           <p className="text-sm" style={{ color: "var(--psg-muted)" }}>
             {job.number} · {jobTypeLabel(job.jobType)} · <span style={{ color: st?.color }}>{st?.label ?? job.status}</span>
             {job.entity && ` · ${job.entity.name}`}
@@ -116,6 +119,8 @@ export default function JobView({ initial, seeMoney, me, staff }: { initial: Job
           </div>
         </div>
       )}
+
+      {usesBuildStages(job) && <BuildPanel key={`${job.stage}|${job.endDate}|${job.links.length}`} job={job} productions={productions} onChange={reload} />}
 
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Time */}

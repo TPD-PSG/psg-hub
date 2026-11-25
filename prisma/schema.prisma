@@ -82,6 +82,7 @@ model Production {
   feeStages           FeeStage[]
   fromOpportunity     Opportunity? @relation("OpportunityProduction")
   job                 Job?
+  builds              Job[]        @relation("JobForProduction")
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -1222,28 +1223,36 @@ model QuoteTemplate {
 // A piece of work we're doing: a PM job (linked to its production), a Workshop build, a Night
 // Run move… Costs and staff time are logged against it; its price comes from the accepted quote.
 model Job {
-  id            Int          @id @default(autoincrement())
-  number        String       @unique // J-2026-001
-  title         String
-  jobType       String       @default("pm")
-  status        String       @default("active") // active | complete | cancelled
-  entityId      Int?
-  entity        Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  clientId      Int?
-  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  opportunityId Int?         @unique
-  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  productionId  Int?         @unique
-  production    Production?  @relation(fields: [productionId], references: [id], onDelete: SetNull)
-  price         Float? // agreed price if there's no accepted quote
-  startDate     DateTime?
-  endDate       DateTime?
-  notes         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  quotes        Quote[]
-  costs         JobCost[]
-  time          TimeEntry[]
+  id              Int          @id @default(autoincrement())
+  number          String       @unique // J-2026-001
+  title           String
+  jobType         String       @default("pm")
+  status          String       @default("active") // active | complete | cancelled
+  entityId        Int?
+  entity          Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  clientId        Int?
+  client          Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  opportunityId   Int?         @unique
+  opportunity     Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  productionId    Int?         @unique
+  production      Production?  @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  price           Float? // agreed price if there's no accepted quote
+  startDate       DateTime?
+  endDate         DateTime?
+  notes           String?
+  // Build stages (workshop jobs): quote → confirmation → technical_design → build → finish → delivery
+  stage           String?
+  stageChangedAt  DateTime?
+  deliveryMethod  String? // collection | delivery
+  deliveryNotes   String? // address, access, contact
+  forProductionId Int? // the show a build is for (a show can have a PM job and builds)
+  forProduction   Production?  @relation("JobForProduction", fields: [forProductionId], references: [id], onDelete: SetNull)
+  links           JobLink[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  quotes          Quote[]
+  costs           JobCost[]
+  time            TimeEntry[]
 }
 
 model JobCost {
@@ -1278,4 +1287,17 @@ model TimeEntry {
 
   @@index([jobId])
   @@index([userId, date])
+}
+
+// A file a job uses, kept where it lives (OneDrive/SharePoint): VectorWorks drawings, cut lists…
+model JobLink {
+  id        Int      @id @default(autoincrement())
+  jobId     Int
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  label     String
+  url       String
+  kind      String   @default("vectorworks") // vectorworks | drawing | other
+  createdAt DateTime @default(now())
+
+  @@index([jobId])
 }

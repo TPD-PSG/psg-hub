@@ -23,6 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       where: { entityId: space.id, status: "active" },
       select: {
         id: true, number: true, title: true, jobType: true, startDate: true, endDate: true,
+        stage: true, stageChangedAt: true, deliveryMethod: true, forProduction: { select: { id: true, name: true } },
         client: { select: { id: true, name: true } }, production: { select: { id: true, name: true } },
         _count: { select: { time: true } },
       },

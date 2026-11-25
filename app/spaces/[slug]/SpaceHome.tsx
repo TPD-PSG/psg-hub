@@ -4,10 +4,12 @@ import Link from "next/link";
 import { fmtDate } from "@/lib/format";
 import { jobTypeLabel } from "@/lib/quotes";
 import { textOn, type SpaceTheme } from "@/lib/spaces";
+import StageChip from "@/components/StageChip";
 
 type Job = {
   id: number; number: string; title: string; jobType: string; startDate: string | null; endDate: string | null;
   client: { id: number; name: string } | null; production: { id: number; name: string } | null; _count: { time: number };
+  stage: string | null; stageChangedAt: string | null; deliveryMethod: string | null; forProduction: { id: number; name: string } | null;
 };
 export type SpaceData = {
   space: SpaceTheme; jobs: Job[]; dueOut: Job[]; overdue: Job[];
@@ -51,7 +53,10 @@ export default function SpaceHome({ data }: { data: SpaceData }) {
         <section className="rounded-lg border lg:col-span-2" style={card}>
           <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--psg-card-border)" }}>
             <h2 className="text-sm font-semibold text-white">Live jobs</h2>
-            <Link href="/jobs" className="text-xs" style={{ color: "var(--psg-muted)" }}>All jobs →</Link>
+            <span className="flex gap-3">
+              <Link href={`/spaces/${space.slug}/board`} className="text-xs text-blue-300">Build board →</Link>
+              <Link href="/jobs" className="text-xs" style={{ color: "var(--psg-muted)" }}>All jobs →</Link>
+            </span>
           </div>
           {jobs.length === 0 ? <p className="px-4 py-5 text-sm" style={{ color: "var(--psg-muted)" }}>No live jobs. Won deals for {space.shortName ?? space.name} open their jobs here.</p> : (
             <ul className="divide-y" style={{ borderColor: "var(--psg-card-border)" }}>
@@ -60,13 +65,14 @@ export default function SpaceHome({ data }: { data: SpaceData }) {
                 return (
                   <li key={j.id} className="px-4 py-3 flex items-start justify-between gap-3" style={{ borderColor: "var(--psg-card-border)" }}>
                     <div className="min-w-0">
-                      <Link href={`/jobs/${j.id}`} className="text-sm text-white hover:underline">{j.title}</Link>
+                      <Link href={`/jobs/${j.id}`} className="text-sm text-white hover:underline">{j.title}</Link> <StageChip stage={j.stage} />
                       <div className="text-xs" style={{ color: "var(--psg-muted)" }}>
-                        {[j.number, jobTypeLabel(j.jobType), j.client?.name, j.production?.name].filter(Boolean).join(" · ")}
+                        {[j.number, jobTypeLabel(j.jobType), j.client?.name, j.forProduction?.name ?? j.production?.name].filter(Boolean).join(" · ")}
                       </div>
                     </div>
                     <div className="text-xs text-right shrink-0" style={{ color: late ? "#f87171" : "var(--psg-muted)" }}>
-                      {j.endDate ? `${late ? "Overdue · " : "Due "}${fmtDate(j.endDate)}` : "No date yet"}
+                      {j.endDate ? `${late ? "Overdue · " : "Out "}${fmtDate(j.endDate)}` : "No date yet"}
+                      {j.deliveryMethod && <div>{j.deliveryMethod === "delivery" ? "🚚 Delivery" : "Collection"}</div>}
                     </div>
                   </li>
                 );

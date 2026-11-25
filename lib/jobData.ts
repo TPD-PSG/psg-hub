@@ -38,6 +38,7 @@ export async function listJobs(v: JobViewer) {
       entity: { select: { id: true, name: true } }, client: { select: { id: true, name: true } },
       production: { select: { id: true, name: true, pmFee: true } },
       quotes: QUOTE_LINES, time: { select: { days: true, dayRate: true } }, costs: { select: { amount: true } },
+      forProduction: { select: { id: true, name: true } },
     },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });
@@ -64,6 +65,8 @@ export async function loadJob(id: number, v: JobViewer) {
       quotes: { ...QUOTE_LINES, select: { ...QUOTE_LINES.select, title: true } },
       time: { include: { user: { select: { id: true, name: true } } }, orderBy: { date: "desc" } },
       costs: { include: { createdBy: { select: { name: true } } }, orderBy: { date: "desc" } },
+      links: { orderBy: { createdAt: "asc" } },
+      forProduction: { select: { id: true, name: true } },
     },
   });
   if (!j) return null;

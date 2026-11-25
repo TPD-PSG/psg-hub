@@ -44,6 +44,7 @@ export default () => run("jobs", async ({ db, users, login, results }) => {
     r = await a(`/api/opportunities/${deal.id}/job`, { method: "POST", body: "{}" });
     const dj = await json(r); made.jobs.push(dj.id);
     ok(r.status === 201 && dj.jobType === "workshop", "won scenic deal opens a workshop job");
+    ok(dj.stage === "confirmation", "a won deal's workshop build starts at Confirmation");
     const djd = (await json(await a(`/api/jobs/${dj.id}`))).job;
     ok(djd.figures.price === 7000 && djd.figures.priceFrom === "quote" && djd.figures.quotedCost === 3000, "job price and quoted cost come from the accepted quote");
     ok((await a(`/api/opportunities/${deal.id}/job`, { method: "POST", body: "{}" })).status === 409, "a deal opens only one job");

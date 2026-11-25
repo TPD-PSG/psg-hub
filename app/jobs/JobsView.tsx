@@ -7,10 +7,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { alertDialog } from "@/components/Dialogs";
 import { JOB_TYPES, jobTypeLabel } from "@/lib/quotes";
+import StageChip from "@/components/StageChip";
 import { marginBy, type JobFigures } from "@/lib/jobCosting";
 
 export type JobRow = {
-  id: number; number: string; title: string; jobType: string; status: string;
+  id: number; number: string; title: string; jobType: string; status: string; stage?: string | null;
   entity: { id: number; name: string } | null; client: { id: number; name: string } | null; production: { id: number; name: string } | null;
   days: number; figures: JobFigures | null;
 };
@@ -138,7 +139,7 @@ export default function JobsView({ initial, entities, clients }: { initial: { se
           <tbody>
             {shown.map(j => (
               <tr key={j.id} className="border-t hover:bg-white/5" style={{ borderColor: "var(--psg-card-border)" }}>
-                <td className="px-4 py-3"><Link href={`/jobs/${j.id}`} className="text-white hover:underline">{j.title}</Link>
+                <td className="px-4 py-3"><Link href={`/jobs/${j.id}`} className="text-white hover:underline">{j.title}</Link> <StageChip stage={j.stage} />
                   <div className="text-xs" style={{ color: "var(--psg-muted)" }}>{j.number} · {jobTypeLabel(j.jobType)}{j.status !== "active" ? ` · ${JOB_STATUS[j.status]?.label}` : ""}</div></td>
                 <td className="px-4 py-3 text-xs" style={{ color: "var(--psg-muted)" }}>{j.entity?.name ?? "—"}<div>{j.client?.name ?? ""}</div></td>
                 <td className="px-4 py-3 text-right tabular-nums text-white">{j.days || "—"}</td>

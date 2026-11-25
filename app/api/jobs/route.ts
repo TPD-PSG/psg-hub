@@ -17,6 +17,8 @@ export async function POST(req: Request) {
   const body = await req.json();
   const fields = jobFields(body);
   if (!fields.title) return NextResponse.json({ error: "Give the job a title" }, { status: 400 });
-  const job = await prisma.job.create({ data: { ...fields, title: fields.title as string, number: await newNumber("J") } });
+  // Workshop builds opened by hand start at the Quote stage
+  const stage = fields.jobType === "workshop" ? { stage: "quote", stageChangedAt: new Date() } : {};
+  const job = await prisma.job.create({ data: { ...fields, ...stage, title: fields.title as string, number: await newNumber("J") } });
   return NextResponse.json(job, { status: 201 });
 }

@@ -19,7 +19,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const jobType = JOB_TYPES.some(t => t.key === body.jobType) ? body.jobType : deal.type === "scenic" ? "workshop" : "other";
   const job = await prisma.$transaction(async tx => {
     const j = await tx.job.create({
-      data: { number: await newNumber("J"), title: deal.title, jobType, entityId: deal.entityId, clientId: deal.clientId, opportunityId: id, price: deal.value },
+      // A won deal has been confirmed, so workshop builds start at Confirmation
+      data: {
+        number: await newNumber("J"), title: deal.title, jobType, entityId: deal.entityId, clientId: deal.clientId, opportunityId: id, price: deal.value,
+        ...(jobType === "workshop" ? { stage: "confirmation", stageChangedAt: new Date() } : {}),
+      },
     });
     await tx.quote.updateMany({ where: { opportunityId: id, jobId: null }, data: { jobId: j.id } });
     await tx.bDActivity.create({ data: { opportunityId: id, kind: "stage", text: `Became job ${j.number}`, userId: v.userId } });

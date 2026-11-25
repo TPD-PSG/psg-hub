@@ -40,7 +40,12 @@ export default function EntityOverview({ data, isAdmin }: { data: { see: Visibil
           <div key={r.entityId ?? "none"} className="px-4 py-4 grid gap-4 grid-cols-2 lg:[grid-template-columns:var(--cols)]"
             style={{ borderColor: "var(--psg-card-border)", ["--cols" as string]: `minmax(120px,1fr) repeat(${cols - 1}, minmax(0,1.3fr))` }}>
             <div className="col-span-2 lg:col-span-1 min-w-0">
-              <div className="font-semibold text-white break-words">{r.name}</div>
+              {r.spaceSlug ? (
+                <Link href={`/spaces/${r.spaceSlug}`} className="font-semibold text-white break-words hover:underline">{r.name}</Link>
+              ) : (
+                <div className="font-semibold text-white break-words">{r.name}</div>
+              )}
+              {r.spaceSlug && <Link href={`/spaces/${r.spaceSlug}`} className="block text-xs text-blue-300 hover:underline mt-0.5">Space →</Link>}
               {r.entityId === null && isAdmin && <div className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>Set a company on these shows and deals</div>}
             </div>
 

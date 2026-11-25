@@ -28,6 +28,7 @@ export type OverviewDeal = { entityId: number | null; stage: string; value: numb
 export type KeyDate = { at: string; label: string; productionId: number; production: string };
 export type EntityOverviewRow = {
   entityId: number | null; name: string;
+  spaceSlug: string | null; // the company's own space in the Hub, if switched on
   live: { count: number; shows: { id: number; name: string }[] } | null;
   pipeline: { open: number; weighted: number; stuck: number } | null;
   people: { crew: number; staff: number } | null;
@@ -43,7 +44,7 @@ export function weekStart(now: Date): number {
 }
 
 export function buildEntityOverview(
-  entities: { id: number; name: string; archived: boolean; sortOrder: number }[],
+  entities: { id: number; name: string; archived: boolean; sortOrder: number; hasSpace?: boolean; slug?: string | null }[],
   productions: OverviewProduction[],
   deals: OverviewDeal[],
   see: Visibility,
@@ -63,6 +64,7 @@ export function buildEntityOverview(
     const shows = live.filter(p => p.entityId === entityId);
     const row: EntityOverviewRow = {
       entityId, name: entities.find(e => e.id === entityId)?.name ?? "No entity",
+      spaceSlug: (() => { const e = entities.find(x => x.id === entityId); return e?.hasSpace && !e.archived && e.slug ? e.slug : null; })(),
       live: null, pipeline: null, people: null, dates: null, waiting: null,
     };
     if (see.productions) {

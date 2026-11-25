@@ -57,6 +57,7 @@ export default () => run("spaces", async ({ db, users, login, anon, results }) =
     const page = await (await f(`/spaces/${SLUG}`, { headers: { accept: "text/html" } })).text();
     ok(page.includes("Space test build") && page.includes("TWS-T · PSG Hub") && page.includes("#e4572e"), "space page in the first HTML, top bar in the company's colours and name");
     const adminHome = await (await a("/", { headers: { accept: "text/html" } })).text();
+    ok(adminHome.includes(`/spaces/${SLUG}`), "Home links to the space (tile and Companies row)");
     ok(!adminHome.includes("TWS-T · PSG Hub"), "people from other companies keep the PSG top bar");
   } finally {
     await db.user.updateMany({ where: { homeEntityId: entity?.id }, data: { homeEntityId: null } }).catch(() => {});

@@ -476,6 +476,10 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
             {(role === "admin" || role === "member") && (
               <CompactTile href="/jobs" icon="🧾" title="Jobs" sub="Days, costs and margin per job" />
             )}
+            {/* Each company with its own space (e.g. The Workshop Stoke) */}
+            {initial.entityOverview?.rows.filter(r => r.spaceSlug).map(r => (
+              <CompactTile key={r.spaceSlug} href={`/spaces/${r.spaceSlug}`} icon="🏭" title={r.name} sub="Company space: live jobs and schedule" />
+            ))}
             {/* Haulage across productions is staff-only, like its API */}
             {canAccess(perms, "productions", role) && (role === "admin" || role === "member") && (
               <CompactTile href="/haulage" icon="🚚" title="Haulage" sub="Movements across all productions" />

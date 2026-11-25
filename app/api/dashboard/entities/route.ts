@@ -27,7 +27,7 @@ export async function GET() {
   const range = { startDate: true, endDate: true } as const;
 
   const [entities, productions, deals] = await Promise.all([
-    prisma.entity.findMany({ select: { id: true, name: true, archived: true, sortOrder: true } }),
+    prisma.entity.findMany({ select: { id: true, name: true, archived: true, sortOrder: true, hasSpace: true, slug: true } }),
     see.productions || see.budget || see.finance
       ? prisma.production.findMany({
           where,

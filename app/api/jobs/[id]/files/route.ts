@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { saveFile } from "@/lib/storage";
 import { jobAccess, FILE_KINDS, FILE_MAX, FILE_SELECT, fileUrl } from "@/lib/jobDesign";
 
-// Files that are drawing revisions (for sign-off) are listed under Drawings & sign-off instead
-const list = async (jobId: number) => (await prisma.jobFile.findMany({ where: { jobId, revision: { is: null } }, select: FILE_SELECT, orderBy: { createdAt: "desc" } })).map(f => ({ ...f, url: fileUrl(f.id) }));
+// Drawing revisions (sign-off), certificates and repair photos are listed in their own sections
+const list = async (jobId: number) => (await prisma.jobFile.findMany({ where: { jobId, revision: { is: null }, kind: { in: ["design", "modelbox"] } }, select: FILE_SELECT, orderBy: { createdAt: "desc" } })).map(f => ({ ...f, url: fileUrl(f.id) }));
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const a = await jobAccess((await params).id);

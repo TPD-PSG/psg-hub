@@ -42,3 +42,12 @@ body {
 
 /* Inside a company space, the page behind it (seen when bounce-scrolling) is the space's paper ground */
 body:has(.tws-shell) { background-color: #f5f2ec !important; }
+
+/* QR labels (TWS storage): print just the labels, 8 to an A4 sheet */
+@media print {
+  .tws-shell > header, .tws-shell aside { display: none !important; }
+  body:has(.tws-labels) { background: #fff !important; }
+  .tws-labels { display: grid !important; grid-template-columns: 1fr 1fr !important; }
+  .tws-label { height: 66mm; box-sizing: border-box; }
+  @page { size: A4; margin: 10mm; }
+}

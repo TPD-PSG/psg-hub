@@ -4,7 +4,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { memberOfEntity } from "@/lib/spaceBoard";
-import { storageFor, locationIn, nameOf } from "@/lib/setStorage";
+import { storageFor, locationIn, nameOf, PIECE_INCLUDE } from "@/lib/setStorage";
+import { certsFor } from "@/lib/frCerts";
 
 type P = { params: Promise<{ id: string }> };
 async function load(p: P) {
@@ -14,6 +15,27 @@ async function load(p: P) {
   if ("error" in m) return m;
   if (!m.staff) return { error: NextResponse.json({ error: "Only staff can change storage" }, { status: 403 }) };
   return { m, piece };
+}
+
+// What a piece's QR label opens: the piece, its build, where it is, its history, and the build's
+// signed-off drawings, photos and FR certificates. Anyone who can open the space.
+export async function GET(_req: Request, p: P) {
+  const piece = await prisma.storedPiece.findUnique({ where: { id: parseInt((await p.params).id) || 0 }, include: { ...PIECE_INCLUDE, moves: { orderBy: { createdAt: "desc" }, select: { id: true, kind: true, location: true, note: true, byName: true, createdAt: true } } } });
+  if (!piece) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const m = await memberOfEntity(piece.entityId);
+  if ("error" in m) return m.error;
+  const jobId = piece.jobId;
+  const [drawings, photos, certs] = jobId ? await Promise.all([
+    prisma.drawing.findMany({ where: { jobId }, orderBy: [{ number: "asc" }, { createdAt: "asc" }], select: { id: true, number: true, title: true, revisions: { orderBy: { createdAt: "desc" }, take: 1, select: { rev: true, status: true, fileId: true } } } }),
+    prisma.spacePhoto.findMany({ where: { jobId }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, caption: true } }),
+    certsFor(jobId),
+  ]) : [[], [], []];
+  return NextResponse.json({
+    space: m.space, piece, staff: m.staff,
+    drawings: drawings.map(d => ({ id: d.id, number: d.number, title: d.title, rev: d.revisions[0]?.rev ?? null, status: d.revisions[0]?.status ?? null, url: d.revisions[0] ? `/api/job-files/${d.revisions[0].fileId}` : null })),
+    photos: photos.map(ph => ({ ...ph, url: `/api/space-photos/${ph.id}` })),
+    certs,
+  });
 }
 
 export async function PATCH(req: Request, p: P) {
@@ -45,6 +67,16 @@ export async function PATCH(req: Request, p: P) {
       if (typeof body.name === "string") { if (!body.name.trim()) return bad("Name the piece"); data.name = body.name.trim().slice(0, 150); }
       if ("quantity" in body) { const q = Math.round(Number(body.quantity)); if (!(q >= 1 && q <= 9999)) return bad("Quantity must be 1 or more"); data.quantity = q; }
       if ("notes" in body) data.notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 1000) : null;
+      for (const k of ["lengthMm", "widthMm", "heightMm"] as const) if (k in body) {
+        const v = body[k] === "" || body[k] == null ? null : Math.round(Number(body[k]));
+        if (v !== null && !(v > 0 && v <= 100000)) return bad("Sizes are millimetres, more than 0");
+        data[k] = v;
+      }
+      if ("weightKg" in body) {
+        const w = body.weightKg === "" || body.weightKg == null ? null : Number(body.weightKg);
+        if (w !== null && !(w > 0 && w <= 100000)) return bad("Weight is kilograms, more than 0");
+        data.weightKg = w;
+      }
       if ("jobId" in body) {
         const j = body.jobId ? Number(body.jobId) : null;
         if (j && !(await prisma.job.count({ where: { id: j, entityId: piece.entityId } }))) return bad("Pick one of this workshop's builds");

@@ -17,6 +17,7 @@ import BuildDesign, { type JobContactRow, type JobFileRow } from "@/components/B
 import DrawingRegister, { type DrawingRow, type Blocker } from "@/components/DrawingRegister";
 import Variations, { type VariationRow } from "@/components/Variations";
 import SetStorage, { type StorageData } from "@/components/SetStorage";
+import FrCertificates, { type CertRow } from "@/components/FrCertificates";
 import { jobTypeLabel } from "@/lib/quotes";
 import { fmtDate } from "@/lib/format";
 import { card, darkCard, h2, muted, link, btnSolid, btnLine, input, label as lbl, pageHeader, stageTone, dayChip } from "@/lib/twsUi";
@@ -42,10 +43,11 @@ const when = (p: PartRow) => {
 const th = "text-left font-semibold py-2 pr-3";
 const td = "py-2 pr-3 align-top";
 
-export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles, initialDrawings, initialVariations = [], initialStorage = null }: {
+export default function SpaceJob({ space, initial, seeMoney, initialParts, people, productions, me, initialMaterials, initialPhotos, initialChecks, initialContacts, initialFiles, initialDrawings, initialVariations = [], initialStorage = null, initialCerts = [] }: {
   space: SpaceTheme; initial: JobDetail; seeMoney: boolean; initialParts: PartRow[]; people: Option[]; productions: Option[]; me: { id: number; isAdmin: boolean }; initialMaterials: JobMaterials; initialPhotos: JobPhoto[]; initialChecks: Check[]; initialContacts: JobContactRow[]; initialFiles: JobFileRow[]; initialDrawings: { drawings: DrawingRow[]; blockers: Blocker[]; overrides?: { id: number; text: string; createdAt: string }[] };
   initialVariations?: VariationRow[];
   initialStorage?: StorageData | null;
+  initialCerts?: CertRow[];
 }) {
   const [blockers, setBlockers] = useState(initialDrawings.blockers);
   const [gate, setGate] = useState<null | { stage: string; message: string; canOverride: boolean; reason: string }>(null);
@@ -145,6 +147,12 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
     }
   }
   async function togglePart(p: PartRow) { if (await call(`/api/jobs/${job.id}/parts/${p.id}`, "PATCH", { done: !p.done })) reloadParts(); }
+  async function collectionPack() {
+    const d = await fetch(`/api/jobs/${job.id}/collection-pack`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (!d) return alertDialog("Couldn't put the pack together. Try again.");
+    const { downloadCollectionPack } = await import("@/lib/collectionPackPdf");
+    await downloadCollectionPack(d);
+  }
   async function pencilPart(p: PartRow) { if (await call(`/api/jobs/${job.id}/parts/${p.id}`, "PATCH", { pencilled: !p.pencilled })) reloadParts(); }
   async function removePart(p: PartRow) { if (await confirmDialog(`Delete the part "${p.label}"?`) && await call(`/api/jobs/${job.id}/parts/${p.id}`, "DELETE")) reloadParts(); }
   async function logTime(e: React.FormEvent) { e.preventDefault(); if (await call(`/api/jobs/${job.id}/time`, "POST", time)) { setTime(t => ({ ...t, note: "" })); reload(); } }
@@ -374,6 +382,10 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                     Ready-to-{job.deliveryMethod === "delivery" ? "deliver" : "collect"} check{collect.length ? `: ${collect.filter(c => c.done).length} of ${collect.length} done` : ""}{collect.length && collect.every(c => c.done) ? " ✓" : ""}
                   </span>
                   <BuildChecklist jobId={job.id} kind="collect" checks={checks} onChange={setChecks} dark placeholder="Add a check" />
+                  <button type="button" disabled={busy} onClick={collectionPack} className="self-start mt-1 text-[13px] font-bold px-3 py-2" style={{ background: "var(--tws-accent)", color: "var(--tws-ink)" }}>
+                    Collection pack (PDF)
+                  </button>
+                  <span className="text-[11px]" style={{ color: "var(--tws-night-muted)" }}>Load list with weights, FR certificates, drawings and these checks.</span>
                 </div>
               </>
             ) : (
@@ -442,6 +454,8 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
               <Link href={`${base}/noticeboard`} className="text-[13px] font-semibold" style={link}>Noticeboard →</Link>
             </div>
           </section>
+
+          <FrCertificates jobId={job.id} initial={initialCerts} />
 
           {initialStorage && <SetStorage slug={space.slug} base={`/spaces/${space.slug}`} jobId={job.id} initial={initialStorage} />}
 

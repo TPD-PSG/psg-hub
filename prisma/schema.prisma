@@ -20,6 +20,7 @@ model User {
   costDayRate  Float? // internal cost per day, for job costing (admins set it)
   homeEntityId Int? // the company this person works for; its space (if any) is their home page
   homeEntity   Entity?  @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
+  clockEntries ClockEntry[] @relation("ClockEntryUser")
   clientId     Int? // client accounts: the client company whose builds they see and sign off
   client       Client?  @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
@@ -1297,6 +1298,9 @@ model Job {
   drawings        Drawing[]
   variations      JobVariation[]
   storedPieces    StoredPiece[]
+  frCertificates  FrCertificate[]
+  repairs         Repair[]
+  clockEntries    ClockEntry[]
   logs            JobLog[]
 }
 
@@ -1562,6 +1566,8 @@ model JobFile {
   uploadedBy   User?            @relation("JobFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
   createdAt    DateTime         @default(now())
   revision     DrawingRevision?
+  frCertificate FrCertificate?
+  repairPhoto  Repair?
 
   @@index([jobId])
 }
@@ -1692,6 +1698,10 @@ model StoredPiece {
   locationId  Int?
   location    StorageLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   notes       String?
+  lengthMm    Int? // size and weight for the load list
+  widthMm     Int?
+  heightMm    Int?
+  weightKg    Float? // each
   storedAt    DateTime         @default(now())
   outAt       DateTime? // gone out (delivered, collected, scrapped); null = in store
   outNote     String?
@@ -1699,6 +1709,7 @@ model StoredPiece {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   moves       StoredPieceMove[]
+  repairs     Repair[]
 
   @@index([entityId, outAt])
   @@index([jobId])
@@ -1716,4 +1727,67 @@ model StoredPieceMove {
   createdAt DateTime    @default(now())
 
   @@index([pieceId])
+}
+
+// Flame-retardant certificates on a build (27 Nov 2026): the certificate file plus what it covers,
+// the standard it meets, who issued it and when it runs out. Listed in the collection pack.
+model FrCertificate {
+  id          Int       @id @default(autoincrement())
+  jobId       Int
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  title       String // what it covers, e.g. "18mm FR MDF", "Wool serge, black"
+  standard    String? // e.g. BS 5867-2 Type B, BS 476-7 Class 1, EN 13501-1 B-s1,d0
+  supplier    String?
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  fileId      Int       @unique
+  file        JobFile   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  createdById Int?
+  createdAt   DateTime  @default(now())
+
+  @@index([jobId])
+}
+
+// Repairs and aftercare for sets out on tour (27 Nov 2026): reported by staff or the client,
+// tracked open → scheduled → done.
+model Repair {
+  id             Int          @id @default(autoincrement())
+  jobId          Int
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  pieceId        Int?
+  piece          StoredPiece? @relation(fields: [pieceId], references: [id], onDelete: SetNull)
+  title          String
+  description    String?
+  whereAt        String? // venue or where the set is now
+  urgency        String       @default("soon") // urgent | soon | routine
+  status         String       @default("open") // open | scheduled | done
+  scheduledFor   DateTime?
+  resolution     String?
+  reportedByName String?
+  reportedById   Int?
+  fromClient     Boolean      @default(false)
+  photoFileId    Int?         @unique
+  photo          JobFile?     @relation(fields: [photoFileId], references: [id], onDelete: SetNull)
+  doneAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([jobId, status])
+}
+
+// Tablet mode clocking (27 Nov 2026): clock on to a build, clock off → a day entry (TimeEntry)
+// rounded to the half day, with the times in its note.
+model ClockEntry {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  user        User      @relation("ClockEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+  jobId       Int
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  startAt     DateTime  @default(now())
+  endAt       DateTime?
+  timeEntryId Int?
+  byName      String? // who tapped it (a shared tablet may clock others on)
+
+  @@index([userId, endAt])
+  @@index([jobId])
 }

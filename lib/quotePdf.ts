@@ -9,7 +9,7 @@ import { spaceTokens } from "@/lib/spaceTheme";
 
 type Rgb = [number, number, number];
 const rgb = (hex: string): Rgb => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as Rgb;
-type Brand = { header: Rgb; rule: Rgb | null; tint: Rgb; accentInk: Rgb; logoUrl: string | null };
+export type Brand = { header: Rgb; rule: Rgb | null; tint: Rgb; accentInk: Rgb; logoUrl: string | null };
 const PSG_BRAND: Brand = { header: [10, 25, 65], rule: null, tint: [236, 239, 247], accentInk: [10, 25, 65], logoUrl: null };
 
 /** The look for a quote's company: its space colours and logo, else PSG's. */

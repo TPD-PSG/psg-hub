@@ -8,15 +8,19 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
 import { fmtDate } from "@/lib/format";
+import { sizeText } from "@/lib/pieceSize";
 import { caps, card, h2, muted, link, btnSolid, btnLine, input, label as lbl } from "@/lib/twsUi";
 
 type Loc = { id: number; name: string; notes: string | null; archived: boolean; inStore: number };
 type Move = { id: number; kind: string; location: string | null; note: string | null; byName: string | null; createdAt: string };
 export type Piece = {
-  id: number; name: string; quantity: number; notes: string | null; storedAt: string; outAt: string | null; outNote: string | null; jobId: number | null;
+  id: number; name: string; quantity: number; notes: string | null; storedAt: string;
+  lengthMm?: number | null; widthMm?: number | null; heightMm?: number | null; weightKg?: number | null; outAt: string | null; outNote: string | null; jobId: number | null;
   job: { id: number; number: string; title: string; client: { name: string } | null } | null; location: { id: number; name: string } | null; moves: Move[];
 };
 export type StorageData = { locations: Loc[]; pieces: Piece[]; jobs?: { id: number; number: string; title: string }[]; me?: { staff: boolean; admin: boolean } };
+
+
 
 const MOVE_WORD: Record<string, string> = { in: "Put in", move: "Moved to", out: "Went out", back: "Back in" };
 const small: React.CSSProperties = { ...btnLine, padding: "5px 10px", fontSize: 12 };
@@ -31,6 +35,13 @@ export default function SetStorage({ slug, initial, jobId, base }: { slug: strin
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState<null | { names: string; jobId: string; locationId: string; notes: string }>(null);
   const [action, setAction] = useState<null | { id: number; kind: "move" | "out" | "back"; locationId: string; note: string }>(null);
+  const [editing, setEditing] = useState<null | { id: number; name: string; quantity: string; lengthMm: string; widthMm: string; heightMm: string; weightKg: string; notes: string }>(null);
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    const { id, ...rest } = editing;
+    if (await call(`/api/stored-pieces/${id}`, "PATCH", { action: "edit", ...rest })) setEditing(null);
+  }
   const [history, setHistory] = useState<number | null>(null);
   const [newLoc, setNewLoc] = useState("");
   const [manage, setManage] = useState(false);
@@ -103,7 +114,7 @@ export default function SetStorage({ slug, initial, jobId, base }: { slug: strin
       {shown.map(p => (
         <li key={p.id} className="py-3 flex flex-col gap-1.5" style={{ borderBottom: "1px solid var(--tws-line-soft)", opacity: p.outAt ? 0.7 : 1 }}>
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <strong className="text-[15px] break-words min-w-0">{p.name}{p.quantity > 1 ? ` ×${p.quantity}` : ""}</strong>
+            <Link href={`${base}/pieces/${p.id}`} className="text-[15px] font-bold break-words min-w-0 hover:underline" style={{ color: "var(--tws-ink)" }}>{p.name}{p.quantity > 1 ? ` ×${p.quantity}` : ""}</Link>
             {!jobId && p.job && <Link href={`${base}/jobs/${p.job.id}`} className="text-[13px]" style={link}>{p.job.title}</Link>}
             {!jobId && p.job?.client && <span className="text-xs" style={muted}>{p.job.client.name}</span>}
             <span className="ml-auto text-[13px] font-bold px-2 py-0.5" style={p.outAt ? { background: "var(--tws-tint)", color: "#4e545b" } : p.location ? { background: "var(--tws-char)", color: "#fff" } : { background: "var(--tws-warn-bg)", color: "var(--tws-warn-ink)", border: "1px solid var(--tws-warn-line)" }}>
@@ -111,7 +122,7 @@ export default function SetStorage({ slug, initial, jobId, base }: { slug: strin
             </span>
           </div>
           <div className="text-xs" style={muted}>
-            In since {fmtDate(p.storedAt)}{p.outAt ? ` · went out ${fmtDate(p.outAt)}${p.outNote ? `: ${p.outNote}` : ""}` : ""}{p.notes ? ` · ${p.notes}` : ""}
+            {sizeText(p) ? <>{sizeText(p)} · </> : null}In since {fmtDate(p.storedAt)}{p.outAt ? ` · went out ${fmtDate(p.outAt)}${p.outNote ? `: ${p.outNote}` : ""}` : ""}{p.notes ? ` · ${p.notes}` : ""}
           </div>
           {staff && (
             <div className="flex flex-wrap gap-2 items-center">
@@ -119,6 +130,7 @@ export default function SetStorage({ slug, initial, jobId, base }: { slug: strin
                 <button type="button" disabled={busy} onClick={() => setAction({ id: p.id, kind: "move", locationId: "", note: "" })} style={small}>{p.location ? "Move" : "Place"}</button>
                 <button type="button" disabled={busy} onClick={() => setAction({ id: p.id, kind: "out", locationId: "", note: "" })} style={small}>Gone out</button>
               </> : <button type="button" disabled={busy} onClick={() => setAction({ id: p.id, kind: "back", locationId: "", note: "" })} style={small}>Back in store</button>}
+              <button type="button" disabled={busy} onClick={() => setEditing({ id: p.id, name: p.name, quantity: String(p.quantity), lengthMm: p.lengthMm?.toString() ?? "", widthMm: p.widthMm?.toString() ?? "", heightMm: p.heightMm?.toString() ?? "", weightKg: p.weightKg?.toString() ?? "", notes: p.notes ?? "" })} style={small}>Size &amp; weight</button>
               <button type="button" onClick={() => setHistory(history === p.id ? null : p.id)} aria-expanded={history === p.id} className="text-xs underline" style={muted}>{history === p.id ? "Hide history" : "History"}</button>
               <button type="button" disabled={busy} onClick={() => remove(p)} className="text-xs ml-auto" style={{ color: "var(--tws-bad-ink)" }} aria-label={`Delete ${p.name}`}>Delete</button>
             </div>
@@ -135,6 +147,18 @@ export default function SetStorage({ slug, initial, jobId, base }: { slug: strin
                 <input id={`act-n${p.id}`} required={action.kind === "out"} autoFocus={action.kind === "out"} style={input} value={action.note} onChange={e => setAction({ ...action, note: e.target.value })} placeholder={action.kind === "out" ? "e.g. Delivered to the Lyceum for the get-in" : "e.g. Made room for the panto"} /></div>
               <button type="submit" disabled={busy} style={{ ...btnSolid, padding: "8px 14px" }}>{action.kind === "out" ? "Mark gone out" : action.kind === "back" ? "Back in store" : "Move"}</button>
               <button type="button" onClick={() => setAction(null)} style={{ ...btnLine, padding: "8px 14px" }}>Cancel</button>
+            </form>
+          )}
+          {editing?.id === p.id && (
+            <form onSubmit={saveEdit} className="grid gap-2 p-3 grid-cols-2 sm:grid-cols-4 items-end" style={{ background: "var(--tws-ground)" }}>
+              <div className="col-span-2 sm:col-span-3"><label htmlFor={`ed-n${p.id}`} style={lbl}>Piece</label><input id={`ed-n${p.id}`} required style={input} value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} /></div>
+              <div><label htmlFor={`ed-q${p.id}`} style={lbl}>How many</label><input id={`ed-q${p.id}`} type="number" min={1} required style={input} value={editing.quantity} onChange={e => setEditing({ ...editing, quantity: e.target.value })} /></div>
+              <div><label htmlFor={`ed-l${p.id}`} style={lbl}>Length mm</label><input id={`ed-l${p.id}`} type="number" min={1} style={input} value={editing.lengthMm} onChange={e => setEditing({ ...editing, lengthMm: e.target.value })} /></div>
+              <div><label htmlFor={`ed-w${p.id}`} style={lbl}>Width mm</label><input id={`ed-w${p.id}`} type="number" min={1} style={input} value={editing.widthMm} onChange={e => setEditing({ ...editing, widthMm: e.target.value })} /></div>
+              <div><label htmlFor={`ed-h${p.id}`} style={lbl}>Height mm</label><input id={`ed-h${p.id}`} type="number" min={1} style={input} value={editing.heightMm} onChange={e => setEditing({ ...editing, heightMm: e.target.value })} /></div>
+              <div><label htmlFor={`ed-kg${p.id}`} style={lbl}>Weight kg (each)</label><input id={`ed-kg${p.id}`} type="number" min={0} step="any" style={input} value={editing.weightKg} onChange={e => setEditing({ ...editing, weightKg: e.target.value })} /></div>
+              <div className="col-span-2 sm:col-span-4"><label htmlFor={`ed-no${p.id}`} style={lbl}>Notes</label><input id={`ed-no${p.id}`} style={input} value={editing.notes} onChange={e => setEditing({ ...editing, notes: e.target.value })} /></div>
+              <div className="col-span-2 sm:col-span-4 flex gap-2"><button type="submit" disabled={busy} style={{ ...btnSolid, padding: "8px 14px" }}>Save</button><button type="button" onClick={() => setEditing(null)} style={{ ...btnLine, padding: "8px 14px" }}>Cancel</button></div>
             </form>
           )}
           {history === p.id && (
@@ -154,7 +178,7 @@ export default function SetStorage({ slug, initial, jobId, base }: { slug: strin
       <section style={card} className="flex flex-col gap-3" aria-label="In storage">
         <div className="flex justify-between items-baseline gap-3 flex-wrap">
           <h2 style={h2}>In storage</h2>
-          <Link href={`${base}/storage`} className="text-[13px]" style={link}>Storage →</Link>
+          <span className="flex gap-3"><Link href={`${base}/labels?job=${jobId}`} className="text-[13px]" style={link}>Print QR labels</Link><Link href={`${base}/storage`} className="text-[13px]" style={link}>Storage →</Link></span>
         </div>
         <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Show">
           {([["in", "In store"], ["out", "Gone out"], ["all", "All"]] as const).map(([k, l]) => <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)} className="text-xs font-bold px-2.5 py-1" style={show === k ? { background: "var(--tws-char)", color: "#fff" } : { background: "var(--tws-ground)", border: "1px solid var(--tws-line)", color: "var(--tws-ink)" }}>{l} ({data.pieces.filter(p => k === "all" || (k === "in" ? !p.outAt : !!p.outAt)).length})</button>)}
@@ -171,7 +195,10 @@ export default function SetStorage({ slug, initial, jobId, base }: { slug: strin
         <section style={card} className="flex flex-col gap-3 min-w-0" aria-label="Stored pieces">
           <div className="flex justify-between items-baseline gap-3 flex-wrap">
             <h2 style={h2}>Pieces</h2>
-            {staff && !adding && <button type="button" onClick={() => setAdding({ names: "", jobId: "", locationId: loc !== "all" && loc !== "none" ? loc : "", notes: "" })} style={btnSolid}>+ Put pieces into store</button>}
+            <span className="flex gap-2 flex-wrap items-center">
+              {shown.some(p => !p.outAt) && <Link href={`${base}/labels?ids=${shown.filter(p => !p.outAt).map(p => p.id).join(",")}`} className="text-[13px] font-semibold" style={link}>Print QR labels ({shown.filter(p => !p.outAt).length})</Link>}
+              {staff && !adding && <button type="button" onClick={() => setAdding({ names: "", jobId: "", locationId: loc !== "all" && loc !== "none" ? loc : "", notes: "" })} style={btnSolid}>+ Put pieces into store</button>}
+            </span>
           </div>
           {addForm}
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem]">

@@ -18,6 +18,8 @@ model User {
   avatarUrl    String?
   color        String? // hex colour for schedule grid badge
   costDayRate  Float? // internal cost per day, for job costing (admins set it)
+  homeEntityId Int? // the company this person works for; its space (if any) is their home page
+  homeEntity   Entity?  @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -417,6 +419,15 @@ model Entity {
   name           String          @unique
   archived       Boolean         @default(false)
   sortOrder      Int             @default(0)
+  // Its own space in the Hub (e.g. The Workshop Stoke): home page, colours and logo
+  hasSpace       Boolean         @default(false)
+  slug           String?         @unique // web address of the space, e.g. "tws" → /spaces/tws
+  shortName      String? // e.g. "TWS"
+  color          String? // theme colour, #rrggbb
+  logoKey        String? // logo in R2…
+  logoData       String? // …or in the database (base64) when R2 isn't set up
+  logoMime       String?
+  members        User[]          @relation("UserHomeEntity")
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   opportunities  Opportunity[]

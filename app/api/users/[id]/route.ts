@@ -17,6 +17,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.password) data.passwordHash = await hash(body.password, 12);
   if (body.permissions !== undefined) data.permissions = JSON.stringify(body.permissions);
   if (body.color !== undefined) data.color = body.color || null;
+  // Home company: their company's space (if it has one) becomes their home page and theme
+  if (body.homeEntityId !== undefined) {
+    const e = body.homeEntityId === "" || body.homeEntityId === null ? null : Number(body.homeEntityId);
+    if (e !== null && !(await prisma.entity.count({ where: { id: e } }))) return NextResponse.json({ error: "Unknown company" }, { status: 400 });
+    data.homeEntityId = e;
+  }
   // Internal cost per day for job costing (admins only, like the rest of this route)
   if (body.costDayRate !== undefined) {
     const r = body.costDayRate === "" || body.costDayRate === null ? null : Number(body.costDayRate);
@@ -26,7 +32,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const user = await prisma.user.update({
     where: { id: Number(id) },
     data,
-    select: { id: true, name: true, email: true, role: true, permissions: true, color: true, costDayRate: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, permissions: true, color: true, costDayRate: true, homeEntityId: true, createdAt: true },
   });
   return NextResponse.json(user);
 }

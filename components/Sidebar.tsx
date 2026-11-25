@@ -47,6 +47,10 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
     title: "Haulage",
     items: [{ label: "All Movements", href: "/haulage" }],
   },
+  "/spaces": {
+    title: "Company space",
+    items: [{ label: "Space home", href: "" }, { label: "Jobs", href: "/jobs" }, { label: "PSG Hub home", href: "/?all=1" }],
+  },
   "/jobs": {
     title: "Jobs",
     items: [{ label: "All Jobs", href: "/jobs" }],
@@ -290,6 +294,11 @@ function SidebarInner() {
   } else {
     const key = Object.keys(STATIC_SECTIONS).find(k => pathname.startsWith(k));
     section = key ? STATIC_SECTIONS[key] : null;
+    // A company space's links point at that space
+    if (key === "/spaces" && section) {
+      const home = pathname.split("/").slice(0, 3).join("/");
+      section = { ...section, items: section.items.map(i => (i.href === "" ? { ...i, href: home } : i)) };
+    }
   }
 
   if (!section) return null;

@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { ENTITY_SELECT } from "@/lib/entities";
+import { ENTITY_SELECT, checkSlug, checkColor } from "@/lib/entities";
 
-// Rename, reorder or archive (admins only)
+// Rename, reorder, archive, or set up its space: web address, short name, colour (admins only)
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = parseInt((await params).id);
   const body = await req.json();
-  const data: { name?: string; archived?: boolean; sortOrder?: number } = {};
+  const data: { name?: string; archived?: boolean; sortOrder?: number; hasSpace?: boolean; slug?: string | null; shortName?: string | null; color?: string | null } = {};
   if (typeof body.name === "string") {
     const name = body.name.trim();
     if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
@@ -19,6 +19,27 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   }
   if (typeof body.archived === "boolean") data.archived = body.archived;
   if (Number.isInteger(body.sortOrder)) data.sortOrder = body.sortOrder;
+  if ("slug" in body) {
+    const r = checkSlug(body.slug);
+    if ("error" in r) return NextResponse.json({ error: r.error }, { status: 400 });
+    if (r.slug) {
+      const clash = await prisma.entity.findUnique({ where: { slug: r.slug } });
+      if (clash && clash.id !== id) return NextResponse.json({ error: "Another company already uses that web address" }, { status: 409 });
+    }
+    data.slug = r.slug;
+  }
+  if ("shortName" in body) data.shortName = typeof body.shortName === "string" && body.shortName.trim() ? body.shortName.trim().slice(0, 12) : null;
+  if ("color" in body) {
+    const c = checkColor(body.color);
+    if (c === undefined) return NextResponse.json({ error: "Colour must look like #1a2b3c" }, { status: 400 });
+    data.color = c;
+  }
+  if (typeof body.hasSpace === "boolean") {
+    // A space needs a web address
+    const slug = "slug" in data ? data.slug : (await prisma.entity.findUnique({ where: { id }, select: { slug: true } }))?.slug;
+    if (body.hasSpace && !slug) return NextResponse.json({ error: "Give the space a web address first" }, { status: 400 });
+    data.hasSpace = body.hasSpace;
+  }
   const entity = await prisma.entity.update({ where: { id }, data, select: ENTITY_SELECT }).catch(() => null);
   if (!entity) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(entity);

@@ -10,6 +10,7 @@ import NotificationBell from "@/components/NotificationBell";
 import Sidebar, { MobileSidebarProvider } from "@/components/Sidebar";
 import MobileMenuButton from "@/components/MobileMenuButton";
 import SeasonalOverlay from "@/components/SeasonalOverlay";
+import { homeSpaceFor, textOn } from "@/lib/spaces";
 
 export const metadata: Metadata = {
   title: "PSG Hub",
@@ -27,6 +28,11 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
+  // A person whose company has its own space sees its colours, logo and name in the top bar
+  const userId = Number((session?.user as { id?: string } | undefined)?.id);
+  const space = userId ? await homeSpaceFor(userId).catch(() => null) : null;
+  const barColor = space?.color ?? "var(--psg-navy)";
+  const barInk = space?.color ? textOn(space.color) : "#ffffff";
   return (
     <html lang="en">
       <head>
@@ -38,14 +44,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <AuthProvider session={session}>
           <MobileSidebarProvider>
             {/* Top bar */}
-            <header style={{ backgroundColor: "var(--psg-navy)" }} className="h-14 flex items-center px-4 gap-3 shadow-lg shrink-0 sticky top-0 z-40">
+            <header style={{ backgroundColor: barColor }} className="h-14 flex items-center px-4 gap-3 shadow-lg shrink-0 sticky top-0 z-40">
               <MobileMenuButton />
-              <Link href="/" className="flex items-center shrink-0">
-                <div className="bg-white rounded px-2 py-1">
-                  <Image src="/psg-logo.png" alt="Production Solutions Group" width={70} height={45} className="object-contain" priority />
-                </div>
+              <Link href="/" className="flex items-center shrink-0 gap-2">
+                {space?.logoUrl ? (
+                  <div className="bg-white rounded px-2 py-1 h-10 flex items-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- served by our own API with a cache-busting version */}
+                    <img src={space.logoUrl} alt={space.name} className="h-8 w-auto max-w-[90px] object-contain" />
+                  </div>
+                ) : (
+                  <div className="bg-white rounded px-2 py-1">
+                    <Image src="/psg-logo.png" alt="Production Solutions Group" width={70} height={45} className="object-contain" priority />
+                  </div>
+                )}
               </Link>
-              <span className="text-xs font-semibold tracking-widest uppercase text-white/40 hidden sm:block">PSG Hub</span>
+              <span className="text-xs font-semibold tracking-widest uppercase hidden sm:block" style={{ color: barInk, opacity: 0.6 }}>
+                {space ? `${space.shortName ?? space.name} · PSG Hub` : "PSG Hub"}
+              </span>
               <div className="flex-1" />
               <NotificationBell />
               <UserNav />

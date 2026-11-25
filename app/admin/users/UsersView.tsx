@@ -41,7 +41,7 @@ const MODULES = [
 type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?: string[] };
 export type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
-  color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null;
+  color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null; homeEntityId?: number | null;
 };
 export type Production = { id: number; name: string; status: string };
 
@@ -56,7 +56,7 @@ function parsePerms(raw: string | null): Permissions {
   try { return JSON.parse(raw); } catch { return defaultPerms(); }
 }
 
-const BLANK = { name: "", email: "", password: "", role: "member", color: "", costDayRate: "" };
+const BLANK = { name: "", email: "", password: "", role: "member", color: "", costDayRate: "", homeEntityId: "" };
 
 const MEMBER_COLORS = ["#f59e0b","#10b981","#3b82f6","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16","#f97316","#14b8a6"];
 
@@ -79,6 +79,10 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
   const [invitePerms, setInvitePerms] = useState<Permissions>(defaultPerms());
   const [inviteSelectedProductions, setInviteSelectedProductions] = useState<number[]>();
   const [allProductions, setAllProductions] = useState<Production[]>(initial?.productions ?? []);
+  const [companies, setCompanies] = useState<{ id: number; name: string; hasSpace: boolean; archived: boolean }[]>([]);
+  useEffect(() => {
+    fetch("/api/entities").then(r => r.json()).then(d => { if (Array.isArray(d)) setCompanies(d.filter((e: { archived: boolean }) => !e.archived)); }).catch(() => {});
+  }, []);
   const [selectedProductions, setSelectedProductions] = useState<number[]>([]);
 
   // Users and productions arrive with the page; fetch them here only if that failed
@@ -104,7 +108,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
 
   async function openEdit(u: User) {
     setEditUser(u);
-    setForm({ name: u.name, email: u.email, password: "", role: u.role, color: u.color ?? "", costDayRate: u.costDayRate != null ? String(u.costDayRate) : "" });
+    setForm({ name: u.name, email: u.email, password: "", role: u.role, color: u.color ?? "", costDayRate: u.costDayRate != null ? String(u.costDayRate) : "", homeEntityId: u.homeEntityId ? String(u.homeEntityId) : "" });
     setPerms(parsePerms(u.permissions));
     setError("");
     setShowForm(true);
@@ -308,6 +312,16 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                       <button type="button" onClick={() => setForm(f => ({ ...f, color: "" }))} className="text-xs ml-1" style={{ color: "var(--psg-muted)" }}>Clear</button>
                     )}
                   </div>
+                </div>
+                <div>
+                  <label htmlFor="user-home-entity" className="block text-xs font-medium mb-1" style={{ color: "var(--psg-muted)" }}>Home company</label>
+                  <select id="user-home-entity" className="w-64 rounded px-3 py-2 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    style={{ backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" }}
+                    value={form.homeEntityId} onChange={e => setForm(f => ({ ...f, homeEntityId: e.target.value }))}>
+                    <option value="">— None (PSG Hub home) —</option>
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}{c.hasSpace ? " (has its own space)" : ""}</option>)}
+                  </select>
+                  <p className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>If their company has its own space, it becomes their home page and the top bar takes its colours.</p>
                 </div>
                 {(form.role === "admin" || form.role === "member") && (
                   <div>

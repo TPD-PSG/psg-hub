@@ -5,13 +5,19 @@ import { auth } from "@/auth";
 import { serverApi } from "@/lib/serverApi";
 import DashboardView, { type DashboardData } from "./DashboardView";
 import type { EntityOverviewRow, Visibility } from "@/lib/entityOverview";
+import { homeSpaceFor } from "@/lib/spaces";
 
 const list = <T,>(v: unknown) => (Array.isArray(v) ? (v as T[]) : []);
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
   const session = await auth();
   const user = session?.user as { id?: string; name?: string | null; role?: string; permissions?: string | null } | undefined;
   if (!user?.id) redirect("/login");
+  // People whose company has its own space (e.g. The Workshop Stoke) land there; ?all=1 shows this page
+  if (!(await searchParams).all) {
+    const space = await homeSpaceFor(Number(user.id));
+    if (space) redirect(`/spaces/${space.slug}`);
+  }
   const viewer = { id: Number(user.id), name: user.name ?? "", role: user.role ?? "member", permissions: user.permissions ?? null };
 
   const staff = viewer.role === "admin" || viewer.role === "member";

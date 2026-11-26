@@ -21,6 +21,7 @@ export type PlannerData = {
   elsewhere: { userId: number; startDate: string; endDate: string; activityType: string | null; production: { id: number; name: string } }[];
   staff: { id: number; name: string }[]; canEdit: boolean;
   machines?: { id: number; name: string }[]; inducted?: Record<number, number[]>; // machine inductions (warnings, not blocks)
+  unavailable?: Record<number, string>; // machine → why it shouldn't be used (out of use, check overdue)
 };
 
 const DAY = 86400e3;
@@ -45,6 +46,8 @@ export default function Planner({ initial }: { initial: PlannerData }) {
   const today = t(new Date().toISOString());
   // Machine inductions: machines a planned part needs that its person isn't inducted on
   const gaps = (p: Part) => (p.userId ? (p.machines ?? []).filter(m => !(initial.inducted?.[p.userId!] ?? []).includes(m.machine.id)).map(m => m.machine.name) : []);
+  // Equipment: machines a part needs that are out of use or overdue a check
+  const broken = (p: Part) => (p.machines ?? []).filter(m => initial.unavailable?.[m.machine.id]).map(m => `${m.machine.name} (${initial.unavailable![m.machine.id]})`);
   async function setMachines(p: Part, ids: number[]) {
     const res = await fetch(`/api/jobs/${p.jobId}/parts/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ machineIds: ids }) });
     const d = await res.json().catch(() => ({}));
@@ -165,6 +168,11 @@ export default function Planner({ initial }: { initial: PlannerData }) {
         {clashText.length > 0 && (
           <div role="alert" className="px-4 py-3 text-sm" style={{ background: "var(--tws-bad-bg)", border: "1px solid var(--tws-bad-line)", color: "#7a2414" }}>
             <strong>Clash:</strong> {clashText.join(" · ")}
+          </div>
+        )}
+        {parts.some(p => !p.done && broken(p).length) && (
+          <div role="alert" className="px-4 py-3 text-sm" style={{ background: "var(--tws-bad-bg)", border: "1px solid var(--tws-bad-line)", color: "#7a2414" }}>
+            <strong>⚠ Kit not usable:</strong> {parts.filter(p => !p.done && broken(p).length).map(p => `${p.label} needs ${broken(p).join(", ")}`).join(" · ")}. <Link href={`${base}/safety#equipment`} className="underline">Equipment</Link>
           </div>
         )}
         {parts.some(p => gaps(p).length) && (
@@ -289,11 +297,11 @@ export default function Planner({ initial }: { initial: PlannerData }) {
                       return (
                         <button key={p.id} type="button" {...dragProps(p)} onClick={() => canEdit && setSel(sel === p.id ? null : p.id)} aria-pressed={sel === p.id}
                           className="text-xs font-bold text-left px-2 py-1 overflow-hidden whitespace-nowrap text-ellipsis"
-                          title={`${p.pencilled ? "Pencilled (not confirmed): " : ""}${p.label} · ${jobName(p.jobId)}${gaps(p).length ? ` · ⚠ ${p.user?.name ?? "They"} isn't inducted on ${gaps(p).join(", ")}` : ""}`}
+                          title={`${p.pencilled ? "Pencilled (not confirmed): " : ""}${p.label} · ${jobName(p.jobId)}${gaps(p).length ? ` · ⚠ ${p.user?.name ?? "They"} isn't inducted on ${gaps(p).join(", ")}` : ""}${broken(p).length ? ` · ⚠ ${broken(p).join(", ")}` : ""}`}
                           style={{ ...look(p), gridRow: (laneOf.get(p.id) ?? 0) + 1, gridColumn: `${s + 1} / span ${en - s}`, zIndex: 2,
                             pointerEvents: drag ? "none" : "auto", cursor: canEdit ? "grab" : "default",
                             outline: clashIds.has(p.id) ? "3px solid #b3261e" : maybeIds.has(p.id) ? "3px solid #d08a1e" : sel === p.id ? "3px solid var(--tws-night)" : "none", outlineOffset: -3 }}>
-                          {gaps(p).length ? <span aria-label="Not inducted on a machine this needs">⚠ </span> : null}{p.pencilled ? "✎ " : ""}{p.label}{L === 1 && <span className="block font-medium text-[11px] truncate">{jobName(p.jobId)}</span>}
+                          {gaps(p).length || broken(p).length ? <span aria-label="A machine this needs has a problem">⚠ </span> : null}{p.pencilled ? "✎ " : ""}{p.label}{L === 1 && <span className="block font-medium text-[11px] truncate">{jobName(p.jobId)}</span>}
                         </button>
                       );
                     })}

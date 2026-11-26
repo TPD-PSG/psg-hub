@@ -1965,6 +1965,13 @@ model Machine {
   refresherMonths Int                @default(12) // 0 = no refresher needed
   notes           String?
   archived        Boolean            @default(false)
+  // Equipment checks (26 Nov 2026): any kit, not only machines people are inducted on
+  category        String             @default("machine") // machine | power_tool | lifting | access | fire | coshh | other
+  needsInduction  Boolean            @default(true) // shows in the inductions matrix
+  assetTag        String?
+  outOfUseAt      DateTime? // taken out of use by hand (broken, lost…); a failed check also counts
+  outOfUseNote    String?
+  checks          EquipmentCheck[]
   createdAt       DateTime           @default(now())
   trainers        MachineTrainer[]
   inductions      MachineInduction[]
@@ -2014,4 +2021,40 @@ model BuildPartMachine {
   machine   Machine   @relation(fields: [machineId], references: [id], onDelete: Cascade)
 
   @@id([partId, machineId])
+}
+
+// A check an item needs on a cycle: PAT test, service, LOLER thorough examination, pre-use
+// inspection, COSHH assessment review… The latest record sets when it's next due; a fail puts the
+// item out of use until a later pass.
+model EquipmentCheck {
+  id             Int                    @id @default(autoincrement())
+  machineId      Int
+  machine        Machine                @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  kind           String // pat | service | thorough_exam | inspection | coshh | calibration | other
+  label          String? // for "other", or a note like "6-monthly (people)"
+  intervalMonths Int                    @default(12)
+  firstDue       DateTime? // when it's due if it has never been done
+  createdAt      DateTime               @default(now())
+  records        EquipmentCheckRecord[]
+
+  @@index([machineId])
+}
+
+model EquipmentCheckRecord {
+  id           Int            @id @default(autoincrement())
+  checkId      Int
+  check        EquipmentCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  doneAt       DateTime
+  passed       Boolean
+  doneBy       String // the person or contractor who did it
+  notes        String?
+  nextDue      DateTime? // doneAt + interval (null when the interval is 0)
+  fileName     String? // certificate or report, if one was uploaded
+  fileMime     String?
+  fileKey      String?
+  fileData     String?
+  recordedById Int?
+  createdAt    DateTime       @default(now())
+
+  @@index([checkId, doneAt])
 }

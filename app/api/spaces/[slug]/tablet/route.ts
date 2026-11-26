@@ -8,6 +8,7 @@ import { spaceMember } from "@/lib/spaceBoard";
 import { clockOff } from "@/lib/clocking";
 import { nameOf } from "@/lib/setStorage";
 import { missing } from "@/lib/inductionsCore";
+import { unavailableMachines } from "@/lib/equipment";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,10 @@ async function state(entityId: number) {
     const gap = missing(inds.filter(i => i.userId === userId), ms.map(m => m.machine.id));
     return ms.filter(m => gap.includes(m.machine.id)).map(m => m.machine.name);
   };
+  const bad = await unavailableMachines(entityId);
+  const brokenIn = (ms: { machine: { id: number; name: string } }[]) => ms.filter(m => bad[m.machine.id]).map(m => `${m.machine.name} (${bad[m.machine.id]})`);
   return {
-    team: team.map(t => ({ ...t, on: open.find(o => o.userId === t.id) ?? null, today: todayParts.filter(p => p.userId === t.id).map(p => ({ jobId: p.jobId, label: p.label, notInducted: gapsFor(t.id, p.machines) })) })),
+    team: team.map(t => ({ ...t, on: open.find(o => o.userId === t.id) ?? null, today: todayParts.filter(p => p.userId === t.id).map(p => ({ jobId: p.jobId, label: p.label, notInducted: gapsFor(t.id, p.machines), kitProblems: brokenIn(p.machines) })) })),
     jobs,
   };
 }
@@ -64,10 +67,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     logged = await clockOff(userId); // switching builds closes the last one
     await prisma.clockEntry.create({ data: { userId, jobId: job.id, byName: await nameOf(m.userId) } });
     const notInducted = await inductionWarning(userId, job.id);
-    if (notInducted) return NextResponse.json({ logged, notInducted, person: person.name, ...(await state(m.space.id)) });
+    const kit = await kitWarning(userId, job.id, m.space.id);
+    if (notInducted || kit) return NextResponse.json({ logged, notInducted, kitProblems: kit, person: person.name, ...(await state(m.space.id)) });
   } else if (body.action === "off") {
     logged = await clockOff(userId);
     if (!logged) return NextResponse.json({ error: `${person.name} isn't clocked on` }, { status: 400 });
   } else return NextResponse.json({ error: "Clock on or off" }, { status: 400 });
   return NextResponse.json({ logged, ...(await state(m.space.id)) });
+}
+
+/** Clocking on: machines this build's open parts (theirs, or no one's yet) need that are out of use or overdue a check. */
+async function kitWarning(userId: number, jobId: number, entityId: number) {
+  const parts = await prisma.buildPart.findMany({ where: { jobId, done: false, OR: [{ userId }, { userId: null }] }, select: { machines: { select: { machine: { select: { id: true, name: true } } } } } });
+  const ms = [...new Map(parts.flatMap(p => p.machines.map(m => [m.machine.id, m.machine] as const))).values()];
+  if (!ms.length) return null;
+  const bad = await unavailableMachines(entityId);
+  const list = ms.filter(m => bad[m.id]).map(m => `${m.name} (${bad[m.id]})`);
+  return list.length ? list : null;
 }

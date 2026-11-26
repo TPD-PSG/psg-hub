@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { spaceBySlug, canSeeSpace } from "@/lib/spaces";
 import { PART_SELECT, dayUtc } from "@/lib/buildParts";
 import { current, inductionStatus, inducted as counts } from "@/lib/inductionsCore";
+import { unavailableMachines } from "@/lib/equipment";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   }
   return NextResponse.json({
     space, from: from.toISOString().slice(0, 10), days, jobs, parts, crew, elsewhere, staff, machines, inducted,
+    unavailable: await unavailableMachines(space.id), // machine → why it shouldn't be used (out of use, check overdue)
     canEdit: role === "admin" || role === "member",
   });
 }

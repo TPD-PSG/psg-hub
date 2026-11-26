@@ -5,6 +5,7 @@ import { summariseDaily } from "@/lib/jobSummaries";
 import { weekDigest } from "@/lib/showDigest";
 import { digestLine, mondayOf } from "@/lib/showDigestCore";
 import { allLeads, incidentPath, localStaff } from "@/lib/incidents";
+import { checkState, KIND_LABEL as CHECK_LABEL } from "@/lib/equipmentCore";
 import { incidentRef } from "@/lib/incidentsCore";
 
 export const dynamic = "force-dynamic";
@@ -228,6 +229,25 @@ async function runDaily(req: NextRequest): Promise<Response> {
       const title = (userId === i.userId ? `Your ${i.machine.name} induction needs a refresher ${when}` : `${i.personName}'s ${i.machine.name} refresher is due ${when}`).slice(0, 200);
       if (sentTitles.has(`${userId}|${title}`)) continue;
       add({ userId, title, link, body: left === 0 ? "Until it's done, the planner and tablet will flag work that needs this machine." : "A trainer can record the refresher on the Safety page." }, `refresher-${i.id}-${userId}`);
+    }
+  }
+
+  // ── 4h. Equipment checks: 14 days before and on the day, to the workshop's own staff
+  const kitChecks = await prisma.equipmentCheck.findMany({
+    where: { machine: { archived: false } },
+    select: { kind: true, firstDue: true, machine: { select: { name: true, entityId: true, entity: { select: { slug: true } } } }, records: { orderBy: { doneAt: "desc" }, take: 1, select: { doneAt: true, passed: true, nextDue: true } } },
+  });
+  const kitStaff = new Map<number, number[]>();
+  for (const c of kitChecks) {
+    const st = checkState(c, c.records, now);
+    if (!st.due) continue;
+    const left = Math.round((Date.UTC(st.due.getUTCFullYear(), st.due.getUTCMonth(), st.due.getUTCDate()) - startOfToday.getTime()) / 86400e3);
+    if (left !== 14 && left !== 0) continue;
+    if (!kitStaff.has(c.machine.entityId)) kitStaff.set(c.machine.entityId, (await prisma.user.findMany({ where: { homeEntityId: c.machine.entityId, role: "member" }, select: { id: true } })).map(u => u.id));
+    const title = `${c.machine.name}: ${CHECK_LABEL[c.kind] ?? "check"} due ${left === 0 ? "today" : "in 14 days"}`.slice(0, 200);
+    for (const userId of kitStaff.get(c.machine.entityId)!) {
+      if (sentTitles.has(`${userId}|${title}`)) continue;
+      add({ userId, title, body: left === 0 ? "Once it's overdue, the planner and tablet will say not to use it." : "Book it in, then record the result on the Safety page.", link: `/spaces/${c.machine.entity.slug}/safety#equipment` }, `kit-${c.machine.name}-${c.kind}-${userId}`);
     }
   }
 

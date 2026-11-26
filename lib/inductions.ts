@@ -41,7 +41,7 @@ const IND_SELECT = { id: true, machineId: true, userId: true, personName: true, 
 export async function matrix(v: Viewer) {
   const entityId = v.space.id;
   const machines = await prisma.machine.findMany({
-    where: { entityId }, orderBy: [{ archived: "asc" }, { name: "asc" }],
+    where: { entityId, needsInduction: true }, orderBy: [{ archived: "asc" }, { name: "asc" }],
     select: { id: true, name: true, location: true, refresherMonths: true, notes: true, archived: true, trainers: { select: { user: { select: { id: true, name: true } } } } },
   });
   const all = await prisma.machineInduction.findMany({

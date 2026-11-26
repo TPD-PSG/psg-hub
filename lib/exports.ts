@@ -807,3 +807,25 @@ export async function exportProductionSpendXLSX(
 
   await saveXlsx(wb, `production-spend-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
+
+// ── Compliance pack for a tender (26 Nov 2026) ───────────────────────────────
+
+type PackItem = { category: string; name: string; company: string; issuer: string | null; reference: string | null; cover: string | null; validTo: string | null; version: string | null; documents: number };
+
+/** The chosen compliance register items as one table, for attaching to a bid with their documents. */
+export async function exportCompliancePackPDF(title: string, items: PackItem[]) {
+  const logo = await fetchLogoAsset();
+  const doc = basePDF(title || "Compliance pack", `${items.length} item${items.length === 1 ? "" : "s"} · Exported ${fmtDate(new Date().toISOString())}`, logo);
+  autoTable(doc, {
+    startY: 32,
+    head: [["Kind", "Item", "Company", "Issued by", "Reference", "Cover / version", "Valid to", "Docs"]],
+    body: items.map(i => [i.category, i.name, i.company, i.issuer ?? "—", i.reference ?? "—", i.cover ?? i.version ?? "—", i.validTo ? fmtDate(i.validTo) : "—", String(i.documents)]),
+    styles: { fontSize: 8, cellPadding: 2.5, overflow: "linebreak" },
+    headStyles: { fillColor: [10, 25, 65], fontSize: 8 },
+    columnStyles: { 0: { cellWidth: 26 }, 1: { cellWidth: 52, fontStyle: "bold" }, 2: { cellWidth: 30 }, 3: { cellWidth: 36 }, 4: { cellWidth: 32 }, 5: { cellWidth: 40 }, 6: { cellWidth: 24 }, 7: { cellWidth: "auto", halign: "center" } },
+    margin: { left: 10, right: 10 },
+    alternateRowStyles: { fillColor: [245, 245, 250] },
+  });
+  addFooters(doc);
+  doc.save(`${(title || "compliance-pack").replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "").toLowerCase()}.pdf`);
+}

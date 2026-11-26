@@ -6,6 +6,7 @@ import { weekDigest } from "@/lib/showDigest";
 import { digestLine, mondayOf } from "@/lib/showDigestCore";
 import { allLeads, incidentPath, localStaff } from "@/lib/incidents";
 import { checkState, KIND_LABEL as CHECK_LABEL } from "@/lib/equipmentCore";
+import { daysUntil as daysTo, REMIND_DAYS } from "@/lib/complianceCore";
 import { incidentRef } from "@/lib/incidentsCore";
 
 export const dynamic = "force-dynamic";
@@ -248,6 +249,27 @@ async function runDaily(req: NextRequest): Promise<Response> {
     for (const userId of kitStaff.get(c.machine.entityId)!) {
       if (sentTitles.has(`${userId}|${title}`)) continue;
       add({ userId, title, body: left === 0 ? "Once it's overdue, the planner and tablet will say not to use it." : "Book it in, then record the result on the Safety page.", link: `/spaces/${c.machine.entity.slug}/safety#equipment` }, `kit-${c.machine.name}-${c.kind}-${userId}`);
+    }
+  }
+
+  // ── 4i. Compliance register: renewals and reviews 60, 30 and 7 days before and on the day,
+  //        to the item's owner and the admins
+  const regItems = await prisma.complianceItem.findMany({
+    where: { archived: false, OR: [{ expiresAt: { not: null } }, { reviewAt: { not: null } }] },
+    select: { id: true, name: true, category: true, expiresAt: true, reviewAt: true, ownerId: true, entity: { select: { shortName: true, name: true } } },
+  });
+  let regAdmins: number[] | null = null;
+  for (const it of regItems) {
+    const d = it.expiresAt ?? it.reviewAt!;
+    const left = daysTo(d, now);
+    if (!REMIND_DAYS.includes(left)) continue;
+    regAdmins ??= (await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } })).map(u => u.id);
+    const what = it.expiresAt ? "renewal" : "review";
+    const whose = it.entity ? ` (${it.entity.shortName ?? it.entity.name})` : "";
+    const title = `${it.name}${whose}: ${what} ${left === 0 ? "due today" : `in ${left} days`}`.slice(0, 200);
+    for (const userId of new Set([...(it.ownerId ? [it.ownerId] : []), ...regAdmins])) {
+      if (sentTitles.has(`${userId}|${title}`)) continue;
+      add({ userId, title, body: `Upload the new ${it.expiresAt ? "certificate or schedule" : "version"} on the Compliance register when it's done.`, link: `/compliance?item=${it.id}` }, `compliance-${it.id}-${userId}`);
     }
   }
 

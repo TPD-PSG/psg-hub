@@ -249,6 +249,7 @@ export type DashboardData = {
   entityOverview?: { see: Visibility; rows: EntityOverviewRow[] } | null; // staff only
   spaces?: SpaceTheme[]; // company spaces this person can open (e.g. The Workshop Stoke)
   hs?: { open: number; riddor: number; overdueActions: number } | null; // Health & Safety tile (staff)
+  compliance?: { expired: number; due: number } | null; // Compliance register tile (staff)
   complete: boolean; // false if any source failed on the server; the browser then loads them itself
 };
 
@@ -551,6 +552,11 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
               <CompactTile href="/health-safety" icon="⛑️" title="Health & Safety"
                 sub={[initial.hs.open ? `${initial.hs.open} open report${initial.hs.open === 1 ? "" : "s"}` : "No open reports", initial.hs.riddor ? `${initial.hs.riddor} RIDDOR to report` : "", initial.hs.overdueActions ? `${initial.hs.overdueActions} overdue action${initial.hs.overdueActions === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")}
                 badge={(initial.hs.riddor + initial.hs.overdueActions) || undefined} />
+            )}
+            {initial.compliance && (
+              <CompactTile href="/compliance" icon="📜" title="Compliance register"
+                sub={initial.compliance.expired ? `${initial.compliance.expired} expired${initial.compliance.due ? ` · ${initial.compliance.due} due in 60 days` : ""}` : initial.compliance.due ? `${initial.compliance.due} due in 60 days` : "Insurances, accreditations, policies"}
+                badge={initial.compliance.expired || undefined} />
             )}
             {canAccess(perms, "suppliers", role) && (
               <CompactTile href="/suppliers" icon="📦" title="Supplier Register" sub="Contractors, venues & services" />

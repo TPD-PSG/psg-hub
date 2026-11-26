@@ -26,46 +26,48 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  tasksAssigned       Task[]              @relation("TaskAssignee")
-  tasksSignoff        Task[]              @relation("TaskSignoff")
-  tasksCreated        Task[]              @relation("TaskCreatedBy")
+  tasksAssigned       Task[]               @relation("TaskAssignee")
+  tasksSignoff        Task[]               @relation("TaskSignoff")
+  tasksCreated        Task[]               @relation("TaskCreatedBy")
   notifications       Notification[]
   funSubmissions      FunSubmission[]
   productionTeams     ProductionTeam[]
   roadmapItems        RoadmapItem[]
   staffAssignments    StaffAssignment[]
-  helpTicketsCreated  HelpTicket[]        @relation("TicketCreator")
-  helpTicketsAssigned HelpTicket[]        @relation("TicketAssignee")
-  expensesSubmitted   ProductionExpense[] @relation("ExpenseSubmitter")
-  marketingPosts      MarketingPost[]     @relation("MarketingPostCreator")
-  showReports         ShowReport[]        @relation("ShowReportCreatedBy")
-  variationsRequested BudgetVariation[]   @relation("VariationRequester")
-  variationsApproved  BudgetVariation[]   @relation("VariationApprover")
+  helpTicketsCreated  HelpTicket[]         @relation("TicketCreator")
+  helpTicketsAssigned HelpTicket[]         @relation("TicketAssignee")
+  expensesSubmitted   ProductionExpense[]  @relation("ExpenseSubmitter")
+  marketingPosts      MarketingPost[]      @relation("MarketingPostCreator")
+  showReports         ShowReport[]         @relation("ShowReportCreatedBy")
+  variationsRequested BudgetVariation[]    @relation("VariationRequester")
+  variationsApproved  BudgetVariation[]    @relation("VariationApprover")
   productionNotes     ProductionNote[]
   meetings            Meeting[]
-  opportunitiesOwned  Opportunity[]       @relation("OpportunityOwner")
-  quotesCreated       Quote[]             @relation("QuoteCreatedBy")
-  jobCostsCreated     JobCost[]           @relation("JobCostCreatedBy")
-  timeEntries         TimeEntry[]         @relation("TimeEntryUser")
-  bdActivities        BDActivity[]        @relation("BDActivityUser")
-  targetClients       Client[]            @relation("ClientTargetOwner")
-  buildParts          BuildPart[]         @relation("BuildParts")
-  posRaised           PurchaseOrder[]     @relation("PORaisedBy")
-  posApproved         PurchaseOrder[]     @relation("POApprovedBy")
-  stockMoves          StockMove[]         @relation("StockMoveUser")
-  spacePosts          SpacePost[]         @relation("SpacePostAuthor")
-  spacePhotos         SpacePhoto[]        @relation("SpacePhotoUploader")
-  buildVotes          BuildVote[]         @relation("BuildVotes")
-  buildChecksDone     BuildCheck[]        @relation("BuildCheckDoneBy")
-  jobFilesUploaded    JobFile[]           @relation("JobFileUploader")
-  drawingDecisions    DrawingDecision[]   @relation("DrawingDecisionBy")
-  jobLogs             JobLog[]            @relation("JobLogBy")
-  incidentsReported   Incident[]          @relation("IncidentReporter")
-  incidentsClosed     Incident[]          @relation("IncidentClosedBy")
-  incidentActions     IncidentAction[]    @relation("IncidentActionOwner")
+  opportunitiesOwned  Opportunity[]        @relation("OpportunityOwner")
+  quotesCreated       Quote[]              @relation("QuoteCreatedBy")
+  jobCostsCreated     JobCost[]            @relation("JobCostCreatedBy")
+  timeEntries         TimeEntry[]          @relation("TimeEntryUser")
+  bdActivities        BDActivity[]         @relation("BDActivityUser")
+  targetClients       Client[]             @relation("ClientTargetOwner")
+  buildParts          BuildPart[]          @relation("BuildParts")
+  posRaised           PurchaseOrder[]      @relation("PORaisedBy")
+  posApproved         PurchaseOrder[]      @relation("POApprovedBy")
+  stockMoves          StockMove[]          @relation("StockMoveUser")
+  spacePosts          SpacePost[]          @relation("SpacePostAuthor")
+  spacePhotos         SpacePhoto[]         @relation("SpacePhotoUploader")
+  buildVotes          BuildVote[]          @relation("BuildVotes")
+  buildChecksDone     BuildCheck[]         @relation("BuildCheckDoneBy")
+  jobFilesUploaded    JobFile[]            @relation("JobFileUploader")
+  drawingDecisions    DrawingDecision[]    @relation("DrawingDecisionBy")
+  jobLogs             JobLog[]             @relation("JobLogBy")
+  incidentsReported   Incident[]           @relation("IncidentReporter")
+  incidentsClosed     Incident[]           @relation("IncidentClosedBy")
+  incidentActions     IncidentAction[]     @relation("IncidentActionOwner")
   machinesTraining    MachineTrainer[]
-  machineInductions   MachineInduction[]  @relation("InductionPerson")
-  inductionsGiven     MachineInduction[]  @relation("InductionTrainer")
+  machineInductions   MachineInduction[]   @relation("InductionPerson")
+  inductionsGiven     MachineInduction[]   @relation("InductionTrainer")
+  complianceOwned     ComplianceItem[]     @relation("ComplianceOwner")
+  complianceUploads   ComplianceDocument[] @relation("ComplianceUploader")
 }
 
 model Production {
@@ -475,6 +477,7 @@ model Entity {
   incidents        Incident[]        @relation("EntityIncidents")
   hsReportToken    String?           @unique // the space's no-login accident/incident form (/report-incident/<token>)
   machines         Machine[]
+  complianceItems  ComplianceItem[]
 }
 
 // An entity's revenue target for a calendar year
@@ -2057,4 +2060,51 @@ model EquipmentCheckRecord {
   createdAt    DateTime       @default(now())
 
   @@index([checkId, doneAt])
+}
+
+// The group's compliance register (26 Nov 2026): insurances, accreditations (e.g. CHAS),
+// policies, certificates and registrations. One register for the group; each item records which
+// company owns it (none = group-wide). Staff see and download; admins and the item's owner manage.
+model ComplianceItem {
+  id        Int                  @id @default(autoincrement())
+  entityId  Int? // the company it belongs to; null = the whole group
+  entity    Entity?              @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  category  String // insurance | accreditation | policy | certificate | registration | other
+  name      String
+  issuer    String? // insurer, scheme or body
+  reference String? // policy or certificate number
+  cover     String? // e.g. "£10m public liability"
+  validFrom DateTime?
+  expiresAt DateTime? // renewal date (insurances, accreditations)
+  reviewAt  DateTime? // next review (policies)
+  version   String? // e.g. "v3, Nov 2026" for a policy
+  ownerId   Int?
+  owner     User?                @relation("ComplianceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  notes     String?
+  archived  Boolean              @default(false)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  documents ComplianceDocument[]
+
+  @@index([entityId])
+  @@index([expiresAt])
+}
+
+// Each document uploaded for an item, newest first = current; older ones are its history
+model ComplianceDocument {
+  id           Int            @id @default(autoincrement())
+  itemId       Int
+  item         ComplianceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  name         String
+  mime         String
+  fileKey      String?
+  data         String         @default("")
+  validFrom    DateTime? // the dates this document covered, kept for the history
+  expiresAt    DateTime?
+  version      String?
+  uploadedById Int?
+  uploadedBy   User?          @relation("ComplianceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+
+  @@index([itemId, createdAt])
 }

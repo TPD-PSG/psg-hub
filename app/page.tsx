@@ -8,6 +8,8 @@ import DashboardView, { type DashboardData } from "./DashboardView";
 import type { EntityOverviewRow, Visibility } from "@/lib/entityOverview";
 import { homeSpaceFor, spacesFor } from "@/lib/spaces";
 import { visibleWhere } from "@/lib/incidents";
+import { companyLimit } from "@/lib/companyScope";
+import { complianceStatus } from "@/lib/complianceCore";
 
 const list = <T,>(v: unknown) => (Array.isArray(v) ? (v as T[]) : []);
 
@@ -50,6 +52,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     calEvents: list(calEvents),
     entityOverview: entityOverview && Array.isArray(entityOverview.rows) ? entityOverview : null,
     hs: staff ? await hsSummary(viewer.id, viewer.role).catch(() => null) : null,
+    compliance: staff ? await complianceSummary(viewer.id, viewer.role).catch(() => null) : null,
     spaces: await spacesFor({ id: viewer.id, role: viewer.role }).catch(() => []),
     // Sources a user's modules block (e.g. finance for a freelancer) come back null too; only treat
     // the always-available ones as a sign the server couldn't reach its own API
@@ -67,4 +70,13 @@ async function hsSummary(userId: number, role: string) {
     prisma.incidentAction.count({ where: { doneAt: null, dueDate: { lt: new Date() }, incident: { AND: [where, { status: { not: "closed" } }] } } }),
   ]);
   return { open, riddor, overdueActions };
+}
+
+// The Compliance register tile: expired, and due within 60 days (what this person may see)
+async function complianceSummary(userId: number, role: string) {
+  const limit = role === "admin" ? null : await companyLimit(userId);
+  const scope = limit ? { OR: [{ entityId: null }, { entityId: { in: limit } }] } : {};
+  const items = await prisma.complianceItem.findMany({ where: { ...scope, archived: false }, select: { expiresAt: true, reviewAt: true } });
+  const now = new Date();
+  return { expired: items.filter(i => complianceStatus(i, now) === "expired").length, due: items.filter(i => complianceStatus(i, now) === "due").length };
 }

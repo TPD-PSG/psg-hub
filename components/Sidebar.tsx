@@ -114,6 +114,10 @@ const STATIC_SECTIONS: Record<string, SectionDef> = {
       { label: "List View", href: "/marketing?view=list" },
     ],
   },
+  "/compliance": {
+    title: "Compliance",
+    items: [{ label: "Register", href: "/compliance" }],
+  },
   "/health-safety": {
     title: "Health & Safety",
     items: [{ label: "Overview", href: "/health-safety" }],

@@ -6,7 +6,9 @@
 import { prisma } from "@/lib/prisma";
 import { companyLimit } from "@/lib/companyScope";
 import { notify } from "@/lib/clientPortal";
-import { KIND_LABEL, incidentRef, isKind, isRiddor, riddorDue, INJURED_ROLES, TREATMENTS } from "@/lib/incidentsCore";
+import { KIND_LABEL, incidentRef, isKind, isRiddor, isSerious, riddorDue, INJURED_ROLES, TREATMENTS } from "@/lib/incidentsCore";
+import { saveFile } from "@/lib/storage";
+import { sendEmail } from "@/lib/mail";
 
 export const HS_LEADS_SETTING = "hs_lead_ids";
 
@@ -56,7 +58,36 @@ export const INCIDENT_INCLUDE = {
   reportedBy: { select: { id: true, name: true } },
   closedBy: { select: { id: true, name: true } },
   actions: { orderBy: { createdAt: "asc" as const }, include: { owner: { select: { id: true, name: true } } } },
+  photos: { orderBy: { createdAt: "asc" as const }, select: { id: true, name: true, createdAt: true } },
 };
+
+// ── Photos: sent with the form as data URLs (shrunk to JPEG in the browser first) ──
+export const MAX_PHOTOS = 4;
+const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+export type PhotoIn = { name: string; mime: string; buffer: Buffer };
+
+/** Read up to `room` photos from what a form sent; an error to show if one isn't a usable picture. */
+export function readPhotos(raw: unknown, room = MAX_PHOTOS): { photos: PhotoIn[] } | { error: string } {
+  if (raw == null) return { photos: [] };
+  if (!Array.isArray(raw)) return { error: "Photos didn't come through" };
+  if (raw.length > room) return { error: `Up to ${MAX_PHOTOS} photos on a report` };
+  const photos: PhotoIn[] = [];
+  for (const p of raw) {
+    const m = typeof p?.dataUrl === "string" ? /^data:([a-z/+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(p.dataUrl) : null;
+    if (!m || !PHOTO_TYPES.has(m[1])) return { error: "Photos need to be JPEG, PNG or WebP pictures" };
+    const buffer = Buffer.from(m[2], "base64");
+    if (buffer.length > 6 * 1024 * 1024) return { error: "A photo is too big (6 MB at most)" };
+    photos.push({ name: (typeof p.name === "string" && p.name.trim() ? p.name.trim() : "photo.jpg").slice(0, 120), mime: m[1], buffer });
+  }
+  return { photos };
+}
+
+export async function savePhotos(incidentId: number, photos: PhotoIn[]) {
+  for (const p of photos) {
+    const saved = await saveFile("incidents", p.name, p.buffer, p.mime);
+    await prisma.incidentPhoto.create({ data: { incidentId, name: p.name, mime: p.mime, fileKey: saved.key, data: saved.base64 ?? "" } });
+  }
+}
 
 const text = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
 const isDate = (v: unknown) => typeof v === "string" && !Number.isNaN(new Date(v).getTime());
@@ -97,7 +128,7 @@ export type ReportFields = {
 };
 
 /** File a report: number it for the year, then tell the H&S leads and the show's team staff. */
-export async function createIncident(productionId: number, data: ReportFields, by: { userId: number | null; viaQr: boolean }) {
+export async function createIncident(productionId: number, data: ReportFields, by: { userId: number | null; viaQr: boolean }, photos: PhotoIn[] = []) {
   const year = new Date().getFullYear();
   let incident = null;
   for (let attempt = 0; attempt < 5 && !incident; attempt++) {
@@ -109,6 +140,7 @@ export async function createIncident(productionId: number, data: ReportFields, b
     }
   }
   if (!incident) throw new Error("Couldn't number the report");
+  await savePhotos(incident.id, photos);
   const [leads, team, prod] = await Promise.all([
     allLeads(),
     prisma.productionTeam.findMany({ where: { productionId, user: { role: "member" } }, select: { userId: true } }),
@@ -119,7 +151,31 @@ export async function createIncident(productionId: number, data: ReportFields, b
     body: data.description.slice(0, 200),
     link: `/productions/${productionId}?section=hs&incident=${incident.id}`,
   });
+  if (isSerious(data)) await emailLeads(leads, incident, data, prod?.name ?? "a production", productionId);
   return incident;
+}
+
+const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+
+/** Serious reports also go to the H&S leads by email, so they hear even when not in the Hub. No names
+ *  or injury details in the email (it leaves the Hub): what, where, when, and a link. Never blocks the report. */
+async function emailLeads(leadIds: number[], incident: { id: number; year: number; number: number }, data: ReportFields, show: string, productionId: number) {
+  try {
+    const people = await prisma.user.findMany({ where: { id: { in: leadIds } }, select: { email: true } });
+    const base = process.env.NEXTAUTH_URL ?? "https://hub.production-solutions.group";
+    const link = `${base}/productions/${productionId}?section=hs&incident=${incident.id}`;
+    const when = data.occurredAt.toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const why = data.kind === "dangerous_occurrence" ? "a dangerous occurrence" : data.treatment === "ambulance" ? "an ambulance was called" : data.treatment === "hospital" ? "someone went to hospital" : "someone has had to stop work";
+    const html = `<p><strong>${esc(KIND_LABEL[data.kind])} on ${esc(show)}</strong> (${incidentRef(incident)}): ${why}.</p>
+<p>${esc(when)}${data.venueName || data.location ? ` · ${esc([data.venueName, data.location].filter(Boolean).join(", "))}` : ""}</p>
+<p>${esc(data.description.slice(0, 600))}</p>
+<p><a href="${link}">Open the report in the Hub</a> to follow it up and decide on RIDDOR.</p>`;
+    for (const p of people) {
+      await sendEmail({ to: p.email, subject: `Serious incident on ${show}: ${KIND_LABEL[data.kind]} (${incidentRef(incident)})`, html }).catch(e => console.error("[incidents] email", e instanceof Error ? e.message : e));
+    }
+  } catch (e) {
+    console.error("[incidents] email", e instanceof Error ? e.message : e);
+  }
 }
 
 /** Fields a manager may change while following a report up (the sign-off itself is separate). */

@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hsProductionAccess } from "@/lib/incidentRoute";
-import { incidentAccess, createIncident, readReport, INCIDENT_INCLUDE } from "@/lib/incidents";
+import { incidentAccess, createIncident, readReport, readPhotos, INCIDENT_INCLUDE } from "@/lib/incidents";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +33,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const body = await req.json().catch(() => ({}));
   const r = readReport(body);
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: 400 });
-  const incident = await createIncident(Number(id), r.data, { userId: access.userId, viaQr: false });
+  const ph = readPhotos(body.photos);
+  if ("error" in ph) return NextResponse.json({ error: ph.error }, { status: 400 });
+  const incident = await createIncident(Number(id), r.data, { userId: access.userId, viaQr: false }, ph.photos);
   return NextResponse.json(await prisma.incident.findUnique({ where: { id: incident.id }, include: INCIDENT_INCLUDE }), { status: 201 });
 }

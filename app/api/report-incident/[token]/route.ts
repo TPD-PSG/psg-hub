@@ -2,7 +2,7 @@
 // creates a report and never shows one back. Rate-limited per device.
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createIncident, readReport } from "@/lib/incidents";
+import { createIncident, readReport, readPhotos } from "@/lib/incidents";
 import { incidentRef } from "@/lib/incidentsCore";
 
 const recent = new Map<string, number[]>();
@@ -34,8 +34,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (tooMany(ip)) return NextResponse.json({ error: "Too many reports from this device. Try again shortly, or tell the production manager." }, { status: 429 });
   const p = await production((await params).token);
   if (!p) return NextResponse.json({ error: "This form is no longer active" }, { status: 404 });
-  const r = readReport(await req.json().catch(() => ({})));
+  const body = await req.json().catch(() => ({}));
+  const r = readReport(body);
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: 400 });
-  const inc = await createIncident(p.id, r.data, { userId: null, viaQr: true });
+  const ph = readPhotos(body.photos);
+  if ("error" in ph) return NextResponse.json({ error: ph.error }, { status: 400 });
+  const inc = await createIncident(p.id, r.data, { userId: null, viaQr: true }, ph.photos);
   return NextResponse.json({ ref: incidentRef(inc) }, { status: 201 });
 }

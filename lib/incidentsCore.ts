@@ -56,6 +56,10 @@ export function riddorHint(i: { kind: string; treatment?: string | null; offWork
   return null;
 }
 
+/** Serious enough to email the H&S leads straight away (as well as the Hub notification). */
+export const isSerious = (i: { kind: string; treatment?: string | null; offWork?: boolean }) =>
+  i.kind === "dangerous_occurrence" || i.treatment === "hospital" || i.treatment === "ambulance" || !!i.offWork;
+
 export const incidentRef = (i: { year: number; number: number }) => `INC-${i.year}-${String(i.number).padStart(3, "0")}`;
 
 export type IncidentStatus = "open" | "investigating" | "closed";

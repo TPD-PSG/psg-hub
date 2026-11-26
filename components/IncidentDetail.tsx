@@ -6,6 +6,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
+import { photosFrom } from "@/components/IncidentForm";
 import { KIND_LABEL, TREATMENT_LABEL, RIDDOR, STATUS_LABEL, incidentRef, riddorHint, closeBlockers } from "@/lib/incidentsCore";
 
 export type IncidentAction = { id: number; text: string; dueDate: string | null; doneAt: string | null; owner: { id: number; name: string } | null };
@@ -17,6 +18,7 @@ export type Incident = {
   reportedBy: { id: number; name: string } | null; status: string; severity: string | null; investigation: string | null; rootCause: string | null;
   riddor: string | null; riddorDueDate: string | null; riddorReportedAt: string | null; riddorRef: string | null;
   closedAt: string | null; closedBy: { id: number; name: string } | null; closeNote: string | null; createdAt: string; actions: IncidentAction[];
+  photos: { id: number; name: string }[];
 };
 
 const muted = { color: "var(--psg-muted)" };
@@ -90,6 +92,32 @@ export default function IncidentDetail({ incident, manage, lead, people, onChang
         </dl>
       )}
       {row("Witnesses", i.witnesses)}
+
+      {(i.photos.length > 0 || !closed) && (
+        <div>
+          <p className={lbl} style={muted}>Photos</p>
+          <div className="flex flex-wrap gap-2 items-center">
+            {i.photos.map(p => (
+              <span key={p.id} className="relative">
+                <a href={`/api/incident-photos/${p.id}`} target="_blank" rel="noopener noreferrer" title={p.name}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/incident-photos/${p.id}`} alt={p.name} className="block rounded" style={{ width: 88, height: 88, objectFit: "cover" }} />
+                </a>
+                {manage && !closed && <button type="button" aria-label={`Remove ${p.name}`} disabled={busy}
+                  onClick={async () => { if (await confirmDialog("Remove this photo from the report?")) call(`/api/incident-photos/${p.id}`, "DELETE"); }}
+                  className="absolute top-0.5 right-0.5 w-6 h-6 rounded-full text-white text-sm leading-6" style={{ background: "rgba(0,0,0,0.65)" }}>×</button>}
+              </span>
+            ))}
+            {!closed && i.photos.length < 4 && (
+              <label className="text-xs border rounded px-3 py-1.5 cursor-pointer hover:bg-white/5" style={{ ...muted, borderColor: "var(--psg-card-border)" }}>
+                {busy ? "Adding…" : "+ Add photos"}
+                <input type="file" accept="image/*" multiple className="hidden" disabled={busy}
+                  onChange={async e => { const files = e.target.files; e.target.value = ""; if (!files?.length) return; setBusy(true); const photos = await photosFrom(files, 4 - i.photos.length); setBusy(false); call(`/api/incidents/${i.id}/photos`, "POST", { photos }); }} />
+              </label>
+            )}
+          </div>
+        </div>
+      )}
 
       {manage && (
         <section className="space-y-3 pt-4 border-t" style={{ borderColor: "var(--psg-card-border)" }} aria-label="Follow-up">

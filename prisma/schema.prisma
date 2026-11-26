@@ -1908,6 +1908,7 @@ model Incident {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   actions          IncidentAction[]
+  photos           IncidentPhoto[]
 
   @@unique([year, number])
   @@index([productionId, occurredAt])
@@ -1927,4 +1928,18 @@ model IncidentAction {
 
   @@index([incidentId])
   @@index([ownerId, doneAt])
+}
+
+// Photos on an incident report (the hazard, the damage, the scene): taken on the report form or added later
+model IncidentPhoto {
+  id         Int      @id @default(autoincrement())
+  incidentId Int
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  name       String
+  mime       String
+  data       String   @default("") // base64 when there's no object storage
+  fileKey    String? // object key in R2 when there is
+  createdAt  DateTime @default(now())
+
+  @@index([incidentId])
 }

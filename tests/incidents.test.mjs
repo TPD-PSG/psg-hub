@@ -17,6 +17,7 @@ export default () => run("incidents", async ({ db, users, login, anon, results }
     ok(core.riddorDue("specified", t0).toISOString().startsWith("2026-11-11") && core.riddorDue("over7", t0).toISOString().startsWith("2026-11-16") && core.riddorDue("no", t0) === null && core.riddorDue(null, t0) === null, "RIDDOR deadlines: 10 days, 15 for over-7-day, none if not reportable");
     ok(core.incidentRef({ year: 2026, number: 7 }) === "INC-2026-007", "references read INC-2026-007");
     ok(core.closeBlockers({ riddor: null, riddorReportedAt: null, actions: [{ doneAt: null }] }).length === 2 && core.closeBlockers({ riddor: "no", riddorReportedAt: null, actions: [{ doneAt: new Date() }] }).length === 0, "closing waits for a RIDDOR decision and every action done");
+    ok(core.isSerious({ kind: "accident", treatment: "ambulance" }) && core.isSerious({ kind: "dangerous_occurrence" }) && core.isSerious({ kind: "accident", offWork: true }) && !core.isSerious({ kind: "accident", treatment: "first_aid" }) && !core.isSerious({ kind: "near_miss" }), "hospital, ambulance, off work or a dangerous occurrence count as serious (emailed to leads)");
     ok(!!core.riddorHint({ kind: "accident", treatment: "hospital" }) && core.riddorHint({ kind: "near_miss" }) === null, "hospital treatment prompts a RIDDOR check; near misses don't");
 
     made.prod = await db.production.create({ data: { name: "Incident test show", type: "Other", venue: "Test Theatre" } });
@@ -39,10 +40,26 @@ export default () => run("incidents", async ({ db, users, login, anon, results }
     ok((await f(`/api/incidents/${acc.id}`)).status === 404, "and can't open anyone else's");
     ok((await f(`/api/incidents/${mine.id}`, { method: "PATCH", body: JSON.stringify({ investigation: "x" }) })).status === 403, "or follow one up");
 
+    // Photos: on the form, added later by the reporter, seen only by those who see the report
+    const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    r = await f(`/api/productions/${pid}/incidents`, { method: "POST", body: body({ kind: "near_miss", description: "Loose handrail", photos: [{ name: "rail.png", dataUrl: PNG }] }) });
+    const withPhoto = await r.json();
+    ok(r.status === 201 && withPhoto.photos.length === 1 && withPhoto.photos[0].name === "rail.png", "a report can carry photos");
+    const pic = await f(`/api/incident-photos/${withPhoto.photos[0].id}`);
+    ok(pic.status === 200 && pic.headers.get("content-type") === "image/png", "the reporter sees their photo");
+    ok((await f(`/api/productions/${pid}/incidents`, { method: "POST", body: body({ photos: [{ name: "x", dataUrl: "data:text/html;base64,PGI+" }] }) })).status === 400, "only pictures are accepted");
+    ok((await f(`/api/productions/${pid}/incidents`, { method: "POST", body: body({ photos: Array(5).fill({ name: "x.png", dataUrl: PNG }) }) })).status === 400, "four photos at most");
+    r = await f(`/api/incidents/${withPhoto.id}/photos`, { method: "POST", body: JSON.stringify({ photos: [{ name: "more.png", dataUrl: PNG }] }) });
+    ok(r.status === 201 && (await r.json()).photos.length === 2, "the reporter adds another photo later");
+    const accPhoto = await (await a(`/api/incidents/${acc.id}/photos`, { method: "POST", body: JSON.stringify({ photos: [{ name: "scene.png", dataUrl: PNG }] }) })).json();
+    ok((await f(`/api/incident-photos/${accPhoto.photos[0].id}`)).status === 404, "a photo on someone else's report stays hidden");
+    ok((await f(`/api/incident-photos/${withPhoto.photos[0].id}`, { method: "DELETE" })).status === 403, "crew can't remove photos");
+
     // Team staff manage the show's reports; the new-report notice reached them
     await db.productionTeam.create({ data: { productionId: pid, userId: member.id } });
     list = await (await m(`/api/productions/${pid}/incidents`)).json();
-    ok(list.manage === true && list.lead === false && list.incidents.length === 2, "the show's team staff see every report on it");
+    ok(list.manage === true && list.lead === false && list.incidents.length === 3, "the show's team staff see every report on it");
+    ok((await m(`/api/incident-photos/${withPhoto.photos[0].id}`, { method: "DELETE" })).status === 200, "the show's staff can remove a photo");
     r = await m(`/api/incidents/${acc.id}`, { method: "PATCH", body: JSON.stringify({ investigation: "Unprotected edge on flat 4", riddor: "specified", severity: "medium" }) });
     let inc = await r.json();
     const due = new Date(new Date(acc.occurredAt).getTime() + 10 * 86400e3).toISOString();
@@ -84,11 +101,11 @@ export default () => run("incidents", async ({ db, users, login, anon, results }
     ok(qr.status === 200 && qr.headers.get("content-type") === "image/png", "and a QR code");
     const info = await (await anon(`/api/report-incident/${q.token}`)).json();
     ok(info.name === "Incident test show" && info.venues[0] === "Test Theatre" && !("id" in info), "anyone with the link sees the show's name and venue, nothing else");
-    r = await anon(`/api/report-incident/${q.token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: body({ reporterName: "Dock crew", description: "Slipped on wet ramp" }) });
+    r = await anon(`/api/report-incident/${q.token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: body({ reporterName: "Dock crew", description: "Slipped on wet ramp", photos: [{ name: "ramp.png", dataUrl: PNG }] }) });
     const viaQr = await r.json();
     ok(r.status === 201 && /^INC-\d{4}-\d{3}$/.test(viaQr.ref) && Object.keys(viaQr).length === 1, "a report through the QR form gives back only its reference");
     const saved = await db.incident.findFirst({ where: { productionId: pid, viaQr: true } });
-    ok(saved && saved.reportedById === null && saved.reporterName === "Dock crew", "it's saved as a QR report");
+    ok(saved && saved.reportedById === null && saved.reporterName === "Dock crew" && (await db.incidentPhoto.count({ where: { incidentId: saved.id } })) === 1, "it's saved as a QR report, with its photo");
     ok((await anon("/api/report-incident/notARealTokenAtAll")).status === 404, "a wrong link finds nothing");
     const page = await anon(`/report-incident/${q.token}`);
     ok(page.status === 200 && (await page.text()).includes("Incident test show"), "the form page opens without logging in");

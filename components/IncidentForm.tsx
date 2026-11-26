@@ -4,6 +4,19 @@
 // production's H&S tab) and on the no-login QR page crew open on their phones (light, big targets).
 import { useState } from "react";
 import { INCIDENT_KINDS, INJURED_ROLES, TREATMENTS } from "@/lib/incidentsCore";
+import { shrinkPhoto } from "@/lib/shrinkPhoto";
+
+export type PhotoOut = { name: string; dataUrl: string };
+/** Shrink phone photos to JPEG and read them as data URLs for the report. */
+export async function photosFrom(files: FileList | File[], room: number): Promise<PhotoOut[]> {
+  const out: PhotoOut[] = [];
+  for (const f of Array.from(files).filter(x => x.type.startsWith("image/")).slice(0, room)) {
+    const small = await shrinkPhoto(f, 1600, 0.8);
+    const dataUrl = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(small); });
+    out.push({ name: small.name, dataUrl });
+  }
+  return out;
+}
 
 type Look = "hub" | "public";
 const LOOKS = {
@@ -42,6 +55,7 @@ export default function IncidentForm({ look, venues, reporterName = "", submitUr
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [photos, setPhotos] = useState<PhotoOut[]>([]);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setF({ ...f, [k]: e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value });
   const hurt = f.kind === "accident" || f.kind === "ill_health";
@@ -50,7 +64,7 @@ export default function IncidentForm({ look, venues, reporterName = "", submitUr
     e.preventDefault();
     if (!f.kind) { setError("Pick what kind of incident it was"); return; }
     setBusy(true); setError("");
-    const res = await fetch(submitUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, occurredAt: new Date(f.occurredAt).toISOString() }) }).catch(() => null);
+    const res = await fetch(submitUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, occurredAt: new Date(f.occurredAt).toISOString(), photos }) }).catch(() => null);
     setBusy(false);
     const d = await res?.json().catch(() => ({}));
     if (!res?.ok) { setError(d?.error ?? "Couldn't send it. Check your signal and try again."); return; }
@@ -101,6 +115,30 @@ export default function IncidentForm({ look, venues, reporterName = "", submitUr
           </label>
         </div>
       )}
+
+      <div style={{ ...L.group, display: "grid", gap: 10 }}>
+        <p style={{ ...L.heading, marginBottom: 0 }}>Photos</p>
+        <p style={{ ...L.hint, margin: 0 }}>Of the hazard, the damage or the scene, if it&apos;s safe to take them. Up to 4. Not of anyone&apos;s injury.</p>
+        {photos.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {photos.map((p, n) => (
+              <div key={n} style={{ position: "relative" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.dataUrl} alt={`Photo ${n + 1}`} style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 6, display: "block" }} />
+                <button type="button" aria-label={`Remove photo ${n + 1}`} onClick={() => setPhotos(photos.filter((_, i) => i !== n))}
+                  style={{ position: "absolute", top: 2, right: 2, width: 24, height: 24, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.65)", color: "#fff", cursor: "pointer", lineHeight: "24px" }}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {photos.length < 4 && (
+          <label style={{ ...L.choice(false), display: "inline-block", width: "auto", justifySelf: "start" }}>
+            + Add photos
+            <input type="file" accept="image/*" multiple style={{ display: "none" }}
+              onChange={async e => { const files = e.target.files; if (files?.length) { const more = await photosFrom(files, 4 - photos.length); setPhotos(p => [...p, ...more]); } e.target.value = ""; }} />
+          </label>
+        )}
+      </div>
 
       <div style={{ ...L.group, display: "grid", gap: 12 }}>
         {field("Witnesses", <input id="inc-wit" style={L.input} value={f.witnesses} onChange={set("witnesses")} placeholder="Names, and a phone number if you have one" />, "inc-wit")}

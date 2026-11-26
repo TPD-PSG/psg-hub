@@ -104,7 +104,8 @@ export default () => run("audit-round2-security", async ({ db, users, login, res
     // The test PNG was written to disk too: remove it with its row
     const mine = await db.funMedia.findMany({ where: { submission: { title: "Audit test", authorId: free.id } }, select: { filePath: true } }).catch(() => []);
     const { unlink } = await import("fs/promises");
-    for (const x of mine) if (x.filePath) await unlink(`${process.cwd()}/public/fun-media/${x.filePath}`).catch(() => {});
+    const dir = process.env.FUN_MEDIA_DIR || `${process.cwd()}/public/fun-media`;
+    for (const x of mine) if (x.filePath) await unlink(`${dir}/${x.filePath}`).catch(() => {});
     await db.funSubmission.deleteMany({ where: { title: "Audit test", authorId: free.id } }).catch(() => {});
     if (made.exp) await db.productionExpense.delete({ where: { id: made.exp.id } }).catch(() => {});
     if (made.opp) await db.opportunity.delete({ where: { id: made.opp.id } }).catch(() => {});

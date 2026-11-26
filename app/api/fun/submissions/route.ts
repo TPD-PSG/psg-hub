@@ -7,7 +7,8 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
 
-const MEDIA_DIR = process.env.NODE_ENV === "production"
+// FUN_MEDIA_DIR overrides where Fun Corner photos live (e.g. a temp folder for CI tests)
+const MEDIA_DIR = process.env.FUN_MEDIA_DIR ? process.env.FUN_MEDIA_DIR : process.env.NODE_ENV === "production"
   ? "/data/fun-media"
   : join(process.cwd(), "public", "fun-media");
 

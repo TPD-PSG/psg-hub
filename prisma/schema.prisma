@@ -63,6 +63,9 @@ model User {
   incidentsReported   Incident[]          @relation("IncidentReporter")
   incidentsClosed     Incident[]          @relation("IncidentClosedBy")
   incidentActions     IncidentAction[]    @relation("IncidentActionOwner")
+  machinesTraining    MachineTrainer[]
+  machineInductions   MachineInduction[]  @relation("InductionPerson")
+  inductionsGiven     MachineInduction[]  @relation("InductionTrainer")
 }
 
 model Production {
@@ -471,6 +474,7 @@ model Entity {
   labourTypes      LabourType[]
   incidents        Incident[]        @relation("EntityIncidents")
   hsReportToken    String?           @unique // the space's no-login accident/incident form (/report-incident/<token>)
+  machines         Machine[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1382,6 +1386,7 @@ model BuildPart {
   labourTypeId Int? // the kind of work (Carpenter, Welder…): costed at its rate until a person is planned
   labourType   LabourType?         @relation(fields: [labourTypeId], references: [id], onDelete: SetNull)
   materials    BuildPartMaterial[]
+  machines     BuildPartMachine[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -1947,4 +1952,66 @@ model IncidentPhoto {
   createdAt  DateTime @default(now())
 
   @@index([incidentId])
+}
+
+// Workshop machines and who's inducted on them (26 Nov 2026), per company space. Named trainers
+// record inductions; trainee and trainer both sign; a refresher is due refresherMonths later.
+model Machine {
+  id              Int                @id @default(autoincrement())
+  entityId        Int
+  entity          Entity             @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  name            String
+  location        String?
+  refresherMonths Int                @default(12) // 0 = no refresher needed
+  notes           String?
+  archived        Boolean            @default(false)
+  createdAt       DateTime           @default(now())
+  trainers        MachineTrainer[]
+  inductions      MachineInduction[]
+  parts           BuildPartMachine[]
+
+  @@index([entityId])
+}
+
+model MachineTrainer {
+  machineId Int
+  machine   Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([machineId, userId])
+}
+
+model MachineInduction {
+  id               Int       @id @default(autoincrement())
+  machineId        Int
+  machine          Machine   @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  userId           Int? // a Hub user…
+  user             User?     @relation("InductionPerson", fields: [userId], references: [id], onDelete: SetNull)
+  personName       String // …or someone without a login (always filled: the name at the time)
+  personCompany    String?
+  trainerId        Int?
+  trainer          User?     @relation("InductionTrainer", fields: [trainerId], references: [id], onDelete: SetNull)
+  trainerName      String
+  inductedAt       DateTime
+  expiresAt        DateTime? // null = no refresher needed
+  notes            String?
+  traineeSignature String // data:image/png
+  trainerSignature String
+  revokedAt        DateTime? // withdrawn (e.g. unsafe use): no longer counts
+  revokeNote       String?
+  createdAt        DateTime  @default(now())
+
+  @@index([machineId, userId])
+  @@index([expiresAt])
+}
+
+// Which machines a part of a build needs, so the planner and tablet can warn about inductions
+model BuildPartMachine {
+  partId    Int
+  part      BuildPart @relation(fields: [partId], references: [id], onDelete: Cascade)
+  machineId Int
+  machine   Machine   @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@id([partId, machineId])
 }

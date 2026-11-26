@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { spaceBySlug, canSeeSpace } from "@/lib/spaces";
 import { PART_SELECT, dayUtc } from "@/lib/buildParts";
+import { current, inductionStatus, inducted as counts } from "@/lib/inductionsCore";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +49,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const staff = role === "admin" || role === "member"
     ? await prisma.user.findMany({ where: { role: { in: ["admin", "member"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } })
     : [];
+  // Machine inductions: the space's machines (to pick for a part), and parts planned on someone who
+  // isn't inducted on a machine the part needs (a warning, not a block)
+  const machines = await prisma.machine.findMany({ where: { entityId: space.id, archived: false }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const inds = await prisma.machineInduction.findMany({ where: { userId: { not: null }, machine: { entityId: space.id } }, select: { userId: true, machineId: true, inductedAt: true, expiresAt: true, revokedAt: true } });
+  const inducted: Record<number, number[]> = {}; // person → machines they're inducted on today
+  for (const key of new Set(inds.map(i => `${i.userId}:${i.machineId}`))) {
+    const [u, mId] = key.split(":").map(Number);
+    if (counts(inductionStatus(current(inds.filter(i => i.userId === u && i.machineId === mId))))) (inducted[u] ??= []).push(mId);
+  }
   return NextResponse.json({
-    space, from: from.toISOString().slice(0, 10), days, jobs, parts, crew, elsewhere, staff,
+    space, from: from.toISOString().slice(0, 10), days, jobs, parts, crew, elsewhere, staff, machines, inducted,
     canEdit: role === "admin" || role === "member",
   });
 }

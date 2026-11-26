@@ -210,6 +210,27 @@ async function runDaily(req: NextRequest): Promise<Response> {
     }
   }
 
+  // ── 4g. Machine refreshers: 30 days before and on the day, to the person and the machine's trainers
+  const soonEnds = await prisma.machineInduction.findMany({
+    where: { revokedAt: null, expiresAt: { gte: startOfToday, lt: new Date(startOfToday.getTime() + 31 * 86400e3) } },
+    select: { id: true, machineId: true, userId: true, personName: true, inductedAt: true, expiresAt: true, machine: { select: { name: true, archived: true, entity: { select: { slug: true } }, trainers: { select: { userId: true } } } } },
+  });
+  for (const i of soonEnds) {
+    if (i.machine.archived) continue;
+    const left = Math.round((i.expiresAt!.getTime() - startOfToday.getTime()) / 86400e3);
+    if (left !== 30 && left !== 0) continue;
+    // Only the induction that counts: skip it if they've had a newer one on this machine
+    const newer = await prisma.machineInduction.count({ where: { machineId: i.machineId, revokedAt: null, inductedAt: { gt: i.inductedAt }, ...(i.userId ? { userId: i.userId } : { userId: null, personName: i.personName }) } });
+    if (newer) continue;
+    const link = `/spaces/${i.machine.entity.slug}/safety#inductions`;
+    const when = left === 0 ? "today" : `in 30 days (${i.expiresAt!.toLocaleDateString("en-GB", { day: "numeric", month: "short" })})`;
+    for (const userId of new Set([i.userId, ...i.machine.trainers.map(t => t.userId)].filter((x): x is number => !!x))) {
+      const title = (userId === i.userId ? `Your ${i.machine.name} induction needs a refresher ${when}` : `${i.personName}'s ${i.machine.name} refresher is due ${when}`).slice(0, 200);
+      if (sentTitles.has(`${userId}|${title}`)) continue;
+      add({ userId, title, link, body: left === 0 ? "Until it's done, the planner and tablet will flag work that needs this machine." : "A trainer can record the refresher on the Safety page." }, `refresher-${i.id}-${userId}`);
+    }
+  }
+
   // ── 4c. Mondays: last week's show-report digest for each show's PSG team ──
   // (?digestFor=YYYY-MM-DD runs it for that week on any day, for testing and catch-up)
   const forced = req.nextUrl.searchParams.get("digestFor");

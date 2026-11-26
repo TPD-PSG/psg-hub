@@ -9,7 +9,7 @@ import { shrinkPhoto } from "@/lib/shrinkPhoto";
 import type { SpaceTheme } from "@/lib/spaces";
 
 type Job = { id: number; number: string; title: string; stage: string | null };
-type Person = { id: number; name: string; on: { jobId: number; startAt: string } | null; today: { jobId: number; label: string }[] };
+type Person = { id: number; name: string; on: { jobId: number; startAt: string } | null; today: { jobId: number; label: string; notInducted?: string[] }[] };
 export type TabletData = { space: SpaceTheme; team: Person[]; jobs: Job[] };
 
 const hm = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -25,6 +25,7 @@ export default function Tablet({ initial }: { initial: TabletData }) {
   const [snag, setSnag] = useState("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null); // machine inductions: a warning, not a block
   const photoRef = useRef<HTMLInputElement>(null);
   const person = data.team.find(p => p.id === who) ?? null;
   const jobName = (id: number) => data.jobs.find(j => j.id === id)?.title ?? "a build";
@@ -50,6 +51,10 @@ export default function Tablet({ initial }: { initial: TabletData }) {
     setData(d);
     const logged = d.logged?.days ? ` · ${d.logged.days} day${d.logged.days === 1 ? "" : "s"} logged on ${jobName(d.logged.jobId)}` : "";
     done(action === "on" ? `${person.name} is on ${jobName(jobId!)}${logged}` : `${person.name} clocked off${logged}`);
+    if (d.notInducted?.length) {
+      setWarn(`${person.name} isn't inducted on ${d.notInducted.join(", ")}, which this build needs. Don't use ${d.notInducted.length === 1 ? "it" : "them"} until a trainer has inducted you.`);
+      setTimeout(() => setWarn(null), 15000);
+    }
   }
   async function sendPhoto(file: File | undefined) {
     if (!file || !jobFor || !person) return;
@@ -72,6 +77,7 @@ export default function Tablet({ initial }: { initial: TabletData }) {
 
   // Builds to offer: this person's planned work today first, then the rest
   const ordered = person ? [...person.today.map(t => data.jobs.find(j => j.id === t.jobId)).filter((j): j is Job => !!j), ...data.jobs].filter((j, i, a) => a.findIndex(x => x.id === j.id) === i) : data.jobs;
+  const gapsOn = (jobId: number) => [...new Set(person?.today.filter(t => t.jobId === jobId).flatMap(t => t.notInducted ?? []) ?? [])];
   const planned = (jobId: number) => person?.today.filter(t => t.jobId === jobId).map(t => t.label).join(", ");
 
   const buildPicker = (onPick: (id: number) => void, title: string) => (
@@ -82,6 +88,7 @@ export default function Tablet({ initial }: { initial: TabletData }) {
           <button key={j.id} type="button" disabled={busy} onClick={() => onPick(j.id)} style={{ ...tile, ...(person?.on?.jobId === j.id ? { borderColor: "var(--tws-accent)", borderWidth: 4 } : {}) }}>
             {j.title}
             <span className="block text-sm font-semibold mt-1" style={{ color: "var(--tws-muted)" }}>{planned(j.id) ? `Planned today: ${planned(j.id)}` : j.number}</span>
+            {gapsOn(j.id).length > 0 && <span className="block text-sm font-bold mt-1" style={{ color: "var(--tws-warn-ink)" }}>⚠ Not inducted on {gapsOn(j.id).join(", ")}</span>}
           </button>
         ))}
       </div>
@@ -91,6 +98,7 @@ export default function Tablet({ initial }: { initial: TabletData }) {
 
   return (
     <div className="px-4 sm:px-8 py-6 flex flex-col gap-6 select-none" style={{ minHeight: "calc(100vh - 64px)" }}>
+      {warn && <div role="alert" className="text-xl font-bold px-5 py-4 flex items-start gap-3" style={{ background: "var(--tws-warn-bg)", color: "var(--tws-warn-ink)", borderLeft: "8px solid var(--tws-warn-line)" }}><span aria-hidden="true">⚠</span><span className="flex-1">{warn}</span><button type="button" onClick={() => setWarn(null)} className="text-base underline">OK</button></div>}
       {toast && <div role="status" className="text-xl font-bold px-5 py-4" style={{ background: "var(--tws-char)", color: "#fff", borderLeft: "8px solid var(--tws-accent)" }}>{toast}</div>}
 
       {!person ? (

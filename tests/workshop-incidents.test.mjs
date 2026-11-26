@@ -56,7 +56,7 @@ export default () => run("workshop-incidents", async ({ db, users, login, anon, 
     const hsm = await (await m("/api/health-safety")).json();
     ok(hsm.incidents.some(i => i.id === mine.id) && hsm.openActions.some(x => x.incident.path === `/spaces/${slug}/safety?incident=${mine.id}`), "including for the workshop's own staff, with its actions");
     const page = await m(`/spaces/${slug}/safety`);
-    ok(page.status === 200 && (await page.text()).includes("Accidents &amp; near misses"), "the workshop's Safety page opens");
+    ok(page.status === 200 && (await page.text()).includes("Emergency? Call 999 first."), "the workshop's Safety page opens");
   } finally {
     if (made.e) {
       await db.notification.deleteMany({ where: { createdAt: { gte: since }, link: { contains: "/spaces/zz-test-ws/" } } }).catch(() => {});

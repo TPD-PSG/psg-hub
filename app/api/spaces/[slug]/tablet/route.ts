@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { spaceMember } from "@/lib/spaceBoard";
 import { clockOff } from "@/lib/clocking";
 import { nameOf } from "@/lib/setStorage";
+import { missing } from "@/lib/inductionsCore";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,29 @@ async function state(entityId: number) {
     prisma.user.findMany({ where: { homeEntityId: entityId, role: { in: ["admin", "member"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.job.findMany({ where: { entityId, status: "active" }, select: { id: true, number: true, title: true, stage: true }, orderBy: { createdAt: "desc" } }),
     prisma.clockEntry.findMany({ where: { endAt: null, job: { entityId } }, select: { userId: true, jobId: true, startAt: true } }),
-    prisma.buildPart.findMany({ where: { done: false, userId: { not: null }, startDate: { lte: new Date(day0) }, job: { entityId, status: "active" } }, select: { userId: true, jobId: true, label: true, startDate: true, days: true } }),
+    prisma.buildPart.findMany({ where: { done: false, userId: { not: null }, startDate: { lte: new Date(day0) }, job: { entityId, status: "active" } }, select: { userId: true, jobId: true, label: true, startDate: true, days: true, machines: { select: { machine: { select: { id: true, name: true } } } } } }),
   ]);
   const todayParts = parts.filter(p => p.startDate && p.startDate.getTime() + p.days * 86400e3 > day0);
+  // Machine inductions: flag today's parts that need a machine the person isn't inducted on
+  const inds = team.length ? await prisma.machineInduction.findMany({ where: { userId: { in: team.map(t => t.id) }, machine: { entityId } }, select: { userId: true, machineId: true, inductedAt: true, expiresAt: true, revokedAt: true } }) : [];
+  const gapsFor = (userId: number, ms: { machine: { id: number; name: string } }[]) => {
+    const gap = missing(inds.filter(i => i.userId === userId), ms.map(m => m.machine.id));
+    return ms.filter(m => gap.includes(m.machine.id)).map(m => m.machine.name);
+  };
   return {
-    team: team.map(t => ({ ...t, on: open.find(o => o.userId === t.id) ?? null, today: todayParts.filter(p => p.userId === t.id).map(p => ({ jobId: p.jobId, label: p.label })) })),
+    team: team.map(t => ({ ...t, on: open.find(o => o.userId === t.id) ?? null, today: todayParts.filter(p => p.userId === t.id).map(p => ({ jobId: p.jobId, label: p.label, notInducted: gapsFor(t.id, p.machines) })) })),
     jobs,
   };
+}
+
+/** Clocking on to a build: the machines its open parts (theirs, or no one's yet) need that they aren't inducted on. */
+async function inductionWarning(userId: number, jobId: number) {
+  const parts = await prisma.buildPart.findMany({ where: { jobId, done: false, OR: [{ userId }, { userId: null }] }, select: { machines: { select: { machine: { select: { id: true, name: true } } } } } });
+  const ms = [...new Map(parts.flatMap(p => p.machines.map(m => [m.machine.id, m.machine] as const))).values()];
+  if (!ms.length) return null;
+  const inds = await prisma.machineInduction.findMany({ where: { userId, machineId: { in: ms.map(m => m.id) } }, select: { machineId: true, inductedAt: true, expiresAt: true, revokedAt: true } });
+  const gap = missing(inds, ms.map(m => m.id));
+  return gap.length ? ms.filter(m => gap.includes(m.id)).map(m => m.name) : null;
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -46,6 +63,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     if (!job) return NextResponse.json({ error: "Pick one of this workshop's builds" }, { status: 400 });
     logged = await clockOff(userId); // switching builds closes the last one
     await prisma.clockEntry.create({ data: { userId, jobId: job.id, byName: await nameOf(m.userId) } });
+    const notInducted = await inductionWarning(userId, job.id);
+    if (notInducted) return NextResponse.json({ logged, notInducted, person: person.name, ...(await state(m.space.id)) });
   } else if (body.action === "off") {
     logged = await clockOff(userId);
     if (!logged) return NextResponse.json({ error: `${person.name} isn't clocked on` }, { status: 400 });

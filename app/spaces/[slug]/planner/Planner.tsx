@@ -13,13 +13,14 @@ import type { SpaceTheme } from "@/lib/spaces";
 import { buildStageLabel } from "@/lib/buildStages";
 import { caps, card, h2, muted, btnSolid, btnLine, input, label as lbl, pageHeader, JOB_FILLS } from "@/lib/twsUi";
 
-type Part = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled?: boolean; user: { id: number; name: string } | null };
+type Part = { id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled?: boolean; user: { id: number; name: string } | null; machines?: { machine: { id: number; name: string } }[] };
 type Job = { id: number; number: string; title: string; stage: string | null; startDate: string | null; endDate: string | null; deliveryMethod: string | null; client: { name: string } | null };
 export type PlannerData = {
   space: SpaceTheme; from: string; days: number; jobs: Job[]; parts: Part[];
   crew: { id: number; name: string; team: boolean }[];
   elsewhere: { userId: number; startDate: string; endDate: string; activityType: string | null; production: { id: number; name: string } }[];
   staff: { id: number; name: string }[]; canEdit: boolean;
+  machines?: { id: number; name: string }[]; inducted?: Record<number, number[]>; // machine inductions (warnings, not blocks)
 };
 
 const DAY = 86400e3;
@@ -33,6 +34,7 @@ export default function Planner({ initial }: { initial: PlannerData }) {
   const [parts, setParts] = useState(initial.parts);
   const [extraRows, setExtraRows] = useState<{ id: number; name: string; team: boolean }[]>([]);
   const [sel, setSel] = useState<number | null>(null);
+  const [pickMachines, setPickMachines] = useState(false);
   const [weeks, setWeeks] = useState(26);
   const [drag, setDrag] = useState<number | null>(null);
   const [adding, setAdding] = useState({ jobId: initial.jobs[0]?.id ? String(initial.jobs[0].id) : "", label: "", days: "1", hours: "", pencilled: initial.jobs[0]?.stage === "quote" });
@@ -41,6 +43,14 @@ export default function Planner({ initial }: { initial: PlannerData }) {
   const from = t(initial.from), N = initial.days;
   const days = Array.from({ length: N }, (_, i) => from + i * DAY);
   const today = t(new Date().toISOString());
+  // Machine inductions: machines a planned part needs that its person isn't inducted on
+  const gaps = (p: Part) => (p.userId ? (p.machines ?? []).filter(m => !(initial.inducted?.[p.userId!] ?? []).includes(m.machine.id)).map(m => m.machine.name) : []);
+  async function setMachines(p: Part, ids: number[]) {
+    const res = await fetch(`/api/jobs/${p.jobId}/parts/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ machineIds: ids }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return alertDialog(d.error ?? "Couldn't save the machines");
+    setParts(ps => ps.map(x => (x.id === p.id ? { ...x, machines: d.machines } : x)));
+  }
   const fill = (jobId: number) => JOB_FILLS[Math.max(0, jobs.findIndex(j => j.id === jobId)) % JOB_FILLS.length];
   // Pencilled: the build's colour washed out with pencil hatching and a dashed edge
   const PENCIL: React.CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.65) 0 5px, rgba(255,255,255,0.15) 5px 10px)", borderStyle: "dashed", borderWidth: 2, borderColor: "var(--tws-night)", fontStyle: "italic" };
@@ -157,6 +167,11 @@ export default function Planner({ initial }: { initial: PlannerData }) {
             <strong>Clash:</strong> {clashText.join(" · ")}
           </div>
         )}
+        {parts.some(p => gaps(p).length) && (
+          <div role="status" className="px-4 py-3 text-sm" style={{ background: "var(--tws-warn-bg)", border: "1px solid var(--tws-warn-line)", color: "var(--tws-warn-ink)" }}>
+            <strong>⚠ Not inducted:</strong> {parts.filter(p => gaps(p).length).map(p => `${p.user?.name} on ${gaps(p).join(", ")} (${p.label})`).join(" · ")}. <Link href={`${base}/safety#inductions`} className="underline">Inductions</Link>
+          </div>
+        )}
         {maybeText.length > 0 && (
           <div role="status" className="px-4 py-3 text-sm" style={{ background: "var(--tws-warn-bg)", border: "1px solid var(--tws-warn-line)", color: "var(--tws-warn-ink)" }}>
             <strong>Possible clash (pencilled):</strong> {maybeText.join(" · ")}
@@ -178,8 +193,19 @@ export default function Planner({ initial }: { initial: PlannerData }) {
                 {selPart.userId && <button type="button" onClick={() => place(selPart.id, null, null)} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }}>Back to To plan</button>}
                 <button type="button" onClick={() => { save(selPart, { done: true }); setSel(null); }} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }}>Mark done</button>
                 <button type="button" onClick={() => remove(selPart)} style={{ ...btnLine, padding: "4px 10px", fontSize: 13, color: "var(--tws-bad-ink)", borderColor: "var(--tws-bad-line)" }}>Delete</button>
-                <button type="button" onClick={() => setSel(null)} className="underline" style={muted}>Cancel</button>
+                {(initial.machines?.length ?? 0) > 0 && <button type="button" aria-expanded={pickMachines} onClick={() => setPickMachines(!pickMachines)} style={{ ...btnLine, padding: "4px 10px", fontSize: 13 }}>Machines{selPart.machines?.length ? ` (${selPart.machines.length})` : ""}</button>}
+                <button type="button" onClick={() => { setSel(null); setPickMachines(false); }} className="underline" style={muted}>Cancel</button>
               </div>
+            )}
+            {selPart && canEdit && pickMachines && (
+              <fieldset className="w-full flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] p-3 m-0" style={{ border: "1px solid var(--tws-line)", background: "var(--tws-ground)" }}>
+                <legend className="text-xs font-semibold px-1" style={muted}>Machines {selPart.label} needs (for induction warnings)</legend>
+                {initial.machines!.map(m => {
+                  const on = (selPart.machines ?? []).some(x => x.machine.id === m.id);
+                  return <label key={m.id} className="flex items-center gap-1.5"><input type="checkbox" checked={on} style={{ accentColor: "var(--tws-char)" }}
+                    onChange={() => setMachines(selPart, on ? (selPart.machines ?? []).filter(x => x.machine.id !== m.id).map(x => x.machine.id) : [...(selPart.machines ?? []).map(x => x.machine.id), m.id])} />{m.name}</label>;
+                })}
+              </fieldset>
             )}
           </div>
           <div className="flex flex-wrap gap-2 min-h-11">
@@ -263,11 +289,11 @@ export default function Planner({ initial }: { initial: PlannerData }) {
                       return (
                         <button key={p.id} type="button" {...dragProps(p)} onClick={() => canEdit && setSel(sel === p.id ? null : p.id)} aria-pressed={sel === p.id}
                           className="text-xs font-bold text-left px-2 py-1 overflow-hidden whitespace-nowrap text-ellipsis"
-                          title={`${p.pencilled ? "Pencilled (not confirmed): " : ""}${p.label} · ${jobName(p.jobId)}`}
+                          title={`${p.pencilled ? "Pencilled (not confirmed): " : ""}${p.label} · ${jobName(p.jobId)}${gaps(p).length ? ` · ⚠ ${p.user?.name ?? "They"} isn't inducted on ${gaps(p).join(", ")}` : ""}`}
                           style={{ ...look(p), gridRow: (laneOf.get(p.id) ?? 0) + 1, gridColumn: `${s + 1} / span ${en - s}`, zIndex: 2,
                             pointerEvents: drag ? "none" : "auto", cursor: canEdit ? "grab" : "default",
                             outline: clashIds.has(p.id) ? "3px solid #b3261e" : maybeIds.has(p.id) ? "3px solid #d08a1e" : sel === p.id ? "3px solid var(--tws-night)" : "none", outlineOffset: -3 }}>
-                          {p.pencilled ? "✎ " : ""}{p.label}{L === 1 && <span className="block font-medium text-[11px] truncate">{jobName(p.jobId)}</span>}
+                          {gaps(p).length ? <span aria-label="Not inducted on a machine this needs">⚠ </span> : null}{p.pencilled ? "✎ " : ""}{p.label}{L === 1 && <span className="block font-medium text-[11px] truncate">{jobName(p.jobId)}</span>}
                         </button>
                       );
                     })}

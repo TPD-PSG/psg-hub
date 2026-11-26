@@ -1,7 +1,7 @@
 // Parts of a build (TWS planner): validation shared by the create and update routes.
 import { prisma } from "@/lib/prisma";
 
-export const PART_SELECT = { id: true, jobId: true, label: true, userId: true, startDate: true, days: true, hours: true, done: true, pencilled: true, user: { select: { id: true, name: true } }, labourTypeId: true, labourType: { select: { id: true, name: true, dayRate: true } }, materials: { orderBy: { sortOrder: "asc" as const }, select: { id: true, section: true, description: true, quantity: true, unit: true, unitCost: true, stockItemId: true, po: { select: { id: true, number: true, status: true } }, stockMoveId: true } } } as const;
+export const PART_SELECT = { id: true, jobId: true, label: true, userId: true, startDate: true, days: true, hours: true, done: true, pencilled: true, user: { select: { id: true, name: true } }, labourTypeId: true, labourType: { select: { id: true, name: true, dayRate: true } }, materials: { orderBy: { sortOrder: "asc" as const }, select: { id: true, section: true, description: true, quantity: true, unit: true, unitCost: true, stockItemId: true, po: { select: { id: true, number: true, status: true } }, stockMoveId: true } }, machines: { select: { machine: { select: { id: true, name: true } } } } } as const;
 
 /** Midnight UTC of a YYYY-MM-DD day, or null. */
 export const dayUtc = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? new Date(`${s.slice(0, 10)}T00:00:00.000Z`) : null);
@@ -38,6 +38,12 @@ export async function partFields(body: Record<string, unknown>, creating: boolea
     data.labourTypeId = lt;
   }
   if (has("startDate")) data.startDate = dayUtc(body.startDate);
+  if (has("machineIds")) {
+    // The machines this part needs (for induction warnings); replaces the list
+    const ids = Array.isArray(body.machineIds) ? [...new Set(body.machineIds.map(Number).filter(Number.isInteger))] : [];
+    if (ids.length && (await prisma.machine.count({ where: { id: { in: ids } } })) !== ids.length) return { error: "Unknown machine" };
+    data.machines = creating ? { create: ids.map(machineId => ({ machineId })) } : { deleteMany: {}, create: ids.map(machineId => ({ machineId })) };
+  }
   if (has("userId")) {
     const uid = body.userId === "" || body.userId == null ? null : Number(body.userId);
     if (uid !== null && !(await prisma.user.count({ where: { id: uid } }))) return { error: "Unknown person" };

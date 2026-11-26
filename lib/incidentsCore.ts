@@ -60,6 +60,14 @@ export function riddorHint(i: { kind: string; treatment?: string | null; offWork
 export const isSerious = (i: { kind: string; treatment?: string | null; offWork?: boolean }) =>
   i.kind === "dangerous_occurrence" || i.treatment === "hospital" || i.treatment === "ambulance" || !!i.offWork;
 
+/** Where a report lives in the Hub: its show's H&S tab, or its workshop's Safety page. */
+export function incidentPath(i: { id: number; productionId: number | null; entity?: { slug: string | null } | null }) {
+  return i.productionId ? `/productions/${i.productionId}?section=hs&incident=${i.id}` : `/spaces/${i.entity?.slug ?? ""}/safety?incident=${i.id}`;
+}
+/** The API folder for a report's show or workshop. */
+export const ownerApi = (i: { productionId: number | null; entity?: { slug: string | null } | null }) =>
+  i.productionId ? `/api/productions/${i.productionId}` : `/api/spaces/${i.entity?.slug ?? ""}`;
+
 export const incidentRef = (i: { year: number; number: number }) => `INC-${i.year}-${String(i.number).padStart(3, "0")}`;
 
 export type IncidentStatus = "open" | "investigating" | "closed";

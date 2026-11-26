@@ -54,7 +54,7 @@ export default function HealthSafetyTab({ prod, reload }: TabProps) {
   return (
     <div className="space-y-6">
 
-      <IncidentsPanel productionId={prod.id} productionName={prod.name}
+      <IncidentsPanel apiBase={`/api/productions/${prod.id}`} placeName={prod.name}
         venues={[...new Set(prod.isTour ? prod.tourStops.map(s => s.venue.name) : [prod.venueRef?.name ?? prod.venue ?? ""])].filter(Boolean)} />
 
       {/* ── Documents section ── */}

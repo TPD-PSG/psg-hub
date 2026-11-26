@@ -1,8 +1,9 @@
 "use client";
 
-// Accidents & incidents at the top of a production's H&S tab (26 Nov 2026): report one, the QR code
-// for crew without a login, and the reports this person may see (all of them for the show's staff and
-// the H&S leads; just their own for everyone else). ?incident=<id> opens one.
+// Accidents & incidents (26 Nov 2026), at the top of a production's H&S tab or on a workshop space's
+// Safety page: report one, the QR code for people without a login, and the reports this person may
+// see (all of them for the local staff and the H&S leads; just their own for everyone else).
+// ?incident=<id> opens one.
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -16,7 +17,9 @@ type Data = { incidents: Incident[]; lead: boolean; manage: boolean; qrToken: st
 const card = { backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" };
 const muted = { color: "var(--psg-muted)" };
 
-export default function IncidentsPanel({ productionId, productionName, venues }: { productionId: number; productionName: string; venues: string[] }) {
+export default function IncidentsPanel({ apiBase, placeName, venues, workshop = false }: {
+  apiBase: string; placeName: string; venues: string[]; workshop?: boolean; // apiBase: /api/productions/12 or /api/spaces/tws
+}) {
   const { data: session } = useSession();
   const params = useSearchParams();
   const router = useRouter();
@@ -29,14 +32,14 @@ export default function IncidentsPanel({ productionId, productionName, venues }:
   const openId = Number(params.get("incident")) || null;
 
   const load = useCallback(async () => {
-    const r = await fetch(`/api/productions/${productionId}/incidents`).then(x => (x.ok ? x.json() : null)).catch(() => null);
+    const r = await fetch(`${apiBase}/incidents`).then(x => (x.ok ? x.json() : null)).catch(() => null);
     if (r) setD(r);
-  }, [productionId]);
+  }, [apiBase]);
   useEffect(() => {
     let gone = false;
-    fetch(`/api/productions/${productionId}/incidents`).then(x => (x.ok ? x.json() : null)).then(r => { if (!gone && r) setD(r); }).catch(() => {});
+    fetch(`${apiBase}/incidents`).then(x => (x.ok ? x.json() : null)).then(r => { if (!gone && r) setD(r); }).catch(() => {});
     return () => { gone = true; };
-  }, [productionId]);
+  }, [apiBase]);
 
   const setOpen = (id: number | null) => {
     const q = new URLSearchParams(params.toString());
@@ -47,7 +50,7 @@ export default function IncidentsPanel({ productionId, productionName, venues }:
 
   async function qr(renew = false) {
     if (renew && !(await confirmDialog("Make a new QR code? Printed copies of the old one will stop working."))) return;
-    const res = await fetch(`/api/productions/${productionId}/incident-qr`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ renew }) });
+    const res = await fetch(`${apiBase}/incident-qr`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ renew }) });
     const r = await res.json().catch(() => ({}));
     if (!res.ok) return alertDialog(r.error ?? "Couldn't make the QR code");
     setD(x => x && { ...x, qrToken: r.token });
@@ -65,14 +68,14 @@ export default function IncidentsPanel({ productionId, productionName, venues }:
     <section aria-label="Accidents and incidents">
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <h2 className="text-base font-semibold text-white mr-auto">Accidents &amp; incidents</h2>
-        {d.manage && <button type="button" onClick={() => (d.qrToken ? setQrOpen(true) : qr())} className="text-xs border px-3 py-1.5 rounded hover:bg-white/5" style={{ ...muted, borderColor: "var(--psg-card-border)" }}>QR code for crew</button>}
-        <button type="button" onClick={() => setReporting(true)} className="text-sm font-semibold px-3 py-1.5 rounded text-white" style={{ backgroundColor: "#b91c1c" }}>Report an incident</button>
+        {d.manage && <button type="button" onClick={() => (d.qrToken ? setQrOpen(true) : qr())} className="text-xs border px-3 py-1.5 rounded hover:bg-white/5" style={{ ...muted, borderColor: "var(--psg-card-border)" }}>{workshop ? "QR code for the floor" : "QR code for crew"}</button>}
+        <button type="button" onClick={() => setReporting(true)} className="text-sm font-semibold px-3 py-1.5 rounded" style={{ backgroundColor: "#b91c1c", color: "#fff" }}>Report an incident</button>
       </div>
 
       <div className="rounded-lg border overflow-hidden" style={card}>
         {list.length === 0 ? (
           <p className="text-xs text-center py-6 m-0" style={muted}>
-            {d.incidents.length ? "No open reports." : d.manage ? "Nothing reported on this show." : "You haven't reported anything on this show. Reports you file appear here."}
+            {d.incidents.length ? "No open reports." : d.manage ? `Nothing reported ${workshop ? "here" : "on this show"}.` : `You haven't reported anything ${workshop ? "here" : "on this show"}. Reports you file appear here.`}
           </p>
         ) : (
           <ul className="m-0 p-0 list-none">
@@ -91,8 +94,8 @@ export default function IncidentsPanel({ productionId, productionName, venues }:
       </div>
 
       {reporting && (
-        <Modal title={`Report an incident · ${productionName}`} onClose={() => setReporting(false)}>
-          <IncidentForm look="hub" venues={venues} reporterName={session?.user?.name ?? ""} submitUrl={`/api/productions/${productionId}/incidents`}
+        <Modal title={`Report an incident · ${placeName}`} onClose={() => setReporting(false)}>
+          <IncidentForm look="hub" venues={venues} reporterName={session?.user?.name ?? ""} submitUrl={`${apiBase}/incidents`}
             onDone={async r => { setReporting(false); await load(); setOpen((r as Incident).id); }} />
         </Modal>
       )}
@@ -105,14 +108,14 @@ export default function IncidentsPanel({ productionId, productionName, venues }:
       )}
 
       {qrOpen && d.qrToken && (
-        <Modal title="QR code for crew" onClose={() => setQrOpen(false)}>
+        <Modal title={workshop ? "QR code for the workshop" : "QR code for crew"} onClose={() => setQrOpen(false)}>
           <div className="flex flex-col items-center gap-3 text-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/productions/${productionId}/incident-qr?v=${qrVersion}`} alt="QR code for the incident form" width={200} height={200} style={{ imageRendering: "pixelated", background: "#fff" }} />
-            <p className="text-center m-0" style={muted}>Put this up by the prompt desk, the stage door and the first-aid kit. Anyone can report from their phone without logging in; only this show&apos;s managers and the H&amp;S leads see the reports.</p>
+            <img src={`${apiBase}/incident-qr?v=${qrVersion}`} alt="QR code for the incident form" width={200} height={200} style={{ imageRendering: "pixelated", background: "#fff" }} />
+            <p className="text-center m-0" style={muted}>{workshop ? "Put this up by the machines, the first-aid kit and the loading door." : "Put this up by the prompt desk, the stage door and the first-aid kit."} Anyone can report from their phone without logging in; only {workshop ? "the workshop's own staff" : "this show's managers"} and the H&amp;S leads see the reports.</p>
             <code className="text-xs break-all text-white">{formUrl}</code>
             <div className="flex gap-2 flex-wrap justify-center">
-              <a href={`/api/productions/${productionId}/incident-qr?v=${qrVersion}`} download="incident-report-qr.png" className="text-xs border px-3 py-1.5 rounded" style={{ ...muted, borderColor: "var(--psg-card-border)" }}>Download</a>
+              <a href={`${apiBase}/incident-qr?v=${qrVersion}`} download="incident-report-qr.png" className="text-xs border px-3 py-1.5 rounded" style={{ ...muted, borderColor: "var(--psg-card-border)" }}>Download</a>
               <a href={formUrl} target="_blank" rel="noopener noreferrer" className="text-xs border px-3 py-1.5 rounded" style={{ ...muted, borderColor: "var(--psg-card-border)" }}>Open form</a>
               <button type="button" onClick={() => qr(true)} className="text-xs border px-3 py-1.5 rounded" style={{ ...muted, borderColor: "var(--psg-card-border)" }}>Make a new code</button>
             </div>

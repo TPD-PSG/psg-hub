@@ -10,7 +10,7 @@ import { incidentAccess } from "@/lib/incidents";
 async function manager(id: string) {
   const access = await hsProductionAccess(id);
   if ("error" in access) return access;
-  const { manage } = await incidentAccess(access.userId, access.role, Number(id));
+  const { manage } = await incidentAccess(access.userId, access.role, { productionId: Number(id), entityId: null });
   return manage ? access : { error: NextResponse.json({ error: "Only the show's staff and H&S leads can do that" }, { status: 403 }) };
 }
 const base = (req: NextRequest) => process.env.NEXTAUTH_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;

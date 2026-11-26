@@ -12,7 +12,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const access = await hsProductionAccess(id);
   if ("error" in access) return access.error;
   const productionId = Number(id);
-  const { lead, manage } = await incidentAccess(access.userId, access.role, productionId);
+  const { lead, manage } = await incidentAccess(access.userId, access.role, { productionId, entityId: null });
   const incidents = await prisma.incident.findMany({
     where: { productionId, ...(manage ? {} : { reportedById: access.userId }) },
     orderBy: { occurredAt: "desc" }, include: INCIDENT_INCLUDE,
@@ -35,6 +35,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: 400 });
   const ph = readPhotos(body.photos);
   if ("error" in ph) return NextResponse.json({ error: ph.error }, { status: 400 });
-  const incident = await createIncident(Number(id), r.data, { userId: access.userId, viaQr: false }, ph.photos);
+  const incident = await createIncident({ productionId: Number(id), entityId: null }, r.data, { userId: access.userId, viaQr: false }, ph.photos);
   return NextResponse.json(await prisma.incident.findUnique({ where: { id: incident.id }, include: INCIDENT_INCLUDE }), { status: 201 });
 }

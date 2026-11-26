@@ -8,14 +8,14 @@ import Link from "next/link";
 import { Modal } from "@/components/Modal";
 import { alertDialog } from "@/components/Dialogs";
 import IncidentDetail, { StatusPill, type Incident, type IncidentAction } from "@/components/IncidentDetail";
-import { KIND_LABEL, INCIDENT_KINDS, incidentRef } from "@/lib/incidentsCore";
+import { KIND_LABEL, INCIDENT_KINDS, incidentRef, ownerApi } from "@/lib/incidentsCore";
 
 type Doc = { id: number; name: string; reviewDate: string | null };
 export type HSData = {
-  me: { lead: boolean; admin: boolean; managed: "all" | number[] };
+  me: { lead: boolean; admin: boolean };
   incidents: Incident[];
   stats: { months: { key: string; label: string; count: number }[]; byKind: Record<string, number>; byShow: { name: string; count: number }[]; open: number; last30: number; riddorDueSoon: number; riddorOverdue: number };
-  openActions: (IncidentAction & { incident: { id: number; year: number; number: number; productionId: number; productionName: string } })[];
+  openActions: (IncidentAction & { incident: { id: number; year: number; number: number; productionId: number | null; productionName: string; path: string; entity?: { slug: string | null } | null } })[];
   docs: { id: number; name: string; status: string; count: number; noReviewDate: number; due: (Doc & { overdue: boolean })[]; documents: Doc[] }[];
   toolbox: { id: number; name: string; status: string; thisWeek: number; total: number; last: string | null }[];
   weekOf: string;
@@ -60,8 +60,8 @@ export default function HealthSafetyView({ initial }: { initial: HSData | null }
 
   if (!d) return <p className="text-sm" style={muted}>The Health &amp; Safety page is for Hub staff.</p>;
 
-  async function openIncident(id: number, productionId: number) {
-    const r = await fetch(`/api/productions/${productionId}/incidents`).then(x => (x.ok ? x.json() : null)).catch(() => null);
+  async function openIncident(id: number, owner: { productionId: number | null; entity?: { slug: string | null } | null }) {
+    const r = await fetch(`${ownerApi(owner)}/incidents`).then(x => (x.ok ? x.json() : null)).catch(() => null);
     const inc = r?.incidents?.find((x: Incident) => x.id === id);
     if (!inc) return alertDialog("Couldn't open that report");
     setOpen({ incident: inc, manage: r.manage, lead: r.lead, people: r.people });
@@ -84,14 +84,14 @@ export default function HealthSafetyView({ initial }: { initial: HSData | null }
   const docsDue = d.docs.reduce((n, x) => n + x.due.length, 0);
   const noDocs = d.docs.filter(x => x.count === 0);
   const max = Math.max(1, ...s.months.map(m => m.count));
-  const scope = d.me.lead ? "every show" : "the shows you're on";
+  const scope = d.me.lead ? "every show and workshop" : "the shows and workshop you work on";
   const docsOpen = d.docs.find(x => x.id === docsShow) ?? null;
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
       <header>
         <h1 className="text-2xl font-bold text-white m-0">Health &amp; Safety</h1>
-        <p className="text-sm m-0 mt-1" style={muted}>Accidents, incidents and paperwork across {scope}. Report an incident from the show&apos;s H&amp;S tab, or put up its QR code for crew.</p>
+        <p className="text-sm m-0 mt-1" style={muted}>Accidents, incidents and paperwork across {scope}. Report an incident from a show&apos;s H&amp;S tab or a workshop&apos;s Safety page, or put up their QR codes.</p>
       </header>
 
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
@@ -104,7 +104,7 @@ export default function HealthSafetyView({ initial }: { initial: HSData | null }
       {riddorWaiting.length > 0 && (
         <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "rgba(248,113,113,0.5)", backgroundColor: "rgba(248,113,113,0.06)" }} role="status">
           <strong className="text-white">RIDDOR reports to make: </strong>
-          {riddorWaiting.map((i, n) => <span key={i.id}>{n > 0 && " · "}<button type="button" onClick={() => openIncident(i.id, i.productionId)} className="text-blue-300 hover:underline">{incidentRef(i)} {i.production.name}</button><span style={muted}> by {day(i.riddorDueDate)}</span></span>)}
+          {riddorWaiting.map((i, n) => <span key={i.id}>{n > 0 && " · "}<button type="button" onClick={() => openIncident(i.id, i)} className="text-blue-300 hover:underline">{incidentRef(i)} {i.production?.name ?? i.entity?.name}</button><span style={muted}> by {day(i.riddorDueDate)}</span></span>)}
         </div>
       )}
 
@@ -118,10 +118,10 @@ export default function HealthSafetyView({ initial }: { initial: HSData | null }
             <ul className="m-0 p-0 list-none">
               {list.map(i => (
                 <li key={i.id} style={{ borderTop: "1px solid var(--psg-card-border)" }}>
-                  <button type="button" onClick={() => openIncident(i.id, i.productionId)} className="w-full text-left px-4 py-2.5 hover:bg-white/5 grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
+                  <button type="button" onClick={() => openIncident(i.id, i)} className="w-full text-left px-4 py-2.5 hover:bg-white/5 grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
                     <span className="min-w-0">
                       <span className="block text-sm text-white truncate"><strong className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}</strong>: {i.description}</span>
-                      <span className="block text-xs" style={muted}>{i.production.name} · {day(i.occurredAt)} · <span className="font-mono">{incidentRef(i)}</span>{i.actions.some(a => !a.doneAt) ? ` · ${i.actions.filter(a => !a.doneAt).length} open action${i.actions.filter(a => !a.doneAt).length === 1 ? "" : "s"}` : ""}</span>
+                      <span className="block text-xs" style={muted}>{i.production?.name ?? i.entity?.name} · {day(i.occurredAt)} · <span className="font-mono">{incidentRef(i)}</span>{i.actions.some(a => !a.doneAt) ? ` · ${i.actions.filter(a => !a.doneAt).length} open action${i.actions.filter(a => !a.doneAt).length === 1 ? "" : "s"}` : ""}</span>
                     </span>
                     <StatusPill i={i} />
                   </button>
@@ -138,7 +138,7 @@ export default function HealthSafetyView({ initial }: { initial: HSData | null }
                 const late = a.dueDate && new Date(a.dueDate) < new Date();
                 return (
                   <li key={a.id} className="px-4 py-2" style={{ borderTop: "1px solid var(--psg-card-border)" }}>
-                    <button type="button" onClick={() => openIncident(a.incident.id, a.incident.productionId)} className="text-left w-full">
+                    <button type="button" onClick={() => openIncident(a.incident.id, a.incident)} className="text-left w-full">
                       <span className="block text-sm text-white">{a.text}</span>
                       <span className="block text-xs" style={{ color: late ? "#fca5a5" : "var(--psg-muted)" }}>{[a.owner?.name ?? "No one yet", a.dueDate && `${late ? "overdue, was due" : "by"} ${day(a.dueDate)}`, `${incidentRef(a.incident)} ${a.incident.productionName}`].filter(Boolean).join(" · ")}</span>
                     </button>

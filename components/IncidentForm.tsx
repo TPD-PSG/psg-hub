@@ -21,14 +21,14 @@ export async function photosFrom(files: FileList | File[], room: number): Promis
 type Look = "hub" | "public";
 const LOOKS = {
   hub: {
-    input: { width: "100%", padding: "8px 10px", border: "1px solid var(--psg-card-border)", borderRadius: 6, fontSize: 14, color: "#fff", backgroundColor: "var(--psg-input-bg, rgba(255,255,255,0.04))", boxSizing: "border-box" as const },
+    input: { width: "100%", padding: "8px 10px", border: "1px solid var(--psg-card-border)", borderRadius: 6, fontSize: 14, color: "var(--inc-ink, #fff)", backgroundColor: "var(--inc-field, rgba(255,255,255,0.04))", boxSizing: "border-box" as const },
     label: { display: "block", fontSize: 12, fontWeight: 600, color: "var(--psg-muted)", marginBottom: 4 },
     group: { borderTop: "1px solid var(--psg-card-border)", paddingTop: 14 },
-    heading: { fontSize: 13, fontWeight: 700, color: "#fff", margin: "0 0 10px" },
+    heading: { fontSize: 13, fontWeight: 700, color: "var(--inc-ink, #fff)", margin: "0 0 10px" },
     hint: { fontSize: 12, color: "var(--psg-muted)" },
-    choice: (on: boolean) => ({ border: `1px solid ${on ? "var(--psg-blue)" : "var(--psg-card-border)"}`, backgroundColor: on ? "rgba(59,130,246,0.15)" : "transparent", color: on ? "#fff" : "var(--psg-muted)", borderRadius: 6, padding: "8px 10px", fontSize: 13, textAlign: "left" as const, cursor: "pointer" }),
+    choice: (on: boolean) => ({ border: `1px solid ${on ? "var(--psg-blue)" : "var(--psg-card-border)"}`, backgroundColor: on ? "var(--inc-pick, rgba(59,130,246,0.15))" : "transparent", color: on ? "var(--inc-ink, #fff)" : "var(--psg-muted)", borderRadius: 6, padding: "8px 10px", fontSize: 13, textAlign: "left" as const, cursor: "pointer" }),
     button: { padding: "10px 16px", backgroundColor: "var(--psg-blue)", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" },
-    error: { color: "#fca5a5", fontSize: 13 },
+    error: { color: "var(--inc-bad-ink, #fca5a5)", fontSize: 13 },
   },
   public: {
     input: { width: "100%", padding: "11px 12px", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 16, color: "#0f172a", backgroundColor: "#fff", boxSizing: "border-box" as const },

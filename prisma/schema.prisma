@@ -469,6 +469,8 @@ model Entity {
   storedPieces     StoredPiece[]
   buildTemplates   BuildTemplate[]
   labourTypes      LabourType[]
+  incidents        Incident[]        @relation("EntityIncidents")
+  hsReportToken    String?           @unique // the space's no-login accident/incident form (/report-incident/<token>)
 }
 
 // An entity's revenue target for a calendar year
@@ -1869,8 +1871,10 @@ model LabourType {
 // H&S leads (Setting "hs_lead_ids"): investigation, root cause, actions, RIDDOR, then sign-off to close.
 model Incident {
   id               Int              @id @default(autoincrement())
-  productionId     Int
-  production       Production       @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  productionId     Int? // a show's report…
+  production       Production?      @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  entityId         Int? // …or a company space's (e.g. The Workshop Stoke's floor)
+  entity           Entity?          @relation("EntityIncidents", fields: [entityId], references: [id], onDelete: Cascade)
   number           Int // per year: INC-2026-007
   year             Int
   kind             String // accident | near_miss | dangerous_occurrence | ill_health | property_damage
@@ -1912,6 +1916,7 @@ model Incident {
 
   @@unique([year, number])
   @@index([productionId, occurredAt])
+  @@index([entityId, occurredAt])
   @@index([status])
 }
 

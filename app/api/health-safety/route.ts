@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { companyLimit } from "@/lib/companyScope";
-import { hsLeadIds, managedProductions, visibleWhere, INCIDENT_INCLUDE } from "@/lib/incidents";
+import { hsLeadIds, managedScope, visibleWhere, incidentPath, INCIDENT_INCLUDE } from "@/lib/incidents";
 import { incidentStats } from "@/lib/incidentsCore";
 import { mondayOf } from "@/lib/showDigestCore";
 
@@ -19,7 +19,7 @@ export async function GET() {
   const role = user.role ?? "member", userId = Number(user.id);
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const managed = await managedProductions(userId, role);
+  const managed = await managedScope(userId, role);
   const limit = role === "admin" ? null : await companyLimit(userId);
   const now = new Date();
   const yearAgo = new Date(now.getTime() - 366 * DAY);
@@ -34,7 +34,7 @@ export async function GET() {
   const shows = await prisma.production.findMany({
     where: {
       archived: false, status: { not: "closed" }, OR: [{ endDate: null }, { endDate: { gte: startOfToday } }],
-      ...(managed === "all" ? {} : { id: { in: managed } }),
+      ...(managed === "all" ? {} : { id: { in: managed.productionIds } }),
       ...(limit ? { entityId: { in: limit } } : {}),
     },
     select: {
@@ -60,14 +60,14 @@ export async function GET() {
     last: s.toolboxSignatures.map(t => t.signeeDate).sort().pop() ?? null,
   }));
 
-  const openActions = incidents.flatMap(i => i.actions.filter(a => !a.doneAt).map(a => ({ ...a, incident: { id: i.id, year: i.year, number: i.number, productionId: i.productionId, productionName: i.production.name } })))
+  const openActions = incidents.flatMap(i => i.actions.filter(a => !a.doneAt).map(a => ({ ...a, incident: { id: i.id, year: i.year, number: i.number, productionId: i.productionId, productionName: i.production?.name ?? i.entity?.name ?? "", path: incidentPath(i), entity: i.entity } })))
     .sort((a, b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity));
-  const stats = incidentStats(incidents.map(i => ({ ...i, productionName: i.production.name })), now);
+  const stats = incidentStats(incidents.map(i => ({ ...i, productionName: i.production?.name ?? i.entity?.name ?? "" })), now);
 
   const leadIds = role === "admin" ? await hsLeadIds() : [];
   const staff = role === "admin" ? await prisma.user.findMany({ where: { role: { in: ["admin", "member"] } }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }) : [];
   return NextResponse.json({
-    me: { lead: managed === "all", admin: role === "admin", managed },
+    me: { lead: managed === "all", admin: role === "admin" },
     incidents, stats, openActions, docs, toolbox, weekOf: monday,
     leads: role === "admin" ? { ids: leadIds, staff } : null,
   });

@@ -51,3 +51,16 @@ body:has(.tws-shell) { background-color: #f5f2ec !important; }
   .tws-label { height: 66mm; box-sizing: border-box; }
   @page { size: A4; margin: 10mm; }
 }
+
+/* Accident & incident reports inside a company space (Safety page): the Hub's report components,
+   recoloured from the space's own tokens */
+.inc-light {
+  --psg-card-bg: var(--tws-card); --psg-card-border: var(--tws-line); --psg-muted: var(--tws-muted); --psg-blue: var(--tws-char);
+  --inc-ink: var(--tws-ink); --inc-field: #fff; --inc-pick: var(--tws-ground);
+  --inc-bad-bg: var(--tws-bad-bg); --inc-bad-ink: var(--tws-bad-ink); --inc-warn-bg: var(--tws-warn-bg); --inc-warn-ink: var(--tws-warn-ink);
+  --inc-ok-bg: #e2f1e7; --inc-ok-ink: #1d6b3c; --inc-info-bg: #e5edf8; --inc-info-ink: #1f4878;
+  color: var(--tws-ink);
+}
+.inc-light .text-white { color: var(--tws-ink) !important; }
+.inc-light .text-blue-300 { color: var(--tws-accent-ink) !important; }
+.inc-light [class*="hover:bg-white"]:hover { background-color: var(--tws-ground) !important; }

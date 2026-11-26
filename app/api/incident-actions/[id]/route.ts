@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const ownerId = body.ownerId ? Number(body.ownerId) : null;
     if (ownerId) {
       const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { role: true } });
-      if (!owner || !(await incidentAccess(ownerId, owner.role, x.r.inc.productionId)).manage) return NextResponse.json({ error: "That person can't see this show's reports" }, { status: 400 });
+      if (!owner || !(await incidentAccess(ownerId, owner.role, x.r.inc)).manage) return NextResponse.json({ error: "That person can't see this show's reports" }, { status: 400 });
     }
     data.ownerId = ownerId;
   }

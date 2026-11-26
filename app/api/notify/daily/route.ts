@@ -4,7 +4,7 @@ import { recordRun } from "@/lib/job-status";
 import { summariseDaily } from "@/lib/jobSummaries";
 import { weekDigest } from "@/lib/showDigest";
 import { digestLine, mondayOf } from "@/lib/showDigestCore";
-import { allLeads } from "@/lib/incidents";
+import { allLeads, incidentPath, localStaff } from "@/lib/incidents";
 import { incidentRef } from "@/lib/incidentsCore";
 
 export const dynamic = "force-dynamic";
@@ -179,20 +179,20 @@ async function runDaily(req: NextRequest): Promise<Response> {
   }
 
   // ── 4f. Health & safety: overdue incident actions to their owner; RIDDOR reports not yet made,
-  //        3 days before, on the day and every day after, to the H&S leads and the show's team staff
+  //        3 days before, on the day and every day after, to the H&S leads and the local staff
+  const place = (i: { production: { name: string } | null; entity: { name: string } | null }) => i.production?.name ?? i.entity?.name ?? "";
   const lateActions = await prisma.incidentAction.findMany({
     where: { doneAt: null, ownerId: { not: null }, dueDate: { lt: startOfToday }, incident: { status: { not: "closed" } } },
-    select: { id: true, text: true, ownerId: true, incident: { select: { id: true, year: true, number: true, productionId: true, production: { select: { name: true } } } } },
+    select: { id: true, text: true, ownerId: true, incident: { select: { id: true, year: true, number: true, productionId: true, production: { select: { name: true } }, entity: { select: { name: true, slug: true } } } } },
   });
   for (const a of lateActions) {
-    const link = `/productions/${a.incident.productionId}?section=hs&incident=${a.incident.id}`;
     const title = `Overdue incident action: ${a.text}`.slice(0, 200);
     if (sentTitles.has(`${a.ownerId}|${title}`)) continue;
-    add({ userId: a.ownerId!, title, body: `${incidentRef(a.incident)} · ${a.incident.production.name}`, link }, `incident-action-${a.id}`);
+    add({ userId: a.ownerId!, title, body: `${incidentRef(a.incident)} · ${place(a.incident)}`, link: incidentPath(a.incident) }, `incident-action-${a.id}`);
   }
   const riddorOpen = await prisma.incident.findMany({
     where: { riddorReportedAt: null, riddorDueDate: { lt: in3Days }, NOT: { riddor: null }, status: { not: "closed" } },
-    select: { id: true, year: true, number: true, productionId: true, riddorDueDate: true, production: { select: { name: true, team: { select: { userId: true, user: { select: { role: true } } } } } } },
+    select: { id: true, year: true, number: true, productionId: true, entityId: true, riddorDueDate: true, production: { select: { name: true } }, entity: { select: { name: true, slug: true } } },
   });
   if (riddorOpen.length) {
     const leads = await allLeads();
@@ -200,9 +200,9 @@ async function runDaily(req: NextRequest): Promise<Response> {
       const due = i.riddorDueDate!;
       const left = Math.ceil((due.getTime() - startOfToday.getTime()) / 86400e3);
       if (left > 0 && left !== 3) continue; // 3 days before, then daily from the day it's due
-      const link = `/productions/${i.productionId}?section=hs&incident=${i.id}`;
-      const title = `RIDDOR report ${left > 0 ? `due in ${left} days` : left === 0 ? "due today" : "overdue"}: ${incidentRef(i)} ${i.production.name}`.slice(0, 200);
-      const who = [...new Set([...leads, ...i.production.team.filter(t => t.user.role === "member").map(t => t.userId)])];
+      const link = incidentPath(i);
+      const title = `RIDDOR report ${left > 0 ? `due in ${left} days` : left === 0 ? "due today" : "overdue"}: ${incidentRef(i)} ${place(i)}`.slice(0, 200);
+      const who = [...new Set([...leads, ...(await localStaff(i))])];
       for (const userId of who) {
         if (sentTitles.has(`${userId}|${title}`)) continue; // (the same link may already carry an action reminder)
         add({ userId, title, body: `Report it to the HSE by ${due.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, then note the date and reference on the report.`, link }, `riddor-${i.id}-${userId}`);

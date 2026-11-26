@@ -1,11 +1,14 @@
 // Accident & incident reports (26 Nov 2026): who may see and manage them, creating them, and
 // what goes back to the browser. Injury details are personal data, so the rule is:
 //   H&S leads (admins + Setting "hs_lead_ids") see every report and sign them off;
-//   a production's team staff (members on its team) see and follow up that show's reports;
+//   a production's team staff (members on its team) see and follow up that show's reports, and a
+//   workshop's own staff (members whose home company it is) its floor's reports;
 //   anyone else sees only what they reported themselves.
 import { prisma } from "@/lib/prisma";
 import { companyLimit } from "@/lib/companyScope";
 import { notify } from "@/lib/clientPortal";
+import { incidentPath } from "@/lib/incidentsCore";
+export { incidentPath };
 import { KIND_LABEL, incidentRef, isKind, isRiddor, isSerious, riddorDue, INJURED_ROLES, TREATMENTS } from "@/lib/incidentsCore";
 import { saveFile } from "@/lib/storage";
 import { sendEmail } from "@/lib/mail";
@@ -27,34 +30,55 @@ export async function isHsLead(userId: number, role: string) {
   return role === "admin" || (role === "member" && (await hsLeadIds()).includes(userId));
 }
 
-/** The productions whose reports this person manages, or "all" for an H&S lead. */
-export async function managedProductions(userId: number, role: string): Promise<"all" | number[]> {
+/** Where a report belongs: a show, or a company space (a workshop floor). */
+export type Owner = { productionId: number | null; entityId: number | null };
+
+/** The shows and workshops whose reports this person manages, or "all" for an H&S lead.
+ *  A show's: members on its team. A workshop's: members whose home company it is. */
+export async function managedScope(userId: number, role: string): Promise<"all" | { productionIds: number[]; entityIds: number[] }> {
   if (await isHsLead(userId, role)) return "all";
-  if (role !== "member") return [];
-  const teams = await prisma.productionTeam.findMany({ where: { userId }, select: { productionId: true } });
-  return teams.map(t => t.productionId);
+  if (role !== "member") return { productionIds: [], entityIds: [] };
+  const [teams, me] = await Promise.all([
+    prisma.productionTeam.findMany({ where: { userId }, select: { productionId: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { homeEntityId: true } }),
+  ]);
+  return { productionIds: teams.map(t => t.productionId), entityIds: me?.homeEntityId ? [me.homeEntityId] : [] };
 }
 
-/** How this person stands on one production's reports. */
-export async function incidentAccess(userId: number, role: string, productionId: number): Promise<{ lead: boolean; manage: boolean }> {
+/** How this person stands on one show's or workshop's reports. */
+export async function incidentAccess(userId: number, role: string, owner: Owner): Promise<{ lead: boolean; manage: boolean }> {
   const lead = await isHsLead(userId, role);
   if (lead) return { lead, manage: true };
   if (role !== "member") return { lead, manage: false };
-  const onTeam = await prisma.productionTeam.findUnique({ where: { productionId_userId: { productionId, userId } }, select: { id: true } });
-  return { lead, manage: !!onTeam };
+  if (owner.productionId) {
+    const onTeam = await prisma.productionTeam.findUnique({ where: { productionId_userId: { productionId: owner.productionId, userId } }, select: { id: true } });
+    return { lead, manage: !!onTeam };
+  }
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { homeEntityId: true } });
+  return { lead, manage: !!owner.entityId && me?.homeEntityId === owner.entityId };
 }
 
-/** The where-clause for the central page: what this person may see across all shows. */
+/** The where-clause for the central page: what this person may see across every show and workshop. */
 export async function visibleWhere(userId: number, role: string) {
-  const managed = await managedProductions(userId, role);
+  const managed = await managedScope(userId, role);
   const limit = role === "admin" ? null : await companyLimit(userId);
-  const scope = limit ? { production: { entityId: { in: limit } } } : {};
+  const scope = limit ? { OR: [{ production: { entityId: { in: limit } } }, { entityId: { in: limit } }] } : {};
   if (managed === "all") return scope;
-  return { ...scope, OR: [{ productionId: { in: managed } }, { reportedById: userId }] };
+  return { AND: [scope, { OR: [{ productionId: { in: managed.productionIds } }, { entityId: { in: managed.entityIds } }, { reportedById: userId }] }] };
 }
+
+/** Staff told about a new report besides the leads: the show's team members, or the workshop's own staff. */
+async function localStaff(owner: Owner): Promise<number[]> {
+  if (owner.productionId) return (await prisma.productionTeam.findMany({ where: { productionId: owner.productionId, user: { role: "member" } }, select: { userId: true } })).map(t => t.userId);
+  if (owner.entityId) return (await prisma.user.findMany({ where: { homeEntityId: owner.entityId, role: "member" }, select: { id: true } })).map(u => u.id);
+  return [];
+}
+export { localStaff };
+
 
 export const INCIDENT_INCLUDE = {
   production: { select: { id: true, name: true } },
+  entity: { select: { id: true, name: true, slug: true } },
   reportedBy: { select: { id: true, name: true } },
   closedBy: { select: { id: true, name: true } },
   actions: { orderBy: { createdAt: "asc" as const }, include: { owner: { select: { id: true, name: true } } } },
@@ -127,31 +151,32 @@ export type ReportFields = {
   injuredEmployer: string | null; injuryDetails: string | null; bodyPart: string | null; treatment: string | null; offWork: boolean;
 };
 
-/** File a report: number it for the year, then tell the H&S leads and the show's team staff. */
-export async function createIncident(productionId: number, data: ReportFields, by: { userId: number | null; viaQr: boolean }, photos: PhotoIn[] = []) {
+/** File a report: number it for the year, then tell the H&S leads and the local staff. */
+export async function createIncident(owner: Owner, data: ReportFields, by: { userId: number | null; viaQr: boolean }, photos: PhotoIn[] = []) {
   const year = new Date().getFullYear();
   let incident = null;
   for (let attempt = 0; attempt < 5 && !incident; attempt++) {
     const last = await prisma.incident.findFirst({ where: { year }, orderBy: { number: "desc" }, select: { number: true } });
     try {
-      incident = await prisma.incident.create({ data: { ...data, productionId, year, number: (last?.number ?? 0) + 1, reportedById: by.userId, viaQr: by.viaQr } });
+      incident = await prisma.incident.create({
+        data: { ...data, productionId: owner.productionId, entityId: owner.productionId ? null : owner.entityId, year, number: (last?.number ?? 0) + 1, reportedById: by.userId, viaQr: by.viaQr },
+        include: { production: { select: { name: true } }, entity: { select: { name: true, slug: true } } },
+      });
     } catch (e) {
       if ((e as { code?: string }).code !== "P2002") throw e; // someone else took that number: try the next
     }
   }
   if (!incident) throw new Error("Couldn't number the report");
   await savePhotos(incident.id, photos);
-  const [leads, team, prod] = await Promise.all([
-    allLeads(),
-    prisma.productionTeam.findMany({ where: { productionId, user: { role: "member" } }, select: { userId: true } }),
-    prisma.production.findUnique({ where: { id: productionId }, select: { name: true } }),
-  ]);
-  await notify([...leads, ...team.map(t => t.userId)].filter(id => id !== by.userId), {
-    title: `${KIND_LABEL[data.kind]} reported on ${prod?.name ?? "a production"} (${incidentRef(incident)})`,
+  const [leads, local] = await Promise.all([allLeads(), localStaff(owner)]);
+  const place = incident.production?.name ?? incident.entity?.name ?? "a production";
+  const path = incidentPath(incident);
+  await notify([...leads, ...local].filter(id => id !== by.userId), {
+    title: `${KIND_LABEL[data.kind]} reported ${incident.production ? "on" : "at"} ${place} (${incidentRef(incident)})`,
     body: data.description.slice(0, 200),
-    link: `/productions/${productionId}?section=hs&incident=${incident.id}`,
+    link: path,
   });
-  if (isSerious(data)) await emailLeads(leads, incident, data, prod?.name ?? "a production", productionId);
+  if (isSerious(data)) await emailLeads(leads, incident, data, place, path);
   return incident;
 }
 
@@ -159,11 +184,11 @@ const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt
 
 /** Serious reports also go to the H&S leads by email, so they hear even when not in the Hub. No names
  *  or injury details in the email (it leaves the Hub): what, where, when, and a link. Never blocks the report. */
-async function emailLeads(leadIds: number[], incident: { id: number; year: number; number: number }, data: ReportFields, show: string, productionId: number) {
+async function emailLeads(leadIds: number[], incident: { id: number; year: number; number: number }, data: ReportFields, show: string, path: string) {
   try {
     const people = await prisma.user.findMany({ where: { id: { in: leadIds } }, select: { email: true } });
     const base = process.env.NEXTAUTH_URL ?? "https://hub.production-solutions.group";
-    const link = `${base}/productions/${productionId}?section=hs&incident=${incident.id}`;
+    const link = `${base}${path}`;
     const when = data.occurredAt.toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     const why = data.kind === "dangerous_occurrence" ? "a dangerous occurrence" : data.treatment === "ambulance" ? "an ambulance was called" : data.treatment === "hospital" ? "someone went to hospital" : "someone has had to stop work";
     const html = `<p><strong>${esc(KIND_LABEL[data.kind])} on ${esc(show)}</strong> (${incidentRef(incident)}): ${why}.</p>

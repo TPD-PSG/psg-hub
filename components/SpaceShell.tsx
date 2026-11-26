@@ -25,6 +25,7 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
     { href: `${base}/materials`, label: "Materials & kit" },
     { href: `${base}/storage`, label: "Storage" },
     { href: `${base}/aftercare`, label: "Aftercare" },
+    { href: `${base}/safety`, label: "Safety" },
     { href: `${base}/tablet`, label: "Tablet mode" },
     { href: `${base}/noticeboard`, label: "Noticeboard" },
     { href: `${base}/fun`, label: "Fun Corner" },

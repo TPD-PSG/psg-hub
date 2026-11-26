@@ -1,5 +1,6 @@
 // One design file of a build: opened by PSG staff who can see the build; deleted by its uploader or an admin.
 import { NextResponse } from "next/server";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { loadFile, removeFile } from "@/lib/storage";
 import { jobAccess } from "@/lib/jobDesign";
@@ -15,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!bytes) return new Response("Not found", { status: 404 });
   const name = f.name.replace(/[^\w.\- ]+/g, "_");
   return new Response(new Uint8Array(bytes), {
-    headers: { "Content-Type": f.mime, "Content-Disposition": `inline; filename="${name}"`, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" },
+    headers: fileHeaders(f.mime, name, { "Cache-Control": "private, max-age=3600" }),
   });
 }
 

@@ -1,5 +1,6 @@
 // A photo in a company space: served to people who can open that space; deleted by its uploader or an admin.
 import { NextResponse } from "next/server";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { memberOfEntity } from "@/lib/spaceBoard";
 import { loadFile, removeFile } from "@/lib/storage";
@@ -13,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if ("error" in m) return new Response("Forbidden", { status: m.error.status });
   const bytes = await loadFile(photo.fileKey, photo.data).catch(() => null);
   if (!bytes) return new Response("Not found", { status: 404 });
-  return new Response(new Uint8Array(bytes), { headers: { "Content-Type": photo.mime, "Cache-Control": "private, max-age=604800, immutable", "X-Content-Type-Options": "nosniff" } });
+  return new Response(new Uint8Array(bytes), { headers: fileHeaders(photo.mime, "photo", { "Cache-Control": "private, max-age=604800, immutable" }) });
 }
 
 // Staff in the space switch whether the build's client sees it (progress photos in My builds)

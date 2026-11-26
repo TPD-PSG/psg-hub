@@ -29,6 +29,8 @@ const RULES: Rule[] = [
   { prefixes: ["/api/property"], write: ["property"] },
   { prefixes: ["/api/suppliers"], write: ["suppliers"] },
   { prefixes: ["/api/fun"], write: ["fun"] },
+  // Ask Me Anything: the policy documents and the paid Q&A (clients don't have this module)
+  { prefixes: ["/api/knowledge-docs"], write: ["ask"] },
   { prefixes: ["/api/tasks", "/api/task-lists"], write: ["tasks", "productions"] },
   { prefixes: ["/api/venues", "/api/venue-contacts", "/api/venue-documents"], write: ["venues"], read: ["venues", "productions"] },
 ];
@@ -62,6 +64,11 @@ export const proxy = auth((req) => {
   if (req.method !== "GET" && req.method !== "HEAD" && pathname.startsWith("/api/")) {
     const len = Number(req.headers.get("content-length") ?? 0);
     const max = maxBodyBytes(pathname);
+    // A body sent in chunks states no size, so the cap above can't see it: refuse it (browsers
+    // always send the size; audit round 2)
+    if (!req.headers.get("content-length") && /chunked/i.test(req.headers.get("transfer-encoding") ?? "")) {
+      return NextResponse.json({ error: "Send the request with its size" }, { status: 411 });
+    }
     if (len > max) {
       return NextResponse.json({ error: `File too large (max ${Math.round(max / MB)} MB)` }, { status: 413 });
     }

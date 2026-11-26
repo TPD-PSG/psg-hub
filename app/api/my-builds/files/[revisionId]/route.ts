@@ -1,5 +1,6 @@
 // A drawing file for the client whose build it's on
 import { prisma } from "@/lib/prisma";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { loadFile } from "@/lib/storage";
 import { clientViewer } from "@/lib/clientPortal";
 
@@ -15,6 +16,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ revisio
   if (!bytes) return new Response("Not found", { status: 404 });
   const name = r.file.name.replace(/[^\w.\- ]+/g, "_");
   return new Response(new Uint8Array(bytes), {
-    headers: { "Content-Type": r.file.mime, "Content-Disposition": `inline; filename="${name}"`, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" },
+    headers: fileHeaders(r.file.mime, name, { "Cache-Control": "private, max-age=3600" }),
   });
 }

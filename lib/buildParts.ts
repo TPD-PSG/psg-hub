@@ -65,3 +65,20 @@ export function materialFields(body: Record<string, unknown>, creating: boolean)
   if (has("stockItemId")) data.stockItemId = Number(body.stockItemId) || null;
   return { data };
 }
+
+// Parts carry money (a labour type's day rate, each material's cost). People who can't see money,
+// freelancers on the planner included, get them without it (audit round 2).
+type WithMoney = { labourType?: { dayRate: number | null } | null; materials?: { unitCost: number | null }[] };
+function stripMoney<T extends WithMoney>(p: T): T {
+  return {
+    ...p,
+    ...(p.labourType ? { labourType: { ...p.labourType, dayRate: null } } : {}),
+    ...(p.materials ? { materials: p.materials.map(m => ({ ...m, unitCost: null })) } : {}),
+  };
+}
+export function partsForViewer<T extends WithMoney>(seeMoney: boolean, parts: T[]): T[];
+export function partsForViewer<T extends WithMoney>(seeMoney: boolean, parts: T | null): T | null;
+export function partsForViewer<T extends WithMoney>(seeMoney: boolean, parts: T[] | T | null) {
+  if (seeMoney || parts == null) return parts;
+  return Array.isArray(parts) ? parts.map(stripMoney) : stripMoney(parts);
+}

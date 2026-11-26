@@ -336,7 +336,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                     <li key={m.id} className="py-1.5 flex items-center gap-2" style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
                       <input type="checkbox" aria-label={`Order ${m.description}`} checked={orderPick.has(m.id)} onChange={() => setOrderPick(s => { const n = new Set(s); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return n; })} style={{ accentColor: "var(--tws-char)" }} />
                       <span className="flex-1 min-w-0 break-words">{m.description} <span style={muted}>· {m.quantity} {m.unit ?? ""} · {m.partLabel}</span>{m.stockItemId && <span className="ml-1 text-[11px] font-bold" style={{ color: "var(--tws-warn-ink)" }}>in stock</span>}</span>
-                      <span className="tabular-nums shrink-0">{gbp(m.quantity * m.unitCost)}</span>
+                      {seeMoney && <span className="tabular-nums shrink-0">{gbp(m.quantity * m.unitCost)}</span>}
                     </li>
                   ))}
                 </ul>
@@ -406,7 +406,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                         <td className={td}>
                           <span style={{ textDecoration: p.done ? "line-through" : undefined }}>{p.label}</span>
                           <button type="button" onClick={() => toggleMats(p.id)} aria-expanded={openMats.has(p.id)} className="block text-xs font-semibold mt-0.5 whitespace-nowrap" style={link}>
-                            {p.materials?.length ? `Materials: ${p.materials.length} · ${gbp(materialsCost(p.materials))}` : "+ Materials"} {openMats.has(p.id) ? "▴" : "▾"}
+                            {p.materials?.length ? `Materials: ${p.materials.length}${seeMoney ? ` · ${gbp(materialsCost(p.materials))}` : ""}` : "+ Materials"} {openMats.has(p.id) ? "▴" : "▾"}
                           </button>
                         </td>
                         <td className={td}>{p.user?.name ?? <span style={muted}>Nobody yet</span>}
@@ -437,7 +437,7 @@ export default function SpaceJob({ space, initial, seeMoney, initialParts, peopl
                   <strong className="text-sm">Materials: {p.label}</strong>
                   <button type="button" onClick={() => toggleMats(p.id)} className="text-xs underline" style={muted}>Close</button>
                 </div>
-                <PartMaterials jobId={job.id} partId={p.id} entityId={space.id} materials={p.materials ?? []} onChange={ms => setPartMaterials(p.id, ms)} />
+                <PartMaterials jobId={job.id} partId={p.id} entityId={space.id} materials={p.materials ?? []} onChange={ms => setPartMaterials(p.id, ms)} seeMoney={seeMoney} />
               </div>
             ))}
             <BuildTemplates<PartRow> jobId={job.id} slug={space.slug} hasParts={parts.length > 0} me={me} onParts={setParts} />

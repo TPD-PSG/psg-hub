@@ -1,5 +1,6 @@
 // One photo on an incident report: seen by whoever can see the report; removed by the show's staff or a lead.
 import { NextRequest, NextResponse } from "next/server";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { loadFile, removeFile } from "@/lib/storage";
 import { INCIDENT_INCLUDE } from "@/lib/incidents";
@@ -17,7 +18,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   if ("error" in r) return r.error;
   const buf = await loadFile(p.fileKey, p.data);
   if (!buf) return NextResponse.json({ error: "File missing" }, { status: 404 });
-  return new NextResponse(buf, { headers: { "Content-Type": p.mime, "Cache-Control": "private, no-store", "Content-Disposition": `inline; filename="${p.name.replace(/"/g, "")}"` } });
+  return new NextResponse(buf, { headers: fileHeaders(p.mime, p.name, { "Cache-Control": "private, no-store" }) });
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {

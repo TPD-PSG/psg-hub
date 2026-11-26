@@ -1,18 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { generateText, ClaudeOutputError } from "@/lib/claude";
+import { requireRecordAccess, requireProductionAccess } from "@/lib/access";
+import { allowUse } from "@/lib/rate-limit";
 
 
-export async function POST(req: NextRequest, { params: _params }: { params: Promise<{ id: string }> }) {
+// Write minutes from a transcript (Opus). PSG staff only, on a meeting (or, before it's saved, a
+// production) they can open; transcripts capped; a few runs per person per hour (audit round 2).
+const MAX_TRANSCRIPT = 200_000; // characters, about 50,000 words
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = session?.user as { id?: string; role?: string } | undefined;
+  if (!user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (user.role !== "admin" && user.role !== "member") return NextResponse.json({ error: "PSG staff only" }, { status: 403 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const { transcript, agenda, title, attendees, meetingDate } = body;
+  const { id } = await params;
+  const access = /^\d+$/.test(id) ? await requireRecordAccess("meeting", id) : await requireProductionAccess(Number(body.productionId) || 0, "meetings");
+  if ("error" in access) return access.error;
 
-  if (!transcript?.trim()) {
+  if (typeof transcript !== "string" || !transcript.trim()) {
     return NextResponse.json({ error: "No transcript provided" }, { status: 400 });
   }
+  if (transcript.length > MAX_TRANSCRIPT) return NextResponse.json({ error: "That transcript is too long to write minutes from in one go. Split it into parts." }, { status: 413 });
+  if (!allowUse(`minutes:${user.id}`, 10, 3600e3)) return NextResponse.json({ error: "That's the limit for minutes this hour. Try again later." }, { status: 429 });
 
   const prompt = `You are helping write professional meeting minutes for a theatre production company.
 

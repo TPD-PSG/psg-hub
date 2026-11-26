@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
@@ -19,8 +20,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   if (!buffer) return NextResponse.json({ error: "File missing" }, { status: 404 });
   return new NextResponse(buffer, {
     headers: {
-      "Content-Type": doc.mime,
-      "Content-Disposition": `attachment; filename="${doc.name}"`,
+      ...fileHeaders(doc.mime, doc.name, {}, { download: true }),
     },
   });
 }

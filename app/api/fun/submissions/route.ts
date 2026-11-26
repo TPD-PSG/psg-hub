@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { MEDIA_TYPES, MEDIA_EXT } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { spaceMember } from "@/lib/spaceBoard";
@@ -74,6 +75,10 @@ export async function POST(req: NextRequest) {
   const MAX_FILE_MB = 150;
   const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
   for (const file of files) {
+    // Pictures and videos only: anything else could be a web page in disguise (audit round 2)
+    if (!MEDIA_TYPES.has(file.type.toLowerCase())) {
+      return NextResponse.json({ error: `"${file.name}" isn't a photo or video. Fun Corner takes JPEG, PNG, WebP, GIF, HEIC, MP4, MOV or WebM.` }, { status: 415 });
+    }
     if (file.size > MAX_FILE_BYTES) {
       return NextResponse.json(
         { error: `"${file.name}" is too large (${Math.round(file.size / 1024 / 1024)}MB). Maximum file size is ${MAX_FILE_MB}MB.` },
@@ -89,10 +94,10 @@ export async function POST(req: NextRequest) {
   const mediaData = await Promise.all(
     files.map(async (file) => {
       const buf = await file.arrayBuffer();
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
+      const ext = MEDIA_EXT[file.type.toLowerCase()] ?? "bin"; // from the checked type, never the uploaded name
       const filename = `${randomUUID()}.${ext}`;
       await writeFile(join(MEDIA_DIR, filename), Buffer.from(buf));
-      return { name: file.name, mime: file.type, filePath: filename, data: null };
+      return { name: file.name, mime: file.type.toLowerCase(), filePath: filename, data: null };
     })
   );
 

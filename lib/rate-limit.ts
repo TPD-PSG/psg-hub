@@ -26,3 +26,14 @@ export function checkRateLimit(ip: string): { allowed: boolean; retryAfterMs: nu
 export function resetRateLimit(ip: string) {
   attempts.delete(ip);
 }
+
+/** A per-key allowance: `max` uses per `windowMs` (e.g. AI calls per person). In memory, per server. */
+const buckets = new Map<string, number[]>();
+export function allowUse(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const hits = (buckets.get(key) ?? []).filter(t => now - t < windowMs);
+  if (hits.length >= max) { buckets.set(key, hits); return false; }
+  hits.push(now);
+  buckets.set(key, hits);
+  return true;
+}

@@ -1,6 +1,7 @@
 // A register document: any staff member who can see its item downloads it; admins can delete one
 // uploaded by mistake (the page confirms first).
 import { NextRequest, NextResponse } from "next/server";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { loadFile, removeFile } from "@/lib/storage";
 import { complianceViewer, register, visibleItems } from "@/lib/compliance";
@@ -19,7 +20,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   if ("error" in x) return x.error;
   const buf = await loadFile(x.doc.fileKey, x.doc.data);
   if (!buf) return NextResponse.json({ error: "File missing" }, { status: 404 });
-  return new NextResponse(buf, { headers: { "Content-Type": x.doc.mime, "Content-Disposition": `inline; filename="${x.doc.name.replace(/"/g, "")}"`, "Cache-Control": "private, no-store" } });
+  return new NextResponse(buf, { headers: fileHeaders(x.doc.mime, x.doc.name, { "Cache-Control": "private, no-store" }) });
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {

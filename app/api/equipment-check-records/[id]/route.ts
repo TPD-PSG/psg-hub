@@ -1,5 +1,6 @@
 // A check record's certificate: anyone in the space can open it.
 import { NextRequest, NextResponse } from "next/server";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { loadFile } from "@/lib/storage";
 import { workshopViewer } from "@/lib/inductions";
@@ -12,5 +13,5 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   if ("error" in v) return v.error;
   const buf = await loadFile(r.fileKey, r.fileData);
   if (!buf) return NextResponse.json({ error: "File missing" }, { status: 404 });
-  return new NextResponse(buf, { headers: { "Content-Type": r.fileMime ?? "application/octet-stream", "Content-Disposition": `inline; filename="${r.fileName.replace(/"/g, "")}"`, "Cache-Control": "private, no-store" } });
+  return new NextResponse(buf, { headers: fileHeaders(r.fileMime, r.fileName, { "Cache-Control": "private, no-store" }) });
 }

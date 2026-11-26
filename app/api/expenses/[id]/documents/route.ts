@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/auth";
+import { expenseOwnerAccess } from "@/lib/expenseAccess";
 import { saveFile } from "@/lib/storage";
 
 const ALLOWED_MIME = [
@@ -16,9 +16,9 @@ const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 export const dynamic = "force-dynamic";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id } = await params;
+  const a = await expenseOwnerAccess((await params).id); // the submitter or an admin
+  if ("error" in a) return a.error;
+  const id = a.expenseId;
   const docs = await prisma.productionExpenseDocument.findMany({
     where: { expenseId: Number(id) },
     orderBy: { createdAt: "asc" },
@@ -28,9 +28,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id } = await params;
+  const a = await expenseOwnerAccess((await params).id); // the submitter or an admin
+  if ("error" in a) return a.error;
+  const id = a.expenseId;
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;

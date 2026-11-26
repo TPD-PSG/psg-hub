@@ -1,5 +1,6 @@
 // A progress photo for the client whose build it's on (only photos staff ticked "Client")
 import { prisma } from "@/lib/prisma";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { loadFile } from "@/lib/storage";
 import { clientViewer } from "@/lib/clientPortal";
 
@@ -13,5 +14,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!p) return new Response("Not found", { status: 404 });
   const bytes = await loadFile(p.fileKey, p.data).catch(() => null);
   if (!bytes) return new Response("Not found", { status: 404 });
-  return new Response(new Uint8Array(bytes), { headers: { "Content-Type": p.mime, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" } });
+  return new Response(new Uint8Array(bytes), { headers: fileHeaders(p.mime, "photo", { "Cache-Control": "private, max-age=3600" }) });
 }

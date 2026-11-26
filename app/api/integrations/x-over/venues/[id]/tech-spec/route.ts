@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { loadFile } from "@/lib/storage";
 import { guard } from "@/lib/xover-sync";
@@ -14,9 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!venue || !buffer) return NextResponse.json({ error: "No file" }, { status: 404 });
   return new NextResponse(buffer, {
     headers: {
-      "Content-Type": venue.techSpecMime ?? "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${(venue.techSpecName ?? "tech-spec").replace(/["\r\n]/g, "")}"`,
-      "Cache-Control": "private, no-store",
+      ...fileHeaders(venue.techSpecMime, venue.techSpecName ?? "tech-spec", { "Cache-Control": "private, no-store" }, { download: true }),
     },
   });
 }

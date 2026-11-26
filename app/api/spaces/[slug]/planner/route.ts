@@ -5,7 +5,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { spaceBySlug, canSeeSpace } from "@/lib/spaces";
-import { PART_SELECT, dayUtc } from "@/lib/buildParts";
+import { PART_SELECT, dayUtc, partsForViewer } from "@/lib/buildParts";
+import { parsePerms, canAccess } from "@/lib/permissions";
 import { current, inductionStatus, inducted as counts } from "@/lib/inductionsCore";
 import { unavailableMachines } from "@/lib/equipment";
 
@@ -28,15 +29,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const days = 14;
   const to = new Date(from.getTime() + days * 86400e3);
 
-  const jobs = await prisma.job.findMany({
+  // Money (day rates, material costs) only for those who see it elsewhere; client names only for
+  // PSG staff, not freelancers (audit round 2)
+  const staffRole = role === "admin" || role === "member";
+  const perms = parsePerms((session?.user as { permissions?: string | null } | undefined)?.permissions ?? null);
+  const seeMoney = role === "admin" || (role === "member" && (canAccess(perms, "bd", role) || canAccess(perms, "finance", role)));
+  const jobs = (await prisma.job.findMany({
     where: { entityId: space.id, status: "active" },
     select: { id: true, number: true, title: true, jobType: true, stage: true, startDate: true, endDate: true, deliveryMethod: true, client: { select: { name: true } } },
     orderBy: [{ endDate: "asc" }, { createdAt: "asc" }],
-  });
-  const parts = await prisma.buildPart.findMany({
+  })).map(j => (staffRole ? j : { ...j, client: null }));
+  const parts = partsForViewer(seeMoney, await prisma.buildPart.findMany({
     where: { jobId: { in: jobs.map(j => j.id) } },
     select: PART_SELECT, orderBy: [{ startDate: "asc" }, { id: "asc" }],
-  });
+  }));
   const team = await prisma.user.findMany({ where: { homeEntityId: space.id }, select: { id: true, name: true }, orderBy: { name: "asc" } });
   const extraIds = [...new Set(parts.filter(p => p.userId && !team.some(t => t.id === p.userId)).map(p => p.userId!))];
   const extra = extraIds.length ? await prisma.user.findMany({ where: { id: { in: extraIds } }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { denyOutOfScope } from "@/lib/companyScope";
 import { requireJobViewer } from "@/lib/jobData";
-import { materialFields, PART_SELECT } from "@/lib/buildParts";
+import { materialFields, PART_SELECT, partsForViewer } from "@/lib/buildParts";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; partId: string }> }) {
   const { id, partId } = await params;
@@ -18,5 +18,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const f = materialFields(await req.json().catch(() => ({})), true);
   if ("error" in f) return NextResponse.json({ error: f.error }, { status: 400 });
   await prisma.buildPartMaterial.create({ data: { ...(f.data as { description: string }), partId: part.id, sortOrder: part._count.materials } });
-  return NextResponse.json(await prisma.buildPart.findUnique({ where: { id: part.id }, select: PART_SELECT }), { status: 201 });
+  return NextResponse.json(partsForViewer(v.seeMoney, await prisma.buildPart.findUnique({ where: { id: part.id }, select: PART_SELECT })), { status: 201 });
 }

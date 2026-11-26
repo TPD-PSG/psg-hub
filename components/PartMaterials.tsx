@@ -20,8 +20,9 @@ const cell: React.CSSProperties = { ...input, padding: "6px 8px", fontSize: 13 }
 
 export const materialsCost = (ms: PartMaterial[]) => ms.reduce((s, m) => s + m.quantity * m.unitCost, 0);
 
-export default function PartMaterials({ jobId, partId, entityId, materials, onChange }: {
+export default function PartMaterials({ jobId, partId, entityId, materials, onChange, seeMoney = true }: {
   jobId: number; partId: number; entityId: number | null; materials: PartMaterial[]; onChange: (materials: PartMaterial[]) => void;
+  seeMoney?: boolean; // without it, no costs are shown or sent (they come back blank)
 }) {
   const [entry, setEntry] = useState<Row>({ ...BLANK, section: materials[materials.length - 1]?.section ?? "" });
   const [found, setFound] = useState<Lookup | null>(null);
@@ -67,7 +68,7 @@ export default function PartMaterials({ jobId, partId, entityId, materials, onCh
       {materials.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]" style={{ borderCollapse: "collapse", minWidth: 560 }}>
-            <thead><tr className="text-xs text-left" style={muted}><th className="py-1 pr-1 font-semibold">Material</th><th className="py-1 pr-1 font-semibold w-20">Qty</th><th className="py-1 pr-1 font-semibold w-20">Unit</th><th className="py-1 pr-1 font-semibold w-24">£ each</th><th className="py-1 pr-1 font-semibold w-24 text-right">Cost</th><th className="w-6" /></tr></thead>
+            <thead><tr className="text-xs text-left" style={muted}><th className="py-1 pr-1 font-semibold">Material</th><th className="py-1 pr-1 font-semibold w-20">Qty</th><th className="py-1 pr-1 font-semibold w-20">Unit</th>{seeMoney && <><th className="py-1 pr-1 font-semibold w-24">£ each</th><th className="py-1 pr-1 font-semibold w-24 text-right">Cost</th></>}<th className="w-6" /></tr></thead>
             <tbody>
               {materials.map(m => (
                 <tr key={m.id} style={{ borderTop: "1px solid var(--tws-line-soft)" }}>
@@ -76,12 +77,14 @@ export default function PartMaterials({ jobId, partId, entityId, materials, onCh
                     {!ordered(m) && m.stockItemId && <span className="ml-1.5 text-[11px]" style={muted}>(from stock)</span>}</td>
                   <td className="py-1 pr-1"><input aria-label={`Quantity of ${m.description}`} type="number" step="any" min={0} disabled={ordered(m)} style={cell} defaultValue={m.quantity} onBlur={e => Number(e.target.value) !== m.quantity && update(m, { quantity: e.target.value })} /></td>
                   <td className="py-1 pr-1">{m.unit ?? ""}</td>
+                  {seeMoney && <>
                   <td className="py-1 pr-1"><input aria-label={`Cost each of ${m.description}`} type="number" step="any" min={0} disabled={ordered(m)} style={cell} defaultValue={m.unitCost} onBlur={e => Number(e.target.value) !== m.unitCost && update(m, { unitCost: e.target.value })} /></td>
                   <td className="py-1 pr-1 text-right tabular-nums">{gbp(m.quantity * m.unitCost)}</td>
+                  </>}
                   <td><button type="button" aria-label={`Remove ${m.description}`} disabled={busy || ordered(m)} title={ordered(m) ? (m.stockMoveId ? "Booked out of stock: return it in Materials & kit if it isn't used" : `On ${m.po!.number}: change the purchase order instead`) : undefined} onClick={() => call(`${url}/${m.id}`, "DELETE")} style={{ color: "var(--tws-bad-ink)" }}>✕</button></td>
                 </tr>
               ))}
-              <tr className="font-bold" style={{ borderTop: "2px solid var(--tws-char)" }}><td className="py-1" colSpan={4}>Materials for this part</td><td className="py-1 pr-1 text-right tabular-nums">{gbp(total)}</td><td /></tr>
+              {seeMoney && <tr className="font-bold" style={{ borderTop: "2px solid var(--tws-char)" }}><td className="py-1" colSpan={4}>Materials for this part</td><td className="py-1 pr-1 text-right tabular-nums">{gbp(total)}</td><td /></tr>}
             </tbody>
           </table>
         </div>
@@ -98,7 +101,7 @@ export default function PartMaterials({ jobId, partId, entityId, materials, onCh
               {found.stock.map(st => (
                 <button key={`s${st.id}`} type="button" role="option" aria-selected={false} className="w-full text-left px-2 py-1.5 flex justify-between gap-3 hover:bg-black/5"
                   onClick={() => { setEntry(en => ({ ...en, description: st.name, unit: st.unit, unitCost: st.unitCost != null ? String(st.unitCost) : en.unitCost, section: st.section || en.section, stockItemId: st.id })); setStockNote(`${st.quantity} ${st.unit} in stock`); setFound(null); setSearching(false); }}>
-                  <span className="truncate">{st.name}</span><span className="shrink-0" style={muted}>{st.quantity} {st.unit} in stock{st.unitCost != null ? ` · ${gbp(st.unitCost)}/${st.unit}` : ""}</span>
+                  <span className="truncate">{st.name}</span><span className="shrink-0" style={muted}>{st.quantity} {st.unit} in stock{seeMoney && st.unitCost != null ? ` · ${gbp(st.unitCost)}/${st.unit}` : ""}</span>
                 </button>
               ))}
               {found.recent.map(rc => (
@@ -113,11 +116,11 @@ export default function PartMaterials({ jobId, partId, entityId, materials, onCh
         </div>
         <input aria-label="Material quantity" type="number" step="any" min={0} placeholder="Qty" style={cell} value={entry.quantity} onChange={e => setEntry({ ...entry, quantity: e.target.value })} />
         <div><input aria-label="Material unit" list={`pm-units-${partId}`} placeholder="Unit" style={cell} value={entry.unit} onChange={e => setEntry({ ...entry, unit: e.target.value })} /><datalist id={`pm-units-${partId}`}>{unitsFor(entry.section).map(u => <option key={u} value={u} />)}</datalist></div>
-        <input aria-label="Material cost each" type="number" step="any" min={0} placeholder="£ each" style={cell} value={entry.unitCost} onChange={e => setEntry({ ...entry, unitCost: e.target.value })} />
+        {seeMoney && <input aria-label="Material cost each" type="number" step="any" min={0} placeholder="£ each" style={cell} value={entry.unitCost} onChange={e => setEntry({ ...entry, unitCost: e.target.value })} />}
         <button type="submit" disabled={busy} style={{ ...btnSolid, padding: "6px 12px", fontSize: 13 }}>Add</button>
       </form>
       <span className="text-xs" style={muted}>
-        {stockNote ? `${stockNote} · ` : ""}{entry.section ? `Units for ${entry.section}: ${unitsFor(entry.section).join(", ")} · ` : ""}Costs are what it costs us, ex VAT. Markup is added when you quote.
+        {stockNote ? `${stockNote} · ` : ""}{entry.section ? `Units for ${entry.section}: ${unitsFor(entry.section).join(", ")}` : ""}{seeMoney ? `${entry.section ? " · " : ""}Costs are what it costs us, ex VAT. Markup is added when you quote.` : ""}
       </span>
     </div>
   );

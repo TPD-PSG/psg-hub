@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { auth } from "@/auth";
+import { fileHeaders } from "@/lib/fileHeaders";
 
 const MEDIA_DIR = process.env.NODE_ENV === "production"
   ? "/data/fun-media"
@@ -26,6 +27,6 @@ export async function GET(_: NextRequest, {
   }
 
   return new NextResponse(new Uint8Array(buf), {
-    headers: { "Content-Type": media.mime, "Cache-Control": "private, max-age=86400" },
+    headers: fileHeaders(media.mime, media.name, { "Cache-Control": "private, max-age=86400" }), // older uploads of any type download rather than open
   });
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { fileToContent, parseTechSpec } from "@/lib/venueParser";
 import { ClaudeOutputError } from "@/lib/claude";
@@ -62,8 +63,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!venue || !buffer) return NextResponse.json({ error: "No file" }, { status: 404 });
   return new NextResponse(buffer, {
     headers: {
-      "Content-Type": venue.techSpecMime ?? "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${venue.techSpecName ?? "tech-spec"}"`,
+      ...fileHeaders(venue.techSpecMime, venue.techSpecName ?? "tech-spec", {}, { download: true }),
     },
   });
 }

@@ -126,6 +126,7 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
     try {
       const mid = meetingId ?? editingMeeting?.id ?? 0;
       const res = await sendJson(`/api/meetings/${mid || "_"}/generate-minutes`, "POST", {
+          productionId: prod.id, // checked when the meeting isn't saved yet
           transcript,
           agenda: meetingForm.agenda,
           title: meetingForm.title,

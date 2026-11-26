@@ -7,8 +7,9 @@ import Sidebar from "@/components/Sidebar";
 
 export default function AppChrome({ header, children }: { header: React.ReactNode; children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
-  // Company spaces and the client builds page draw their own chrome in the builder's brand
-  if (pathname.startsWith("/spaces/") || pathname === "/my-builds") return <>{children}</>;
+  // Company spaces and the client builds page draw their own chrome in the builder's brand; the
+  // no-login incident form (QR on site) is a page of its own
+  if (pathname.startsWith("/spaces/") || pathname === "/my-builds" || pathname.startsWith("/report-incident/")) return <>{children}</>;
   return (
     <>
       {header}

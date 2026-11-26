@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { exportToolboxSignoffPDF } from "@/lib/exports";
 import { confirmDialog } from "@/components/Dialogs";
+import IncidentsPanel from "@/components/IncidentsPanel";
 import { FileGrid, FolderToggle, fmtIsoDay, toggled, type HSDoc, type TabProps, type ToolboxSig } from "../shared";
 
 export default function HealthSafetyTab({ prod, reload }: TabProps) {
@@ -52,6 +53,9 @@ export default function HealthSafetyTab({ prod, reload }: TabProps) {
 
   return (
     <div className="space-y-6">
+
+      <IncidentsPanel productionId={prod.id} productionName={prod.name}
+        venues={[...new Set(prod.isTour ? prod.tourStops.map(s => s.venue.name) : [prod.venueRef?.name ?? prod.venue ?? ""])].filter(Boolean)} />
 
       {/* ── Documents section ── */}
       <div>

@@ -34,3 +34,16 @@ export async function DELETE(_: NextRequest, {
   await removeFile(removed.fileKey);
   return NextResponse.json({ ok: true });
 }
+
+// Set (or clear) when a risk assessment or method statement is due for review
+export async function PATCH(req: NextRequest, {
+ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const rec = await requireRecordAccess("hsDocument", id);
+  if ("error" in rec) return rec.error;
+  if (rec.role !== "admin" && rec.role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const body = await req.json().catch(() => ({}));
+  const reviewDate = body.reviewDate && !Number.isNaN(new Date(body.reviewDate).getTime()) ? new Date(body.reviewDate) : null;
+  const doc = await prisma.hSDocument.update({ where: { id: Number(id) }, data: { reviewDate }, select: { id: true, reviewDate: true } });
+  return NextResponse.json(doc);
+}

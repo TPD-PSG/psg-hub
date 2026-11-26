@@ -8,23 +8,23 @@ datasource db {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
+  id           Int          @id @default(autoincrement())
   name         String
-  email        String   @unique
+  email        String       @unique
   passwordHash String
-  role         String   @default("member") // admin | member | client | freelancer
+  role         String       @default("member") // admin | member | client | freelancer
   preferences  String? // JSON: { widgets: string[] }
   permissions  String? // JSON: { modules: string[], allProductions: boolean }
   avatarUrl    String?
   color        String? // hex colour for schedule grid badge
   costDayRate  Float? // internal cost per day, for job costing (admins set it)
   homeEntityId Int? // the company this person works for; its space (if any) is their home page
-  homeEntity   Entity?  @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
+  homeEntity   Entity?      @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
   clockEntries ClockEntry[] @relation("ClockEntryUser")
   clientId     Int? // client accounts: the client company whose builds they see and sign off
-  client       Client?  @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  client       Client?      @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   tasksAssigned       Task[]              @relation("TaskAssignee")
   tasksSignoff        Task[]              @relation("TaskSignoff")
@@ -60,6 +60,9 @@ model User {
   jobFilesUploaded    JobFile[]           @relation("JobFileUploader")
   drawingDecisions    DrawingDecision[]   @relation("DrawingDecisionBy")
   jobLogs             JobLog[]            @relation("JobLogBy")
+  incidentsReported   Incident[]          @relation("IncidentReporter")
+  incidentsClosed     Incident[]          @relation("IncidentClosedBy")
+  incidentActions     IncidentAction[]    @relation("IncidentActionOwner")
 }
 
 model Production {
@@ -122,6 +125,8 @@ model Production {
   productionLinks      ProductionLink[]
   hsDocuments          HSDocument[]
   toolboxSignatures    ToolboxTalkSignature[]
+  incidents            Incident[]
+  hsReportToken        String?                   @unique // the no-login accident/incident form's QR link (/report-incident/<token>)
   performanceSchedule  PerformanceSchedule?
   performanceOverrides PerformanceDateOverride[]
   productionNotes      ProductionNote[]
@@ -432,38 +437,38 @@ model Opportunity {
 
 // A company in the group (deals, productions and revenue targets belong to one). Admins manage them.
 model Entity {
-  id             Int             @id @default(autoincrement())
-  name           String          @unique
-  archived       Boolean         @default(false)
-  sortOrder      Int             @default(0)
+  id               Int               @id @default(autoincrement())
+  name             String            @unique
+  archived         Boolean           @default(false)
+  sortOrder        Int               @default(0)
   // Its own space in the Hub (e.g. The Workshop Stoke): home page, colours and logo
-  hasSpace       Boolean         @default(false)
-  slug           String?         @unique // web address of the space, e.g. "tws" → /spaces/tws
-  shortName      String? // e.g. "TWS"
-  color          String? // theme colour, #rrggbb
-  logoKey        String? // logo in R2…
-  logoData       String? // …or in the database (base64) when R2 isn't set up
-  logoMime       String?
-  members        User[]          @relation("UserHomeEntity")
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  opportunities  Opportunity[]
-  productions    Production[]
-  targets        RevenueTarget[]
-  quotes         Quote[]
-  quoteTemplates QuoteTemplate[]
-  jobs           Job[]
-  stockItems     StockItem[]
-  purchaseOrders PurchaseOrder[]
-  spacePosts     SpacePost[]
-  spacePhotos    SpacePhoto[]
-  buildVotes     BuildVote[]
-  funSubmissions FunSubmission[]
-  roadmapItems   RoadmapItem[]
+  hasSpace         Boolean           @default(false)
+  slug             String?           @unique // web address of the space, e.g. "tws" → /spaces/tws
+  shortName        String? // e.g. "TWS"
+  color            String? // theme colour, #rrggbb
+  logoKey          String? // logo in R2…
+  logoData         String? // …or in the database (base64) when R2 isn't set up
+  logoMime         String?
+  members          User[]            @relation("UserHomeEntity")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  opportunities    Opportunity[]
+  productions      Production[]
+  targets          RevenueTarget[]
+  quotes           Quote[]
+  quoteTemplates   QuoteTemplate[]
+  jobs             Job[]
+  stockItems       StockItem[]
+  purchaseOrders   PurchaseOrder[]
+  spacePosts       SpacePost[]
+  spacePhotos      SpacePhoto[]
+  buildVotes       BuildVote[]
+  funSubmissions   FunSubmission[]
+  roadmapItems     RoadmapItem[]
   storageLocations StorageLocation[]
-  storedPieces   StoredPiece[]
-  buildTemplates BuildTemplate[]
-  labourTypes    LabourType[]
+  storedPieces     StoredPiece[]
+  buildTemplates   BuildTemplate[]
+  labourTypes      LabourType[]
 }
 
 // An entity's revenue target for a calendar year
@@ -1124,6 +1129,7 @@ model HSDocument {
   fileKey      String? // object key in R2 (files/…); when set the bytes live there and the base64 column is ""
   tourStopId   Int?
   folder       String     @default("General")
+  reviewDate   DateTime? // when this risk assessment / method statement must be reviewed (central H&S page flags it)
   createdAt    DateTime   @default(now())
 }
 
@@ -1360,22 +1366,22 @@ model JobLink {
 // TWS planner: a part of a build (e.g. "Truck frames"), who's doing it and when. A part with no
 // person or start date waits in the planner's "To plan" tray.
 model BuildPart {
-  id        Int       @id @default(autoincrement())
-  jobId     Int
-  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  label     String
-  userId    Int?
-  user      User?     @relation("BuildParts", fields: [userId], references: [id], onDelete: SetNull)
-  startDate DateTime? // midnight UTC of the first day
-  days      Int       @default(1) // consecutive calendar days
-  hours     Float? // planned hours
-  done      Boolean   @default(false)
-  pencilled Boolean   @default(false) // tentative: held while the build is still being quoted
+  id           Int                 @id @default(autoincrement())
+  jobId        Int
+  job          Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  label        String
+  userId       Int?
+  user         User?               @relation("BuildParts", fields: [userId], references: [id], onDelete: SetNull)
+  startDate    DateTime? // midnight UTC of the first day
+  days         Int                 @default(1) // consecutive calendar days
+  hours        Float? // planned hours
+  done         Boolean             @default(false)
+  pencilled    Boolean             @default(false) // tentative: held while the build is still being quoted
   labourTypeId Int? // the kind of work (Carpenter, Welder…): costed at its rate until a person is planned
-  labourType   LabourType? @relation(fields: [labourTypeId], references: [id], onDelete: SetNull)
-  materials BuildPartMaterial[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  labourType   LabourType?         @relation(fields: [labourTypeId], references: [id], onDelete: SetNull)
+  materials    BuildPartMaterial[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@index([jobId])
   @@index([userId, startDate])
@@ -1406,51 +1412,51 @@ model StockItem {
 
 // Every change to a stock level: deliveries (from POs), booked out to a job, returns, counts
 model StockMove {
-  id        Int            @id @default(autoincrement())
-  itemId    Int
-  item      StockItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  change    Float // + in, - out
-  kind      String // delivery | book_out | return | adjust
-  jobId     Int?
-  job       Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  poId      Int?
-  po        PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
-  unitCost  Float? // the item's cost when it moved
-  note      String?
-  userId    Int?
-  user      User?          @relation("StockMoveUser", fields: [userId], references: [id], onDelete: SetNull)
-  createdAt DateTime       @default(now())
+  id           Int                @id @default(autoincrement())
+  itemId       Int
+  item         StockItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  change       Float // + in, - out
+  kind         String // delivery | book_out | return | adjust
+  jobId        Int?
+  job          Job?               @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  poId         Int?
+  po           PurchaseOrder?     @relation(fields: [poId], references: [id], onDelete: SetNull)
+  unitCost     Float? // the item's cost when it moved
+  note         String?
+  userId       Int?
+  user         User?              @relation("StockMoveUser", fields: [userId], references: [id], onDelete: SetNull)
+  createdAt    DateTime           @default(now())
+  partMaterial BuildPartMaterial?
 
   @@index([itemId])
   @@index([jobId])
-  partMaterial BuildPartMaterial?
 }
 
 // Purchase orders: draft → awaiting_approval (over the limit) / approved → ordered → delivered; or cancelled
 model PurchaseOrder {
-  id           Int                 @id @default(autoincrement())
-  number       String              @unique // PO-2026-001
-  entityId     Int?
-  entity       Entity?             @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  jobId        Int?
-  job          Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  supplierId   Int?
-  supplier     Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  supplierName String? // when the supplier isn't in the Hub's list
-  status       String              @default("draft")
-  notes        String?
-  raisedById   Int?
-  raisedBy     User?               @relation("PORaisedBy", fields: [raisedById], references: [id], onDelete: SetNull)
-  approvedById Int?
-  approvedBy   User?               @relation("POApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
-  approvedAt   DateTime?
-  orderedAt    DateTime?
-  deliveredAt  DateTime?
-  inSage       Boolean             @default(false)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  lines        PurchaseOrderLine[]
-  stockMoves   StockMove[]
+  id            Int                 @id @default(autoincrement())
+  number        String              @unique // PO-2026-001
+  entityId      Int?
+  entity        Entity?             @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  jobId         Int?
+  job           Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  supplierId    Int?
+  supplier      Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierName  String? // when the supplier isn't in the Hub's list
+  status        String              @default("draft")
+  notes         String?
+  raisedById    Int?
+  raisedBy      User?               @relation("PORaisedBy", fields: [raisedById], references: [id], onDelete: SetNull)
+  approvedById  Int?
+  approvedBy    User?               @relation("POApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt    DateTime?
+  orderedAt     DateTime?
+  deliveredAt   DateTime?
+  inSage        Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  lines         PurchaseOrderLine[]
+  stockMoves    StockMove[]
   partMaterials BuildPartMaterial[]
 
   @@index([jobId])
@@ -1491,21 +1497,21 @@ model SpacePost {
 
 // A photo in a space: of a build (jobId), on a noticeboard post (postId), or both once shared
 model SpacePhoto {
-  id           Int        @id @default(autoincrement())
-  entityId     Int
-  entity       Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  jobId        Int?
-  job          Job?       @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  postId       Int?
-  post         SpacePost? @relation(fields: [postId], references: [id], onDelete: SetNull)
-  uploadedById Int?
-  uploadedBy   User?      @relation("SpacePhotoUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
-  fileKey      String?
-  data         String? // base64 when file storage isn't set up
-  mime         String
-  caption      String?
-  clientVisible Boolean   @default(false) // a progress photo the build's client sees in My builds
-  createdAt    DateTime   @default(now())
+  id            Int        @id @default(autoincrement())
+  entityId      Int
+  entity        Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  jobId         Int?
+  job           Job?       @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  postId        Int?
+  post          SpacePost? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  uploadedById  Int?
+  uploadedBy    User?      @relation("SpacePhotoUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  fileKey       String?
+  data          String? // base64 when file storage isn't set up
+  mime          String
+  caption       String?
+  clientVisible Boolean    @default(false) // a progress photo the build's client sees in My builds
+  createdAt     DateTime   @default(now())
 
   @@index([jobId])
   @@index([entityId, createdAt])
@@ -1563,22 +1569,22 @@ model JobContact {
 
 // Files on a build: the designer's drawings (PDFs, images) and model box photos
 model JobFile {
-  id           Int              @id @default(autoincrement())
-  jobId        Int
-  job          Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  kind         String // design | modelbox
-  name         String
-  mime         String
-  size         Int
-  fileKey      String?
-  data         String? // base64 when file storage isn't set up
-  caption      String?
-  uploadedById Int?
-  uploadedBy   User?            @relation("JobFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
-  createdAt    DateTime         @default(now())
-  revision     DrawingRevision?
+  id            Int              @id @default(autoincrement())
+  jobId         Int
+  job           Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  kind          String // design | modelbox
+  name          String
+  mime          String
+  size          Int
+  fileKey       String?
+  data          String? // base64 when file storage isn't set up
+  caption       String?
+  uploadedById  Int?
+  uploadedBy    User?            @relation("JobFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime         @default(now())
+  revision      DrawingRevision?
   frCertificate FrCertificate?
-  repairPhoto  Repair?
+  repairPhoto   Repair?
 
   @@index([jobId])
 }
@@ -1699,26 +1705,26 @@ model StorageLocation {
 }
 
 model StoredPiece {
-  id          Int              @id @default(autoincrement())
+  id          Int               @id @default(autoincrement())
   entityId    Int
-  entity      Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  entity      Entity            @relation(fields: [entityId], references: [id], onDelete: Cascade)
   jobId       Int?
-  job         Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  job         Job?              @relation(fields: [jobId], references: [id], onDelete: SetNull)
   name        String // e.g. "Palace flats (pair)", "Truck 3"
-  quantity    Int              @default(1)
+  quantity    Int               @default(1)
   locationId  Int?
-  location    StorageLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  location    StorageLocation?  @relation(fields: [locationId], references: [id], onDelete: SetNull)
   notes       String?
   lengthMm    Int? // size and weight for the load list
   widthMm     Int?
   heightMm    Int?
   weightKg    Float? // each
-  storedAt    DateTime         @default(now())
+  storedAt    DateTime          @default(now())
   outAt       DateTime? // gone out (delivered, collected, scrapped); null = in store
   outNote     String?
   createdById Int?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
   moves       StoredPieceMove[]
   repairs     Repair[]
 
@@ -1806,21 +1812,21 @@ model ClockEntry {
 // Estimated materials for a part of a build (27 Nov 2026), added before pricing: what the part
 // needs and what it should cost. "Quote this build" prices each part's labour and materials.
 model BuildPartMaterial {
-  id          Int       @id @default(autoincrement())
+  id          Int            @id @default(autoincrement())
   partId      Int
-  part        BuildPart @relation(fields: [partId], references: [id], onDelete: Cascade)
+  part        BuildPart      @relation(fields: [partId], references: [id], onDelete: Cascade)
   section     String? // Timber, Sheet materials… (sets the units offered)
   description String
-  quantity    Float     @default(1)
+  quantity    Float          @default(1)
   unit        String?
-  unitCost    Float     @default(0) // ex VAT, what it costs us
+  unitCost    Float          @default(0) // ex VAT, what it costs us
   stockItemId Int? // picked from stock (kept as a link only; nothing is booked out)
   poId        Int? // ordered on this purchase order (a cancelled or deleted PO frees it again)
   po          PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
-  stockMoveId Int?      @unique // booked out of stock to the build instead of ordered
-  stockMove   StockMove? @relation(fields: [stockMoveId], references: [id], onDelete: SetNull)
-  sortOrder   Int       @default(0)
-  createdAt   DateTime  @default(now())
+  stockMoveId Int?           @unique // booked out of stock to the build instead of ordered
+  stockMove   StockMove?     @relation(fields: [stockMoveId], references: [id], onDelete: SetNull)
+  sortOrder   Int            @default(0)
+  createdAt   DateTime       @default(now())
 
   @@index([partId])
 }
@@ -1856,4 +1862,69 @@ model LabourType {
   parts     BuildPart[]
 
   @@unique([entityId, name])
+}
+
+// An accident, near miss or other incident on a production (26 Nov 2026). Filed by Hub users from the
+// H&S tab or by crew through the production's no-login QR form; followed up by its team staff and the
+// H&S leads (Setting "hs_lead_ids"): investigation, root cause, actions, RIDDOR, then sign-off to close.
+model Incident {
+  id               Int              @id @default(autoincrement())
+  productionId     Int
+  production       Production       @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  number           Int // per year: INC-2026-007
+  year             Int
+  kind             String // accident | near_miss | dangerous_occurrence | ill_health | property_damage
+  occurredAt       DateTime
+  location         String?
+  venueName        String?
+  description      String
+  immediateAction  String?
+  // The person hurt (personal data: only H&S leads, the production's team staff and the reporter see it)
+  injuredName      String?
+  injuredRole      String? // e.g. Crew (stage), Cast, Venue staff, Member of the public
+  injuredEmployer  String?
+  injuryDetails    String?
+  bodyPart         String?
+  treatment        String? // none | first_aid | doctor | hospital | ambulance
+  offWork          Boolean          @default(false)
+  witnesses        String?
+  reporterName     String
+  reporterContact  String?
+  reportedById     Int?
+  reportedBy       User?            @relation("IncidentReporter", fields: [reportedById], references: [id], onDelete: SetNull)
+  viaQr            Boolean          @default(false)
+  status           String           @default("open") // open | investigating | closed
+  severity         String? // low | medium | high, set on review
+  investigation    String?
+  rootCause        String?
+  riddor           String? // null = not decided | no | specified | over7 | public_hospital | dangerous | disease
+  riddorDueDate    DateTime?
+  riddorReportedAt DateTime?
+  riddorRef        String?
+  closedAt         DateTime?
+  closedById       Int?
+  closedBy         User?            @relation("IncidentClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closeNote        String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  actions          IncidentAction[]
+
+  @@unique([year, number])
+  @@index([productionId, occurredAt])
+  @@index([status])
+}
+
+model IncidentAction {
+  id         Int       @id @default(autoincrement())
+  incidentId Int
+  incident   Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  text       String
+  ownerId    Int?
+  owner      User?     @relation("IncidentActionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  dueDate    DateTime?
+  doneAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([incidentId])
+  @@index([ownerId, doneAt])
 }

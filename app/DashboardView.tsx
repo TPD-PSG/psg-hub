@@ -248,6 +248,7 @@ export type DashboardData = {
   salesBrands: SalesBrand[]; salesTasksCount: number; calEvents: CalEvent[];
   entityOverview?: { see: Visibility; rows: EntityOverviewRow[] } | null; // staff only
   spaces?: SpaceTheme[]; // company spaces this person can open (e.g. The Workshop Stoke)
+  hs?: { open: number; riddor: number; overdueActions: number } | null; // Health & Safety tile (staff)
   complete: boolean; // false if any source failed on the server; the browser then loads them itself
 };
 
@@ -532,7 +533,7 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
         </>
       )}
 
-      {(canAccess(perms, "tasks", role) || canAccess(perms, "property", role)) && (
+      {(canAccess(perms, "tasks", role) || canAccess(perms, "property", role) || !!initial.hs) && (
         <>
           <SectionHeading title="Operations" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -545,6 +546,11 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
               <CompactTile href="/property" icon="🏭" title="Cockshute Industrial Estate"
                 sub={openMaint.length > 0 ? `${openMaint.length} open issue${openMaint.length !== 1 ? "s" : ""}` : "No open issues"}
                 badge={urgentMaint.length || undefined} />
+            )}
+            {initial.hs && (
+              <CompactTile href="/health-safety" icon="⛑️" title="Health & Safety"
+                sub={[initial.hs.open ? `${initial.hs.open} open report${initial.hs.open === 1 ? "" : "s"}` : "No open reports", initial.hs.riddor ? `${initial.hs.riddor} RIDDOR to report` : "", initial.hs.overdueActions ? `${initial.hs.overdueActions} overdue action${initial.hs.overdueActions === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")}
+                badge={(initial.hs.riddor + initial.hs.overdueActions) || undefined} />
             )}
             {canAccess(perms, "suppliers", role) && (
               <CompactTile href="/suppliers" icon="📦" title="Supplier Register" sub="Contractors, venues & services" />

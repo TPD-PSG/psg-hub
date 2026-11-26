@@ -1,0 +1,41 @@
+// Public (QR code on site): crew without a Hub login report an accident or incident. It only ever
+// creates a report and never shows one back. Rate-limited per device.
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { createIncident, readReport } from "@/lib/incidents";
+import { incidentRef } from "@/lib/incidentsCore";
+
+const recent = new Map<string, number[]>();
+function tooMany(ip: string) {
+  const now = Date.now();
+  const hits = (recent.get(ip) ?? []).filter(t => now - t < 10 * 60 * 1000);
+  hits.push(now);
+  recent.set(ip, hits);
+  return hits.length > 10;
+}
+
+async function production(token: string) {
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(token)) return null;
+  const p = await prisma.production.findUnique({
+    where: { hsReportToken: token },
+    select: { id: true, name: true, archived: true, venue: true, venueRef: { select: { name: true } }, isTour: true, tourStops: { select: { id: true, venue: { select: { name: true } } }, orderBy: { startDate: "asc" } } },
+  });
+  return p && !p.archived ? p : null;
+}
+
+export async function GET(_: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const p = await production((await params).token);
+  if (!p) return NextResponse.json({ error: "This form is no longer active" }, { status: 404 });
+  return NextResponse.json({ name: p.name, venues: p.isTour ? [...new Set(p.tourStops.map(s => s.venue.name))] : [p.venueRef?.name ?? p.venue].filter(Boolean) });
+}
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const ip = req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() || "unknown";
+  if (tooMany(ip)) return NextResponse.json({ error: "Too many reports from this device. Try again shortly, or tell the production manager." }, { status: 429 });
+  const p = await production((await params).token);
+  if (!p) return NextResponse.json({ error: "This form is no longer active" }, { status: 404 });
+  const r = readReport(await req.json().catch(() => ({})));
+  if ("error" in r) return NextResponse.json({ error: r.error }, { status: 400 });
+  const inc = await createIncident(p.id, r.data, { userId: null, viaQr: true });
+  return NextResponse.json({ ref: incidentRef(inc) }, { status: 201 });
+}

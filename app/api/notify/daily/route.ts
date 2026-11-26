@@ -4,6 +4,8 @@ import { recordRun } from "@/lib/job-status";
 import { summariseDaily } from "@/lib/jobSummaries";
 import { weekDigest } from "@/lib/showDigest";
 import { digestLine, mondayOf } from "@/lib/showDigestCore";
+import { allLeads } from "@/lib/incidents";
+import { incidentRef } from "@/lib/incidentsCore";
 
 export const dynamic = "force-dynamic";
 
@@ -173,6 +175,38 @@ async function runDaily(req: NextRequest): Promise<Response> {
     for (const uid of p.fromOpportunity.ownerUserId ? [p.fromOpportunity.ownerUserId] : admins.map(a => a.id)) {
       if (sentTitles.has(`${uid}|${title}`)) continue;
       add({ userId: uid, title, body: "A good moment to thank them and ask what's next.", link }, `closed-${p.id}-${uid}`);
+    }
+  }
+
+  // ── 4f. Health & safety: overdue incident actions to their owner; RIDDOR reports not yet made,
+  //        3 days before, on the day and every day after, to the H&S leads and the show's team staff
+  const lateActions = await prisma.incidentAction.findMany({
+    where: { doneAt: null, ownerId: { not: null }, dueDate: { lt: startOfToday }, incident: { status: { not: "closed" } } },
+    select: { id: true, text: true, ownerId: true, incident: { select: { id: true, year: true, number: true, productionId: true, production: { select: { name: true } } } } },
+  });
+  for (const a of lateActions) {
+    const link = `/productions/${a.incident.productionId}?section=hs&incident=${a.incident.id}`;
+    const title = `Overdue incident action: ${a.text}`.slice(0, 200);
+    if (sentTitles.has(`${a.ownerId}|${title}`)) continue;
+    add({ userId: a.ownerId!, title, body: `${incidentRef(a.incident)} · ${a.incident.production.name}`, link }, `incident-action-${a.id}`);
+  }
+  const riddorOpen = await prisma.incident.findMany({
+    where: { riddorReportedAt: null, riddorDueDate: { lt: in3Days }, NOT: { riddor: null }, status: { not: "closed" } },
+    select: { id: true, year: true, number: true, productionId: true, riddorDueDate: true, production: { select: { name: true, team: { select: { userId: true, user: { select: { role: true } } } } } } },
+  });
+  if (riddorOpen.length) {
+    const leads = await allLeads();
+    for (const i of riddorOpen) {
+      const due = i.riddorDueDate!;
+      const left = Math.ceil((due.getTime() - startOfToday.getTime()) / 86400e3);
+      if (left > 0 && left !== 3) continue; // 3 days before, then daily from the day it's due
+      const link = `/productions/${i.productionId}?section=hs&incident=${i.id}`;
+      const title = `RIDDOR report ${left > 0 ? `due in ${left} days` : left === 0 ? "due today" : "overdue"}: ${incidentRef(i)} ${i.production.name}`.slice(0, 200);
+      const who = [...new Set([...leads, ...i.production.team.filter(t => t.user.role === "member").map(t => t.userId)])];
+      for (const userId of who) {
+        if (sentTitles.has(`${userId}|${title}`)) continue; // (the same link may already carry an action reminder)
+        add({ userId, title, body: `Report it to the HSE by ${due.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, then note the date and reference on the report.`, link }, `riddor-${i.id}-${userId}`);
+      }
     }
   }
 

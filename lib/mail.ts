@@ -1,6 +1,11 @@
 // Send email via Microsoft Graph API (application permissions, Mail.Send)
 
-export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
+export type MailAttachment = { name: string; contentType: string; base64: string };
+
+/** True when the Hub can send email (the Graph app's settings are present). */
+export const mailConfigured = () => !!(process.env.AZURE_TENANT_ID && process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET);
+
+export async function sendEmail({ to, subject, html, attachments }: { to: string; subject: string; html: string; attachments?: MailAttachment[] }) {
   const tenantId = process.env.AZURE_TENANT_ID;
   const clientId = process.env.AZURE_CLIENT_ID;
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
@@ -41,6 +46,7 @@ export async function sendEmail({ to, subject, html }: { to: string; subject: st
         subject,
         body: { contentType: "HTML", content: html },
         toRecipients: [{ emailAddress: { address: to } }],
+        ...(attachments?.length ? { attachments: attachments.map(a => ({ "@odata.type": "#microsoft.graph.fileAttachment", name: a.name, contentType: a.contentType, contentBytes: a.base64 })) } : {}),
         from: { emailAddress: { address: fromEmail, name: "PSG Hub" } },
       },
       saveToSentItems: false,

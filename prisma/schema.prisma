@@ -69,6 +69,8 @@ model User {
   inductionsGiven     MachineInduction[]   @relation("InductionTrainer")
   complianceOwned     ComplianceItem[]     @relation("ComplianceOwner")
   complianceUploads   ComplianceDocument[] @relation("ComplianceUploader")
+  callSheetRows       CallSheetEntry[]     @relation("CallSheetPerson")
+  callSheetSends      CallSheetSend[]      @relation("CallSheetSender")
 }
 
 model Production {
@@ -351,6 +353,7 @@ model Crew {
 
   productions   ProductionCrew[]
   hotelBookings HotelBooking[]
+  callSheetRows CallSheetEntry[]
 }
 
 model ProductionCrew {
@@ -641,6 +644,26 @@ model CallSheet {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   entries      CallSheetEntry[]
+  // Emailing (27 Nov 2026): when it last went out, and when anything on it last changed, so a
+  // sheet changed after sending shows "changed since sent" and can go again marked UPDATED.
+  sentAt       DateTime?
+  changedAt    DateTime?
+  sends        CallSheetSend[]
+}
+
+// One emailing of a call sheet: who it went to, and any addresses that failed.
+model CallSheetSend {
+  id          Int       @id @default(autoincrement())
+  callSheetId Int
+  callSheet   CallSheet @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
+  sentById    Int?
+  sentBy      User?     @relation("CallSheetSender", fields: [sentById], references: [id], onDelete: SetNull)
+  isUpdate    Boolean   @default(false)
+  recipients  String // JSON [{ name, email }]
+  failed      String? // JSON [{ name, email, error }]
+  sentAt      DateTime  @default(now())
+
+  @@index([callSheetId, sentAt])
 }
 
 model CallSheetEntry {
@@ -655,6 +678,15 @@ model CallSheetEntry {
   sortOrder   Int       @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  // Who the row is for, when filled in from the show's crew or PSG staff; email is for anyone
+  // added by hand (a linked person's email comes from their crew or user record)
+  crewId      Int?
+  crew        Crew?     @relation(fields: [crewId], references: [id], onDelete: SetNull)
+  userId      Int?
+  user        User?     @relation("CallSheetPerson", fields: [userId], references: [id], onDelete: SetNull)
+  email       String?
+
+  @@index([callSheetId])
 }
 
 model ProductionTeam {

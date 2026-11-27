@@ -30,7 +30,8 @@ export async function PUT(req: NextRequest, {
   const sheet = await prisma.callSheet.update({
     where: { id: Number(id) },
     data: {
-      date: toDate(body.date),
+      changedAt: new Date(),
+      date: toDate(body.date) ?? undefined, // a blank or bad date leaves the date as it was
       title: body.title ?? undefined,
       venue: body.venue ?? undefined,
       generalNotes: body.generalNotes ?? undefined,

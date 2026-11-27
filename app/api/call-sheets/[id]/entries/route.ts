@@ -3,6 +3,7 @@ import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { touchSheet } from "@/lib/callSheets";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -21,8 +22,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       role: body.role || null,
       callTime: body.callTime || null,
       notes: body.notes || null,
+      email: typeof body.email === "string" && body.email.trim() ? body.email.trim() : null,
       sortOrder: body.sortOrder ?? 0,
     },
   });
+  await touchSheet(Number(id));
   return NextResponse.json(entry, { status: 201 });
 }

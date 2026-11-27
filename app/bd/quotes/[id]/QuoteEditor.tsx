@@ -120,7 +120,35 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     });
     setDirty(true);
   };
-  const moveInItem = (g: { idx: number[] }, i: number, d: -1 | 1) => { const p = g.idx.indexOf(i), j = g.idx[p + d]; if (j != null) move(i, (j - i) as -1 | 1); };
+  // Move a line to another place, taking on that item (drag and drop, 28 Nov 2026). `before` is the
+  // row it lands in front of; null = the end of the item.
+  const moveLine = (from: number, toItem: string, before: number | null) => {
+    setRows(rs => {
+      const out = rs.some(x => x.leaveOut && x.section.trim() && sameSection(x.section, toItem)) && !!toItem.trim();
+      const line = { ...rs[from], section: toItem, leaveOut: out };
+      const rest = rs.filter((_, j) => j !== from);
+      let at = before == null ? rest.map(r => sameSection(r.section, toItem)).lastIndexOf(true) + 1 : before > from ? before - 1 : before;
+      if (before == null && at === 0) at = rest.length; // an item with no lines left: put it at the end
+      return [...rest.slice(0, at), line, ...rest.slice(at)];
+    });
+    setInsertAt(null); setDirty(true);
+  };
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null); // "row:3" or "item:Coffin Refit", for the highlight
+  const dropProps = (key: string, onDrop: (from: number) => void) => ({
+    onDragOver: (e: React.DragEvent) => { if (dragFrom == null) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dropOn !== key) setDropOn(key); },
+    onDragLeave: () => setDropOn(d => (d === key ? null : d)),
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); if (dragFrom != null) onDrop(dragFrom); setDragFrom(null); setDropOn(null); },
+  });
+  // Up/down move within the item; past its first or last line they move into the next item
+  const moveInItem = (g: { name: string; idx: number[] }, i: number, d: -1 | 1) => {
+    const p = g.idx.indexOf(i), j = g.idx[p + d];
+    if (j != null) return move(i, (j - i) as -1 | 1);
+    const gi = items.indexOf(g as (typeof items)[number]), next = items[gi + d];
+    if (!next) return;
+    if (d === -1) moveLine(i, next.name, null);
+    else moveLine(i, next.name, next.idx[0]);
+  };
 
   // Look up stock and last-paid prices as the description is typed
   useEffect(() => {
@@ -273,7 +301,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
         <table className="w-full text-sm" style={{ minWidth: 1200 }}>
           <thead>
             <tr className="text-xs" style={{ color: "var(--psg-muted)" }}>
-              <th className="text-left font-medium px-2 py-2 w-36">Type</th><th className="text-left font-medium px-2 py-2">Description *</th>
+              <th className="text-left font-medium px-2 py-2 w-44">Type</th><th className="text-left font-medium px-2 py-2">Description *</th>
               <th className="text-left font-medium px-2 py-2 w-20">Qty</th><th className="text-left font-medium px-2 py-2 w-24">Unit</th>
               <th className="text-left font-medium px-2 py-2 w-28" title="What it costs us (not on the PDF)">Our cost</th><th className="text-left font-medium px-2 py-2 w-28">Price</th>
               <th className="text-right font-medium px-2 py-2 w-28">Line total</th><th className="text-right font-medium px-2 py-2 w-16">Margin</th>
@@ -287,7 +315,8 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
               <tbody key={gi} style={out ? { opacity: 0.55 } : undefined}>
                 {/* The item: its name, subtotal and whether it counts */}
                 {(named || items.length > 1) && (
-                  <tr className="border-t-2" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(91,141,239,0.08)" }}>
+                  <tr className="border-t-2" {...dropProps(`item:${g.name}`, from => moveLine(from, g.name, null))}
+                    style={{ borderColor: "var(--psg-card-border)", backgroundColor: dropOn === `item:${g.name}` ? "rgba(91,141,239,0.3)" : "rgba(91,141,239,0.08)" }}>
                     <td colSpan={2} className="px-2 py-1.5">
                       {named ? (
                         <input aria-label={`Item name: ${g.name}`} className={`${inp} font-semibold`} style={inpStyle} value={g.name} onChange={e => renameItem(g, e.target.value)} />
@@ -319,11 +348,18 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
                   const m = total ? Math.round(((total - cost) / total) * 100) : null;
                   const muted = r.hideLine || r.hidePrice;
                   return (
-                    <tr key={i} className="border-t align-top" style={{ borderColor: "var(--psg-card-border)", ...(insertAt === i ? { boxShadow: "inset 0 -2px 0 #5b8def" } : {}) }}>
-                      <td className={`py-1.5 pr-2 ${named || items.length > 1 ? "pl-5" : "pl-2"}`}>
+                    <tr key={i} className="border-t align-top" {...dropProps(`row:${i}`, from => { if (from !== i) moveLine(from, r.section, i); })}
+                      style={{ borderColor: "var(--psg-card-border)", ...(dropOn === `row:${i}` ? { boxShadow: "inset 0 2px 0 #5b8def" } : insertAt === i ? { boxShadow: "inset 0 -2px 0 #5b8def" } : {}), ...(dragFrom === i ? { opacity: 0.4 } : {}) }}>
+                      <td className={`py-1.5 pr-2 ${named || items.length > 1 ? "pl-1" : "pl-1"}`}>
+                        <div className="flex items-center gap-1">
+                        {/* Drag handle: drop on a line to move there, or on an item's header to add it to that item */}
+                        <span draggable aria-hidden="true" title="Drag to move this line to another place or item"
+                          onDragStart={e => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); setDragFrom(i); }}
+                          onDragEnd={() => { setDragFrom(null); setDropOn(null); }}
+                          className={`cursor-grab select-none px-1 ${named || items.length > 1 ? "ml-2" : ""}`} style={{ color: "var(--psg-muted)" }}>⋮⋮</span>
                         <select aria-label="Line type" className={inp} style={inpStyle} value={r.kind || "misc"} onChange={e => setRow(i, { kind: e.target.value })}>
                           {LINE_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
-                        </select></td>
+                        </select></div></td>
                       <td className="px-2 py-1.5"><input aria-label="Description" className={inp} style={{ ...inpStyle, ...(r.hideLine ? { textDecoration: "line-through" } : {}) }} value={r.description} onChange={e => setRow(i, { description: e.target.value })} /></td>
                       <td className="px-2 py-1.5"><input aria-label="Quantity" type="number" step="any" className={inp} style={inpStyle} value={r.quantity} onChange={e => setRow(i, { quantity: e.target.value })} /></td>
                       <td className="px-2 py-1.5"><input aria-label="Unit" list={`q-units-${i}`} className={inp} style={inpStyle} value={r.unit} onChange={e => setRow(i, { unit: e.target.value })} />

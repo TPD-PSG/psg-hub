@@ -25,7 +25,10 @@ export function summariseImport(res: Response, body: any): { ok: boolean; summar
 
 export function summariseDaily(res: Response, body: any): { ok: boolean; summary: string } {
   if (!res.ok) return { ok: false, summary: body?.error ?? `HTTP ${res.status}` };
-  return { ok: true, summary: `${body?.created ?? 0} notification${body?.created === 1 ? "" : "s"} created` };
+  const made = `${body?.created ?? 0} notification${body?.created === 1 ? "" : "s"} created`;
+  // A section that failed (the rest still ran) marks the run as failed, naming it
+  if (Array.isArray(body?.failed) && body.failed.length) return { ok: false, summary: `${made}; failed: ${body.failed.join(", ")}` };
+  return { ok: true, summary: made };
 }
 
 export function summariseBackup(res: Response, body: any): { ok: boolean; summary: string } {

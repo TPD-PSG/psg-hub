@@ -11,11 +11,12 @@ export async function GET() {
   // enough for pickers (assign task, add to team): no roles or permissions,
   // and clients/freelancers don't see staff email addresses.
   const select = role === "admin"
-    ? { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true, color: true, costDayRate: true, homeEntityId: true, clientId: true }
+    ? { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true, color: true, costDayRate: true, homeEntityId: true, clientId: true, deactivatedAt: true }
     : role === "member"
       ? { id: true, name: true, email: true, avatarUrl: true, color: true }
       : { id: true, name: true, avatarUrl: true, color: true };
-  const users = await prisma.user.findMany({ select, orderBy: { name: "asc" } });
+  // Pickers leave out people who've been deactivated; admins see everyone
+  const users = await prisma.user.findMany({ where: role === "admin" ? {} : { deactivatedAt: null }, select, orderBy: { name: "asc" } });
   return NextResponse.json(users);
 }
 

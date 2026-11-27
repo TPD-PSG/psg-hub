@@ -50,12 +50,20 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = parseInt((await params).id);
-  const [deals, productions] = await Promise.all([
+  // Anything a company's history or safety records depend on keeps it: archive instead (audit round 2)
+  const [deals, productions, jobs, incidents, machines, stock, pieces] = await Promise.all([
     prisma.opportunity.count({ where: { entityId: id } }),
     prisma.production.count({ where: { entityId: id } }),
+    prisma.job.count({ where: { entityId: id } }),
+    prisma.incident.count({ where: { entityId: id } }),
+    prisma.machine.count({ where: { entityId: id } }),
+    prisma.stockItem.count({ where: { entityId: id } }),
+    prisma.storedPiece.count({ where: { entityId: id } }),
   ]);
-  if (deals || productions) {
-    return NextResponse.json({ error: `In use by ${deals} deal(s) and ${productions} production(s). Archive it instead.` }, { status: 409 });
+  const uses = ([[deals, "deal"], [productions, "production"], [jobs, "job"], [incidents, "accident/incident report"], [machines, "machine or item of kit (with inductions and checks)"], [stock, "stock item"], [pieces, "stored piece"]] as const)
+    .filter(([n]) => n).map(([n, w]) => `${n} ${w}${n === 1 || w.endsWith(")") ? "" : "s"}`);
+  if (uses.length) {
+    return NextResponse.json({ error: `In use by ${uses.join(", ")}. Archive it instead.` }, { status: 409 });
   }
   await prisma.entity.delete({ where: { id } }).catch(() => null);
   return NextResponse.json({ ok: true });

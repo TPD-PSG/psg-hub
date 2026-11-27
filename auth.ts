@@ -35,6 +35,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!user) return null;
         const valid = await compare(String(credentials.password), user.passwordHash);
         if (!valid) return null;
+        if (user.deactivatedAt) return null; // deactivated by an admin
 
         resetRateLimit(`ip:${ip}`);
         resetRateLimit(`email:${email}`);
@@ -64,8 +65,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: Number(token.id) },
-            select: { role: true, permissions: true, avatarUrl: true },
+            select: { role: true, permissions: true, avatarUrl: true, deactivatedAt: true },
           });
+          // Deleted or deactivated since they signed in: end the session
+          if (!dbUser || dbUser.deactivatedAt) return null;
           if (dbUser) {
             token.role = dbUser.role;
             token.permissions = dbUser.permissions ?? null;

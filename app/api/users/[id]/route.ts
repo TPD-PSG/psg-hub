@@ -43,11 +43,32 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(user);
 }
 
+// Deactivate or reactivate: a deactivated person can't sign in (and is signed out within five
+// minutes), but everything they did stays (audit round 2)
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if ((session?.user as { role?: string } | undefined)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const id = Number((await params).id);
+  const body = await req.json().catch(() => ({}));
+  if (typeof body.deactivated !== "boolean") return NextResponse.json({ error: "Say whether to deactivate" }, { status: 400 });
+  if (body.deactivated && id === Number((session!.user as { id?: string }).id)) return NextResponse.json({ error: "You can't deactivate yourself" }, { status: 400 });
+  const u = await prisma.user.update({ where: { id }, data: { deactivatedAt: body.deactivated ? new Date() : null }, select: { id: true, deactivatedAt: true } }).catch(() => null);
+  if (!u) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json(u);
+}
+
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!await requireAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const count = await prisma.user.count();
   if (count <= 1) return NextResponse.json({ error: "Cannot delete the last user" }, { status: 400 });
-  await prisma.user.delete({ where: { id: Number(id) } });
+  // Deleting someone would delete the days they logged (and change past job costs): keep them,
+  // and offer to deactivate instead (audit round 2)
+  const uid = Number(id);
+  const [days, clocks] = await Promise.all([prisma.timeEntry.count({ where: { userId: uid } }), prisma.clockEntry.count({ where: { userId: uid } })]);
+  if (days || clocks) {
+    return NextResponse.json({ error: `They have ${days || clocks} record${(days || clocks) === 1 ? "" : "s"} of time logged on jobs, which would be lost. Deactivate them instead: they can't sign in, and their history stays.`, canDeactivate: true }, { status: 409 });
+  }
+  await prisma.user.delete({ where: { id: uid } });
   return NextResponse.json({ ok: true });
 }

@@ -46,257 +46,289 @@ async function runDaily(req: NextRequest): Promise<Response> {
     created.push(key);
   };
 
+  // Each section runs on its own: one failing never stops the rest, the save or the backup
+  // (audit round 2). Failures are named in the run's result and its status.
+  const failed: string[] = [];
+  const section = async (name: string, fn: () => Promise<void>) => {
+    try { await fn(); } catch (e) { failed.push(name); console.error(`[notify-daily] section ${name} failed:`, e instanceof Error ? e.message : e); }
+  };
+  // Shared by several sections
+  const ukDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(d); // YYYY-MM-DD
+  const todayUk = ukDay(now);
+  const daysUntil = (d: Date) => Math.round((Date.parse(ukDay(d)) - Date.parse(todayUk)) / 86400e3);
+  const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
+
   // ── 1. Tasks due today or overdue (not done) ──────────────────────────────
-  const overdueTasks = await prisma.task.findMany({
-    where: { status: { not: "done" }, dueDate: { lt: endOfToday }, assigneeUserId: { not: null } },
-    select: { id: true, title: true, dueDate: true, assigneeUserId: true, production: { select: { name: true } } },
+  await section("tasks due", async () => {
+    const overdueTasks = await prisma.task.findMany({
+      where: { status: { not: "done" }, dueDate: { lt: endOfToday }, assigneeUserId: { not: null } },
+      select: { id: true, title: true, dueDate: true, assigneeUserId: true, production: { select: { name: true } } },
+    });
+    for (const task of overdueTasks) {
+      if (!task.assigneeUserId) continue;
+      const link = `/tasks?highlight=${task.id}`;
+      if (sentLinks.has(`${task.assigneeUserId}|${link}`)) continue;
+      const label = task.dueDate && new Date(task.dueDate) >= startOfToday ? "due today" : "overdue";
+      add({
+        userId: task.assigneeUserId,
+        title: `Task ${label}: ${task.title}`,
+        body: task.production ? ` · ${task.production.name}` : undefined,
+        link,
+      }, `task-${task.id}`);
+    }
   });
-  for (const task of overdueTasks) {
-    if (!task.assigneeUserId) continue;
-    const link = `/tasks?highlight=${task.id}`;
-    if (sentLinks.has(`${task.assigneeUserId}|${link}`)) continue;
-    const label = task.dueDate && new Date(task.dueDate) >= startOfToday ? "due today" : "overdue";
-    add({
-      userId: task.assigneeUserId,
-      title: `Task ${label}: ${task.title}`,
-      body: task.production ? ` · ${task.production.name}` : undefined,
-      link,
-    }, `task-${task.id}`);
-  }
 
   // ── 2. Tasks awaiting sign-off ────────────────────────────────────────────
-  const signoffTasks = await prisma.task.findMany({
-    where: { status: "awaiting_signoff", signoffUserId: { not: null } },
-    select: { id: true, title: true, signoffUserId: true, production: { select: { name: true } } },
+  await section("sign-offs", async () => {
+    const signoffTasks = await prisma.task.findMany({
+      where: { status: "awaiting_signoff", signoffUserId: { not: null } },
+      select: { id: true, title: true, signoffUserId: true, production: { select: { name: true } } },
+    });
+    for (const task of signoffTasks) {
+      if (!task.signoffUserId) continue;
+      const link = `/tasks?highlight=${task.id}`;
+      if (sentLinks.has(`${task.signoffUserId}|${link}`)) continue;
+      add({ userId: task.signoffUserId, title: `Sign-off needed: ${task.title}`, body: task.production?.name || undefined, link }, `signoff-${task.id}`);
+    }
   });
-  for (const task of signoffTasks) {
-    if (!task.signoffUserId) continue;
-    const link = `/tasks?highlight=${task.id}`;
-    if (sentLinks.has(`${task.signoffUserId}|${link}`)) continue;
-    add({ userId: task.signoffUserId, title: `Sign-off needed: ${task.title}`, body: task.production?.name || undefined, link }, `signoff-${task.id}`);
-  }
 
   // ── 3. Key dates in the next 7 days ──────────────────────────────────────
-  const keyDates = await prisma.productionKeyDate.findMany({
-    where: { startDate: { gte: now, lte: in7Days } },
-    select: {
-      id: true, type: true, label: true, startDate: true,
-      production: { select: { id: true, name: true, team: { select: { userId: true } } } },
-    },
-  });
-  const KEY_DATE_LABELS: Record<string, string> = {
-    first_rehearsal: "First Rehearsal", press_night: "Press Night", opening_night: "Opening Night",
-    closing_night: "Closing Night", load_in: "Load In", get_out: "Get Out",
-    tech_week: "Technical Rehearsals", dress_rehearsal: "Dress Rehearsal", touring_start: "Touring Start",
-    touring_end: "Touring End",
-  };
-  for (const kd of keyDates) {
-    const dateStr = new Date(kd.startDate!).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    const title = `${kd.production.name} — ${kd.label || KEY_DATE_LABELS[kd.type] || kd.type} on ${dateStr}`;
-    for (const member of kd.production.team) {
-      if (sentTitles.has(`${member.userId}|${title}`)) continue;
-      add({ userId: member.userId, title, link: `/productions/${kd.production.id}?section=schedule` }, `kd-${kd.id}-user-${member.userId}`);
-    }
-  }
-
-  // ── 4. Invoice to-dos due in the next 3 days ──────────────────────────────
-  const dueTodos = await prisma.invoiceTodo.findMany({
-    where: { done: false, dueDate: { gte: now, lte: in3Days } },
-    select: { id: true, client: true, description: true, dueDate: true },
-  });
-  if (dueTodos.length > 0) {
-    const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
-    for (const todo of dueTodos) {
-      const dateStr = new Date(todo.dueDate!).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-      for (const admin of admins) {
-        const already = todoTitles.some(n => n.userId === admin.id && n.title.includes(todo.client))
-          || queue.some(n => n.userId === admin.id && n.link === "/finance?tab=todo" && n.title.includes(todo.client));
-        if (already) continue;
-        add({ userId: admin.id, title: `Invoice due ${dateStr}: ${todo.client}`, body: todo.description || undefined, link: "/finance?tab=todo" }, `todo-${todo.id}-admin-${admin.id}`);
+  await section("key dates", async () => {
+    const keyDates = await prisma.productionKeyDate.findMany({
+      where: { startDate: { gte: now, lte: in7Days } },
+      select: {
+        id: true, type: true, label: true, startDate: true,
+        production: { select: { id: true, name: true, team: { select: { userId: true } } } },
+      },
+    });
+    const KEY_DATE_LABELS: Record<string, string> = {
+      first_rehearsal: "First Rehearsal", press_night: "Press Night", opening_night: "Opening Night",
+      closing_night: "Closing Night", load_in: "Load In", get_out: "Get Out",
+      tech_week: "Technical Rehearsals", dress_rehearsal: "Dress Rehearsal", touring_start: "Touring Start",
+      touring_end: "Touring End",
+    };
+    for (const kd of keyDates) {
+      const dateStr = new Date(kd.startDate!).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      const title = `${kd.production.name} — ${kd.label || KEY_DATE_LABELS[kd.type] || kd.type} on ${dateStr}`;
+      for (const member of kd.production.team) {
+        if (sentTitles.has(`${member.userId}|${title}`)) continue;
+        add({ userId: member.userId, title, link: `/productions/${kd.production.id}?section=schedule` }, `kd-${kd.id}-user-${member.userId}`);
       }
     }
-  }
+  });
+
+  // ── 4. Invoice to-dos due in the next 3 days ──────────────────────────────
+  await section("invoice to-dos", async () => {
+    const dueTodos = await prisma.invoiceTodo.findMany({
+      where: { done: false, dueDate: { gte: now, lte: in3Days } },
+      select: { id: true, client: true, description: true, dueDate: true },
+    });
+    if (dueTodos.length > 0) {
+      const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
+      for (const todo of dueTodos) {
+        const dateStr = new Date(todo.dueDate!).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+        for (const admin of admins) {
+          const already = todoTitles.some(n => n.userId === admin.id && n.title.includes(todo.client))
+            || queue.some(n => n.userId === admin.id && n.link === "/finance?tab=todo" && n.title.includes(todo.client));
+          if (already) continue;
+          add({ userId: admin.id, title: `Invoice due ${dateStr}: ${todo.client}`, body: todo.description || undefined, link: "/finance?tab=todo" }, `todo-${todo.id}-admin-${admin.id}`);
+        }
+      }
+    }
+  });
 
   // ── 4b. Overdue meeting actions, chased with whoever ran the meeting ──────
   // People with a Hub login are already reminded of their own overdue tasks (section 1). Actions
   // given to someone without one ("Sam (venue)") would otherwise never be chased, so the meeting's
   // owner gets one reminder per meeting listing what's overdue and who has it.
-  const overdueActions = await prisma.task.findMany({
-    where: { meetingId: { not: null }, status: { not: "done" }, dueDate: { lt: startOfToday } },
-    select: { title: true, dueDate: true, assigneeName: true, assigneeUser: { select: { name: true } }, createdByUserId: true, meeting: { select: { id: true, title: true, meetingDate: true, productionId: true, createdByUserId: true } } },
-    orderBy: { dueDate: "asc" },
+  await section("meeting actions", async () => {
+    const overdueActions = await prisma.task.findMany({
+      where: { meetingId: { not: null }, status: { not: "done" }, dueDate: { lt: startOfToday } },
+      select: { title: true, dueDate: true, assigneeName: true, assigneeUser: { select: { name: true } }, createdByUserId: true, meeting: { select: { id: true, title: true, meetingDate: true, productionId: true, createdByUserId: true } } },
+      orderBy: { dueDate: "asc" },
+    });
+    const byMeeting = new Map<number, typeof overdueActions>();
+    for (const t of overdueActions) if (t.meeting) byMeeting.set(t.meeting.id, [...(byMeeting.get(t.meeting.id) ?? []), t]);
+    for (const [meetingId, acts] of byMeeting) {
+      const mt = acts[0].meeting!;
+      const owner = mt.createdByUserId ?? acts[0].createdByUserId;
+      if (!owner) continue;
+      const link = `/productions/${mt.productionId}?section=meetings&meeting=${meetingId}`;
+      if (sentLinks.has(`${owner}|${link}`)) continue;
+      const day = (d: Date | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }) : "");
+      const lines = acts.slice(0, 8).map(t => `${t.title} (${t.assigneeUser?.name ?? t.assigneeName ?? "no owner"}, due ${day(t.dueDate)})`);
+      add({
+        userId: owner,
+        title: `${acts.length} overdue action${acts.length === 1 ? "" : "s"} from ${mt.title} (${day(mt.meetingDate)})`,
+        body: lines.join(" · ") + (acts.length > 8 ? ` · and ${acts.length - 8} more` : ""),
+        link,
+      }, `meeting-actions-${meetingId}`);
+    }
   });
-  const byMeeting = new Map<number, typeof overdueActions>();
-  for (const t of overdueActions) if (t.meeting) byMeeting.set(t.meeting.id, [...(byMeeting.get(t.meeting.id) ?? []), t]);
-  for (const [meetingId, acts] of byMeeting) {
-    const mt = acts[0].meeting!;
-    const owner = mt.createdByUserId ?? acts[0].createdByUserId;
-    if (!owner) continue;
-    const link = `/productions/${mt.productionId}?section=meetings&meeting=${meetingId}`;
-    if (sentLinks.has(`${owner}|${link}`)) continue;
-    const day = (d: Date | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }) : "");
-    const lines = acts.slice(0, 8).map(t => `${t.title} (${t.assigneeUser?.name ?? t.assigneeName ?? "no owner"}, due ${day(t.dueDate)})`);
-    add({
-      userId: owner,
-      title: `${acts.length} overdue action${acts.length === 1 ? "" : "s"} from ${mt.title} (${day(mt.meetingDate)})`,
-      body: lines.join(" · ") + (acts.length > 8 ? ` · and ${acts.length - 8} more` : ""),
-      link,
-    }, `meeting-actions-${meetingId}`);
-  }
 
   // ── 4d. Tender deadlines: the deal's owner (else the admins), 7, 3 and 1 days before and on the day
-  const ukDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(d); // YYYY-MM-DD
-  const todayUk = ukDay(now);
-  const daysUntil = (d: Date) => Math.round((Date.parse(ukDay(d)) - Date.parse(todayUk)) / 86400e3);
-  const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
-  const tenders = await prisma.opportunity.findMany({
-    where: { stage: { notIn: ["won", "lost"] }, tenderDeadline: { gte: new Date(now.getTime() - 86400e3), lte: new Date(now.getTime() + 8 * 86400e3) } },
-    select: { id: true, title: true, tenderDeadline: true, ownerUserId: true, client: { select: { name: true } } },
-  });
-  for (const t of tenders) {
-    const n = daysUntil(t.tenderDeadline!);
-    if (![7, 3, 1, 0].includes(n)) continue;
-    const title = n === 0 ? `Tender due today: ${t.title}` : `Tender due in ${n} day${n === 1 ? "" : "s"}: ${t.title}`;
-    for (const uid of t.ownerUserId ? [t.ownerUserId] : admins.map(a => a.id)) {
-      if (sentTitles.has(`${uid}|${title}`)) continue;
-      add({ userId: uid, title, body: [t.client?.name, t.tenderDeadline!.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" })].filter(Boolean).join(" · "), link: "/bd" }, `tender-${t.id}-${uid}`);
+  await section("tenders", async () => {
+    const tenders = await prisma.opportunity.findMany({
+      where: { stage: { notIn: ["won", "lost"] }, tenderDeadline: { gte: new Date(now.getTime() - 86400e3), lte: new Date(now.getTime() + 8 * 86400e3) } },
+      select: { id: true, title: true, tenderDeadline: true, ownerUserId: true, client: { select: { name: true } } },
+    });
+    for (const t of tenders) {
+      const n = daysUntil(t.tenderDeadline!);
+      if (![7, 3, 1, 0].includes(n)) continue;
+      const title = n === 0 ? `Tender due today: ${t.title}` : `Tender due in ${n} day${n === 1 ? "" : "s"}: ${t.title}`;
+      for (const uid of t.ownerUserId ? [t.ownerUserId] : admins.map(a => a.id)) {
+        if (sentTitles.has(`${uid}|${title}`)) continue;
+        add({ userId: uid, title, body: [t.client?.name, t.tenderDeadline!.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" })].filter(Boolean).join(" · "), link: "/bd" }, `tender-${t.id}-${uid}`);
+      }
     }
-  }
+  });
 
   // ── 4e. A show from a won deal closed yesterday: nudge whoever won it to follow up ────
-  const yesterdayUk = ukDay(new Date(now.getTime() - 86400e3));
-  const closedShows = await prisma.production.findMany({
-    where: { endDate: { gte: new Date(Date.parse(yesterdayUk) - 86400e3), lt: new Date(Date.parse(todayUk) + 86400e3) } },
-    select: { id: true, name: true, endDate: true, bdClient: { select: { id: true, name: true } }, fromOpportunity: { select: { ownerUserId: true, client: { select: { id: true, name: true } } } } },
-  });
-  for (const p of closedShows) {
-    if (!p.endDate || ukDay(p.endDate) !== yesterdayUk || !p.fromOpportunity) continue;
-    const client = p.fromOpportunity.client ?? p.bdClient;
-    const title = `${p.name} closed yesterday: follow up${client ? ` with ${client.name}` : ""}`;
-    const link = client ? `/bd/clients/${client.id}` : "/bd";
-    for (const uid of p.fromOpportunity.ownerUserId ? [p.fromOpportunity.ownerUserId] : admins.map(a => a.id)) {
-      if (sentTitles.has(`${uid}|${title}`)) continue;
-      add({ userId: uid, title, body: "A good moment to thank them and ask what's next.", link }, `closed-${p.id}-${uid}`);
+  await section("closed shows", async () => {
+    const yesterdayUk = ukDay(new Date(now.getTime() - 86400e3));
+    const closedShows = await prisma.production.findMany({
+      where: { endDate: { gte: new Date(Date.parse(yesterdayUk) - 86400e3), lt: new Date(Date.parse(todayUk) + 86400e3) } },
+      select: { id: true, name: true, endDate: true, bdClient: { select: { id: true, name: true } }, fromOpportunity: { select: { ownerUserId: true, client: { select: { id: true, name: true } } } } },
+    });
+    for (const p of closedShows) {
+      if (!p.endDate || ukDay(p.endDate) !== yesterdayUk || !p.fromOpportunity) continue;
+      const client = p.fromOpportunity.client ?? p.bdClient;
+      const title = `${p.name} closed yesterday: follow up${client ? ` with ${client.name}` : ""}`;
+      const link = client ? `/bd/clients/${client.id}` : "/bd";
+      for (const uid of p.fromOpportunity.ownerUserId ? [p.fromOpportunity.ownerUserId] : admins.map(a => a.id)) {
+        if (sentTitles.has(`${uid}|${title}`)) continue;
+        add({ userId: uid, title, body: "A good moment to thank them and ask what's next.", link }, `closed-${p.id}-${uid}`);
+      }
     }
-  }
+  });
 
   // ── 4f. Health & safety: overdue incident actions to their owner; RIDDOR reports not yet made,
   //        3 days before, on the day and every day after, to the H&S leads and the local staff
-  const place = (i: { production: { name: string } | null; entity: { name: string } | null }) => i.production?.name ?? i.entity?.name ?? "";
-  const lateActions = await prisma.incidentAction.findMany({
-    where: { doneAt: null, ownerId: { not: null }, dueDate: { lt: startOfToday }, incident: { status: { not: "closed" } } },
-    select: { id: true, text: true, ownerId: true, incident: { select: { id: true, year: true, number: true, productionId: true, production: { select: { name: true } }, entity: { select: { name: true, slug: true } } } } },
-  });
-  for (const a of lateActions) {
-    const title = `Overdue incident action: ${a.text}`.slice(0, 200);
-    if (sentTitles.has(`${a.ownerId}|${title}`)) continue;
-    add({ userId: a.ownerId!, title, body: `${incidentRef(a.incident)} · ${place(a.incident)}`, link: incidentPath(a.incident) }, `incident-action-${a.id}`);
-  }
-  const riddorOpen = await prisma.incident.findMany({
-    where: { riddorReportedAt: null, riddorDueDate: { lt: in3Days }, NOT: { riddor: null }, status: { not: "closed" } },
-    select: { id: true, year: true, number: true, productionId: true, entityId: true, riddorDueDate: true, production: { select: { name: true } }, entity: { select: { name: true, slug: true } } },
-  });
-  if (riddorOpen.length) {
-    const leads = await allLeads();
-    for (const i of riddorOpen) {
-      const due = i.riddorDueDate!;
-      const left = Math.ceil((due.getTime() - startOfToday.getTime()) / 86400e3);
-      if (left > 0 && left !== 3) continue; // 3 days before, then daily from the day it's due
-      const link = incidentPath(i);
-      const title = `RIDDOR report ${left > 0 ? `due in ${left} days` : left === 0 ? "due today" : "overdue"}: ${incidentRef(i)} ${place(i)}`.slice(0, 200);
-      const who = [...new Set([...leads, ...(await localStaff(i))])];
-      for (const userId of who) {
-        if (sentTitles.has(`${userId}|${title}`)) continue; // (the same link may already carry an action reminder)
-        add({ userId, title, body: `Report it to the HSE by ${due.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, then note the date and reference on the report.`, link }, `riddor-${i.id}-${userId}`);
+  await section("incidents and RIDDOR", async () => {
+    const place = (i: { production: { name: string } | null; entity: { name: string } | null }) => i.production?.name ?? i.entity?.name ?? "";
+    const lateActions = await prisma.incidentAction.findMany({
+      where: { doneAt: null, ownerId: { not: null }, dueDate: { lt: startOfToday }, incident: { status: { not: "closed" } } },
+      select: { id: true, text: true, ownerId: true, incident: { select: { id: true, year: true, number: true, productionId: true, production: { select: { name: true } }, entity: { select: { name: true, slug: true } } } } },
+    });
+    for (const a of lateActions) {
+      const title = `Overdue incident action: ${a.text}`.slice(0, 200);
+      if (sentTitles.has(`${a.ownerId}|${title}`)) continue;
+      add({ userId: a.ownerId!, title, body: `${incidentRef(a.incident)} · ${place(a.incident)}`, link: incidentPath(a.incident) }, `incident-action-${a.id}`);
+    }
+    const riddorOpen = await prisma.incident.findMany({
+      where: { riddorReportedAt: null, riddorDueDate: { lt: in3Days }, NOT: { riddor: null }, status: { not: "closed" } },
+      select: { id: true, year: true, number: true, productionId: true, entityId: true, riddorDueDate: true, production: { select: { name: true } }, entity: { select: { name: true, slug: true } } },
+    });
+    if (riddorOpen.length) {
+      const leads = await allLeads();
+      for (const i of riddorOpen) {
+        const due = i.riddorDueDate!;
+        const left = Math.ceil((due.getTime() - startOfToday.getTime()) / 86400e3);
+        if (left > 0 && left !== 3) continue; // 3 days before, then daily from the day it's due
+        const link = incidentPath(i);
+        const title = `RIDDOR report ${left > 0 ? `due in ${left} days` : left === 0 ? "due today" : "overdue"}: ${incidentRef(i)} ${place(i)}`.slice(0, 200);
+        const who = [...new Set([...leads, ...(await localStaff(i))])];
+        for (const userId of who) {
+          if (sentTitles.has(`${userId}|${title}`)) continue; // (the same link may already carry an action reminder)
+          add({ userId, title, body: `Report it to the HSE by ${due.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, then note the date and reference on the report.`, link }, `riddor-${i.id}-${userId}`);
+        }
       }
     }
-  }
+  });
 
   // ── 4g. Machine refreshers: 30 days before and on the day, to the person and the machine's trainers
-  const soonEnds = await prisma.machineInduction.findMany({
-    where: { revokedAt: null, expiresAt: { gte: startOfToday, lt: new Date(startOfToday.getTime() + 31 * 86400e3) } },
-    select: { id: true, machineId: true, userId: true, personName: true, inductedAt: true, expiresAt: true, machine: { select: { name: true, archived: true, entity: { select: { slug: true } }, trainers: { select: { userId: true } } } } },
-  });
-  for (const i of soonEnds) {
-    if (i.machine.archived) continue;
-    const left = Math.round((i.expiresAt!.getTime() - startOfToday.getTime()) / 86400e3);
-    if (left !== 30 && left !== 0) continue;
-    // Only the induction that counts: skip it if they've had a newer one on this machine
-    const newer = await prisma.machineInduction.count({ where: { machineId: i.machineId, revokedAt: null, inductedAt: { gt: i.inductedAt }, ...(i.userId ? { userId: i.userId } : { userId: null, personName: i.personName }) } });
-    if (newer) continue;
-    const link = `/spaces/${i.machine.entity.slug}/safety#inductions`;
-    const when = left === 0 ? "today" : `in 30 days (${i.expiresAt!.toLocaleDateString("en-GB", { day: "numeric", month: "short" })})`;
-    for (const userId of new Set([i.userId, ...i.machine.trainers.map(t => t.userId)].filter((x): x is number => !!x))) {
-      const title = (userId === i.userId ? `Your ${i.machine.name} induction needs a refresher ${when}` : `${i.personName}'s ${i.machine.name} refresher is due ${when}`).slice(0, 200);
-      if (sentTitles.has(`${userId}|${title}`)) continue;
-      add({ userId, title, link, body: left === 0 ? "Until it's done, the planner and tablet will flag work that needs this machine." : "A trainer can record the refresher on the Safety page." }, `refresher-${i.id}-${userId}`);
+  await section("machine refreshers", async () => {
+    const soonEnds = await prisma.machineInduction.findMany({
+      where: { revokedAt: null, expiresAt: { gte: startOfToday, lt: new Date(startOfToday.getTime() + 31 * 86400e3) } },
+      select: { id: true, machineId: true, userId: true, personName: true, inductedAt: true, expiresAt: true, machine: { select: { name: true, archived: true, entity: { select: { slug: true } }, trainers: { select: { userId: true } } } } },
+    });
+    for (const i of soonEnds) {
+      if (i.machine.archived) continue;
+      const left = Math.round((i.expiresAt!.getTime() - startOfToday.getTime()) / 86400e3);
+      if (left !== 30 && left !== 0) continue;
+      // Only the induction that counts: skip it if they've had a newer one on this machine
+      const newer = await prisma.machineInduction.count({ where: { machineId: i.machineId, revokedAt: null, inductedAt: { gt: i.inductedAt }, ...(i.userId ? { userId: i.userId } : { userId: null, personName: i.personName }) } });
+      if (newer) continue;
+      const link = `/spaces/${i.machine.entity.slug}/safety#inductions`;
+      const when = left === 0 ? "today" : `in 30 days (${i.expiresAt!.toLocaleDateString("en-GB", { day: "numeric", month: "short" })})`;
+      for (const userId of new Set([i.userId, ...i.machine.trainers.map(t => t.userId)].filter((x): x is number => !!x))) {
+        const title = (userId === i.userId ? `Your ${i.machine.name} induction needs a refresher ${when}` : `${i.personName}'s ${i.machine.name} refresher is due ${when}`).slice(0, 200);
+        if (sentTitles.has(`${userId}|${title}`)) continue;
+        add({ userId, title, link, body: left === 0 ? "Until it's done, the planner and tablet will flag work that needs this machine." : "A trainer can record the refresher on the Safety page." }, `refresher-${i.id}-${userId}`);
+      }
     }
-  }
+  });
 
   // ── 4h. Equipment checks: 14 days before and on the day, to the workshop's own staff
-  const kitChecks = await prisma.equipmentCheck.findMany({
-    where: { machine: { archived: false } },
-    select: { kind: true, firstDue: true, machine: { select: { name: true, entityId: true, entity: { select: { slug: true } } } }, records: { orderBy: { doneAt: "desc" }, take: 1, select: { doneAt: true, passed: true, nextDue: true } } },
-  });
-  const kitStaff = new Map<number, number[]>();
-  for (const c of kitChecks) {
-    const st = checkState(c, c.records, now);
-    if (!st.due) continue;
-    const left = Math.round((Date.UTC(st.due.getUTCFullYear(), st.due.getUTCMonth(), st.due.getUTCDate()) - startOfToday.getTime()) / 86400e3);
-    if (left !== 14 && left !== 0) continue;
-    if (!kitStaff.has(c.machine.entityId)) kitStaff.set(c.machine.entityId, (await prisma.user.findMany({ where: { homeEntityId: c.machine.entityId, role: "member" }, select: { id: true } })).map(u => u.id));
-    const title = `${c.machine.name}: ${CHECK_LABEL[c.kind] ?? "check"} due ${left === 0 ? "today" : "in 14 days"}`.slice(0, 200);
-    for (const userId of kitStaff.get(c.machine.entityId)!) {
-      if (sentTitles.has(`${userId}|${title}`)) continue;
-      add({ userId, title, body: left === 0 ? "Once it's overdue, the planner and tablet will say not to use it." : "Book it in, then record the result on the Safety page.", link: `/spaces/${c.machine.entity.slug}/safety#equipment` }, `kit-${c.machine.name}-${c.kind}-${userId}`);
+  await section("equipment checks", async () => {
+    const kitChecks = await prisma.equipmentCheck.findMany({
+      where: { machine: { archived: false } },
+      select: { kind: true, firstDue: true, machine: { select: { name: true, entityId: true, entity: { select: { slug: true } } } }, records: { orderBy: { doneAt: "desc" }, take: 1, select: { doneAt: true, passed: true, nextDue: true } } },
+    });
+    const kitStaff = new Map<number, number[]>();
+    for (const c of kitChecks) {
+      const st = checkState(c, c.records, now);
+      if (!st.due) continue;
+      const left = Math.round((Date.UTC(st.due.getUTCFullYear(), st.due.getUTCMonth(), st.due.getUTCDate()) - startOfToday.getTime()) / 86400e3);
+      if (left !== 14 && left !== 0) continue;
+      if (!kitStaff.has(c.machine.entityId)) kitStaff.set(c.machine.entityId, (await prisma.user.findMany({ where: { homeEntityId: c.machine.entityId, role: "member" }, select: { id: true } })).map(u => u.id));
+      const title = `${c.machine.name}: ${CHECK_LABEL[c.kind] ?? "check"} due ${left === 0 ? "today" : "in 14 days"}`.slice(0, 200);
+      for (const userId of kitStaff.get(c.machine.entityId)!) {
+        if (sentTitles.has(`${userId}|${title}`)) continue;
+        add({ userId, title, body: left === 0 ? "Once it's overdue, the planner and tablet will say not to use it." : "Book it in, then record the result on the Safety page.", link: `/spaces/${c.machine.entity.slug}/safety#equipment` }, `kit-${c.machine.name}-${c.kind}-${userId}`);
+      }
     }
-  }
+  });
 
   // ── 4i. Compliance register: renewals and reviews 60, 30 and 7 days before and on the day,
   //        to the item's owner and the admins
-  const regItems = await prisma.complianceItem.findMany({
-    where: { archived: false, OR: [{ expiresAt: { not: null } }, { reviewAt: { not: null } }] },
-    select: { id: true, name: true, category: true, expiresAt: true, reviewAt: true, ownerId: true, entity: { select: { shortName: true, name: true } } },
-  });
-  let regAdmins: number[] | null = null;
-  for (const it of regItems) {
-    const d = it.expiresAt ?? it.reviewAt!;
-    const left = daysTo(d, now);
-    if (!REMIND_DAYS.includes(left)) continue;
-    regAdmins ??= (await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } })).map(u => u.id);
-    const what = it.expiresAt ? "renewal" : "review";
-    const whose = it.entity ? ` (${it.entity.shortName ?? it.entity.name})` : "";
-    const title = `${it.name}${whose}: ${what} ${left === 0 ? "due today" : `in ${left} days`}`.slice(0, 200);
-    for (const userId of new Set([...(it.ownerId ? [it.ownerId] : []), ...regAdmins])) {
-      if (sentTitles.has(`${userId}|${title}`)) continue;
-      add({ userId, title, body: `Upload the new ${it.expiresAt ? "certificate or schedule" : "version"} on the Compliance register when it's done.`, link: `/compliance?item=${it.id}` }, `compliance-${it.id}-${userId}`);
+  await section("compliance register", async () => {
+    const regItems = await prisma.complianceItem.findMany({
+      where: { archived: false, OR: [{ expiresAt: { not: null } }, { reviewAt: { not: null } }] },
+      select: { id: true, name: true, category: true, expiresAt: true, reviewAt: true, ownerId: true, entity: { select: { shortName: true, name: true } } },
+    });
+    let regAdmins: number[] | null = null;
+    for (const it of regItems) {
+      const d = it.expiresAt ?? it.reviewAt!;
+      const left = daysTo(d, now);
+      if (!REMIND_DAYS.includes(left)) continue;
+      regAdmins ??= admins.map(u => u.id);
+      const what = it.expiresAt ? "renewal" : "review";
+      const whose = it.entity ? ` (${it.entity.shortName ?? it.entity.name})` : "";
+      const title = `${it.name}${whose}: ${what} ${left === 0 ? "due today" : `in ${left} days`}`.slice(0, 200);
+      for (const userId of new Set([...(it.ownerId ? [it.ownerId] : []), ...regAdmins])) {
+        if (sentTitles.has(`${userId}|${title}`)) continue;
+        add({ userId, title, body: `Upload the new ${it.expiresAt ? "certificate or schedule" : "version"} on the Compliance register when it's done.`, link: `/compliance?item=${it.id}` }, `compliance-${it.id}-${userId}`);
+      }
     }
-  }
+  });
 
   // ── 4c. Mondays: last week's show-report digest for each show's PSG team ──
   // (?digestFor=YYYY-MM-DD runs it for that week on any day, for testing and catch-up)
-  const forced = req.nextUrl.searchParams.get("digestFor");
-  const isMonday = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Europe/London" }).format(now) === "Monday";
-  if (isMonday || forced) {
-    const weekStart = forced ? mondayOf(forced) : new Date(mondayOf().getTime() - 7 * 86400e3);
-    const weekEnd = new Date(weekStart.getTime() + 7 * 86400e3);
-    const shows = await prisma.production.findMany({
-      where: { showReports: { some: { reportDate: { gte: weekStart, lt: weekEnd } } } },
-      select: { id: true, name: true, team: { select: { user: { select: { id: true, role: true } } } } },
-    });
-    for (const show of shows) {
-      const g = await weekDigest(show.id, weekStart.toISOString().slice(0, 10));
-      const link = `/productions/${show.id}?section=reports&digest=${g.week}`;
-      const when = weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-      for (const { user } of show.team) {
-        if (user.role !== "admin" && user.role !== "member") continue; // PSG staff
-        if (sentLinks.has(`${user.id}|${link}`)) continue;
-        add({ userId: user.id, title: `${show.name}: week of ${when}`, body: digestLine(g), link }, `digest-${show.id}-${user.id}`);
+  await section("weekly digest", async () => {
+    const forced = req.nextUrl.searchParams.get("digestFor");
+    const isMonday = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Europe/London" }).format(now) === "Monday";
+    if (isMonday || forced) {
+      const weekStart = forced ? mondayOf(forced) : new Date(mondayOf().getTime() - 7 * 86400e3);
+      const weekEnd = new Date(weekStart.getTime() + 7 * 86400e3);
+      const shows = await prisma.production.findMany({
+        where: { showReports: { some: { reportDate: { gte: weekStart, lt: weekEnd } } } },
+        select: { id: true, name: true, team: { select: { user: { select: { id: true, role: true } } } } },
+      });
+      for (const show of shows) {
+        const g = await weekDigest(show.id, weekStart.toISOString().slice(0, 10));
+        const link = `/productions/${show.id}?section=reports&digest=${g.week}`;
+        const when = weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+        for (const { user } of show.team) {
+          if (user.role !== "admin" && user.role !== "member") continue; // PSG staff
+          if (sentLinks.has(`${user.id}|${link}`)) continue;
+          add({ userId: user.id, title: `${show.name}: week of ${when}`, body: digestLine(g), link }, `digest-${show.id}-${user.id}`);
+        }
       }
     }
-  }
+  });
 
-  if (queue.length) await prisma.notification.createMany({ data: queue });
+  await section("save", async () => { if (queue.length) await prisma.notification.createMany({ data: queue }); });
 
   // ── 5. SQLite backup to Cloudflare R2 ────────────────────────────────────
   let backupResult: Record<string, unknown> = { skipped: true };
@@ -311,7 +343,7 @@ async function runDaily(req: NextRequest): Promise<Response> {
     backupResult = { error: String(err) };
   }
 
-  return NextResponse.json({ ok: true, created: created.length, items: created, backup: backupResult });
+  return NextResponse.json({ ok: failed.length === 0, created: failed.includes("save") ? 0 : created.length, items: created, failed, backup: backupResult });
 }
 
 // Runs runDaily and records the outcome for the Hub Settings status panel. Rejected callers

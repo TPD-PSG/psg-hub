@@ -12,44 +12,51 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const rec = await requireRecordAccess("budgetVariation", id);
   if ("error" in rec) return rec.error;
   const userId = Number((session.user as any)?.id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   const existing = await prisma.budgetVariation.findUnique({ where: { id: Number(id) } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Handle status transitions
+  // Status changes move money on the budget lines, so each happens once, inside one transaction:
+  // approving adds the amounts, moving an approved variation away from approved (or deleting it)
+  // takes them back off. A double-click or a race can't apply it twice (audit round 2).
   const newStatus = body.status ?? existing.status;
-  const wasApproved = existing.status !== "approved" && newStatus === "approved";
-
-  const updated = await prisma.budgetVariation.update({
-    where: { id: Number(id) },
-    data: {
-      title: body.title ?? existing.title,
-      type: body.type ?? existing.type,
-      justification: body.justification ?? existing.justification,
-      clientRef: body.clientRef ?? existing.clientRef,
-      notes: body.notes ?? existing.notes,
-      status: newStatus,
-      rejectionReason: body.rejectionReason ?? existing.rejectionReason,
-      approvedById: newStatus === "approved" ? (userId || existing.approvedById) : existing.approvedById,
-      approvedAt: newStatus === "approved" && !existing.approvedAt ? new Date() : existing.approvedAt,
-    },
-    include: {
-      requestedBy: { select: { id: true, name: true } },
-      approvedBy: { select: { id: true, name: true } },
-      items: { include: { budgetLine: { select: { id: true, department: true, description: true } } } },
-    },
-  });
-
-  // When approved, apply the budget adjustments to the actual budget lines
-  if (wasApproved) {
-    for (const item of updated.items) {
-      await prisma.budgetLine.update({
-        where: { id: item.budgetLineId },
-        data: { budgeted: { increment: item.amount } },
-      });
+  const include = {
+    requestedBy: { select: { id: true, name: true } },
+    approvedBy: { select: { id: true, name: true } },
+    items: { include: { budgetLine: { select: { id: true, department: true, description: true } } } },
+  };
+  const updated = await prisma.$transaction(async tx => {
+    const approving = existing.status !== "approved" && newStatus === "approved";
+    const unapproving = existing.status === "approved" && newStatus !== "approved";
+    let moved = 0;
+    if (approving || unapproving) {
+      // Only the request that actually changes the status moves the money
+      const r = await tx.budgetVariation.updateMany({ where: { id: existing.id, status: existing.status }, data: { status: newStatus } });
+      moved = r.count ? (approving ? 1 : -1) : 0;
     }
-  }
+    const v = await tx.budgetVariation.update({
+      where: { id: existing.id },
+      data: {
+        title: body.title ?? existing.title,
+        type: body.type ?? existing.type,
+        justification: body.justification ?? existing.justification,
+        clientRef: body.clientRef ?? existing.clientRef,
+        notes: body.notes ?? existing.notes,
+        ...(approving || unapproving ? {} : { status: newStatus }),
+        rejectionReason: body.rejectionReason ?? existing.rejectionReason,
+        approvedById: newStatus === "approved" ? (userId || existing.approvedById) : existing.approvedById,
+        approvedAt: newStatus === "approved" && !existing.approvedAt ? new Date() : existing.approvedAt,
+      },
+      include,
+    });
+    if (moved) {
+      for (const item of v.items) {
+        await tx.budgetLine.update({ where: { id: item.budgetLineId }, data: { budgeted: { increment: moved * item.amount } } });
+      }
+    }
+    return v;
+  });
 
   return NextResponse.json(updated);
 }
@@ -60,6 +67,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params;
   const rec = await requireRecordAccess("budgetVariation", id);
   if ("error" in rec) return rec.error;
-  await prisma.budgetVariation.delete({ where: { id: Number(id) } });
+  // Deleting an approved variation takes its amounts back off the budget lines (audit round 2)
+  await prisma.$transaction(async tx => {
+    const v = await tx.budgetVariation.findUnique({ where: { id: Number(id) }, select: { id: true, status: true, items: { select: { budgetLineId: true, amount: true } } } });
+    if (!v) return;
+    await tx.budgetVariation.delete({ where: { id: v.id } });
+    if (v.status === "approved") {
+      for (const item of v.items) await tx.budgetLine.update({ where: { id: item.budgetLineId }, data: { budgeted: { decrement: item.amount } } });
+    }
+  });
   return NextResponse.json({ ok: true });
 }

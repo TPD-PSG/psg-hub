@@ -42,6 +42,7 @@ type Permissions = { modules: string[]; allProductions: boolean; hiddenSections?
 export type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
   color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null; homeEntityId?: number | null; clientId?: number | null;
+  deactivatedAt?: string | null;
 };
 export type Production = { id: number; name: string; status: string };
 export type Invite = { id: number; email: string; name: string; role: string; expiresAt: string; createdAt: string; expired: boolean };
@@ -244,9 +245,20 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
   }
 
   async function deleteUser(id: number) {
-    if (!await confirmDialog("Delete this user? This cannot be undone.")) return;
+    if (!await confirmDialog("Delete this user? This cannot be undone.", { danger: true, confirmLabel: "Delete" })) return;
     const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
-    if (!res.ok) { alertDialog((await res.json()).error); return; }
+    const d = await res.json().catch(() => ({}));
+    // People with time logged on jobs are kept: offer to deactivate them instead
+    if (res.status === 409 && d.canDeactivate) {
+      if (await confirmDialog(`${d.error}`, { confirmLabel: "Deactivate" })) await setDeactivated(id, true);
+      return;
+    }
+    if (!res.ok) { alertDialog(d.error ?? "Couldn't delete them"); return; }
+    await reload();
+  }
+  async function setDeactivated(id: number, deactivated: boolean) {
+    const res = await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deactivated }) });
+    if (!res.ok) { alertDialog((await res.json().catch(() => ({}))).error ?? "That didn't work"); return; }
     await reload();
   }
 
@@ -288,11 +300,12 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
               const p = parsePerms(u.permissions);
               const isAdmin = u.role === "admin";
               return (
-                <tr key={u.id} className="hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)" }}>
+                <tr key={u.id} className="hover:bg-white/5 transition-colors" style={{ borderColor: "var(--psg-card-border)", opacity: u.deactivatedAt ? 0.55 : 1 }}>
                   <td className="px-4 py-3">
                     <span className="flex items-center gap-2 font-medium">
                       <UserAvatar name={u.name} avatarUrl={u.avatarUrl} size={28} />
                       {u.name}
+                      {u.deactivatedAt && <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(248,113,113,0.15)", color: "#fca5a5" }}>Deactivated</span>}
                     </span>
                   </td>
                   <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{u.email}</td>
@@ -332,7 +345,9 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                   <td className="px-4 py-3">
                     <div className="flex gap-2 justify-end">
                       <button onClick={() => openEdit(u)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
-                      <button onClick={() => deleteUser(u.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>
+                      {u.deactivatedAt
+                        ? <button onClick={() => setDeactivated(u.id, false)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Reactivate</button>
+                        : <button onClick={() => deleteUser(u.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>}
                     </div>
                   </td>
                 </tr>

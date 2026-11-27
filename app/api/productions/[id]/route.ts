@@ -72,6 +72,9 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const pid = Number(id);
+  // Accident and incident reports (including RIDDOR) must be kept: archive the show instead (audit round 2)
+  const incidents = await prisma.incident.count({ where: { productionId: pid } });
+  if (incidents) return NextResponse.json({ error: `This show has ${incidents} accident/incident report${incidents === 1 ? "" : "s"}, which must be kept. Archive the production instead.` }, { status: 409 });
   // Note the production's stored files so they can be removed from R2 once the rows are gone
   // (company expenses and their receipts are kept: they're unlinked from the production, not deleted)
   const [docs, hs, reports, spend] = await Promise.all([

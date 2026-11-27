@@ -8,23 +8,24 @@ datasource db {
 }
 
 model User {
-  id           Int          @id @default(autoincrement())
-  name         String
-  email        String       @unique
-  passwordHash String
-  role         String       @default("member") // admin | member | client | freelancer
-  preferences  String? // JSON: { widgets: string[] }
-  permissions  String? // JSON: { modules: string[], allProductions: boolean }
-  avatarUrl    String?
-  color        String? // hex colour for schedule grid badge
-  costDayRate  Float? // internal cost per day, for job costing (admins set it)
-  homeEntityId Int? // the company this person works for; its space (if any) is their home page
-  homeEntity   Entity?      @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
-  clockEntries ClockEntry[] @relation("ClockEntryUser")
-  clientId     Int? // client accounts: the client company whose builds they see and sign off
-  client       Client?      @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id            Int          @id @default(autoincrement())
+  name          String
+  email         String       @unique
+  passwordHash  String
+  role          String       @default("member") // admin | member | client | freelancer
+  preferences   String? // JSON: { widgets: string[] }
+  permissions   String? // JSON: { modules: string[], allProductions: boolean }
+  avatarUrl     String?
+  color         String? // hex colour for schedule grid badge
+  costDayRate   Float? // internal cost per day, for job costing (admins set it)
+  homeEntityId  Int? // the company this person works for; its space (if any) is their home page
+  homeEntity    Entity?      @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
+  clockEntries  ClockEntry[] @relation("ClockEntryUser")
+  deactivatedAt DateTime? // can't sign in any more; their history (days logged, inductions…) is kept
+  clientId      Int? // client accounts: the client company whose builds they see and sign off
+  client        Client?      @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   tasksAssigned       Task[]               @relation("TaskAssignee")
   tasksSignoff        Task[]               @relation("TaskSignoff")

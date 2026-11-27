@@ -462,6 +462,8 @@ model Entity {
   logoKey          String? // logo in R2…
   logoData         String? // …or in the database (base64) when R2 isn't set up
   logoMime         String?
+  address          String? // letterhead on its documents (e.g. TWS sales quotes)
+  phone            String?
   members          User[]            @relation("UserHomeEntity")
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -1252,32 +1254,38 @@ model UserInvite {
 // A priced quote for a piece of work. Lines carry our cost and the sell price, so margin is
 // known before it goes out. Accepted quotes become the job's price.
 model Quote {
-  id            Int          @id @default(autoincrement())
-  number        String       @unique // Q-2026-001
-  title         String
-  jobType       String       @default("pm") // pm | workshop | haulage | other
-  status        String       @default("draft") // draft | sent | accepted | declined
-  entityId      Int?
-  entity        Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  clientId      Int?
-  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  opportunityId Int?
-  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  jobId         Int?
-  job           Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  vatRate       Float        @default(20)
-  validUntil    DateTime?
-  terms         String? // shown on the PDF
-  internalNotes String? // never on the PDF
-  showSubtotals Boolean      @default(false) // a subtotal after each section on the PDF
-  pdfDetail     String       @default("lines") // lines: full breakdown | items: one price per section (item)
-  sentAt        DateTime?
-  decidedAt     DateTime?
-  createdById   Int?
-  createdBy     User?        @relation("QuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  lines         QuoteLine[]
+  id             Int          @id @default(autoincrement())
+  number         String       @unique // Q-2026-001
+  title          String
+  jobType        String       @default("pm") // pm | workshop | haulage | other
+  status         String       @default("draft") // draft | sent | accepted | declined
+  entityId       Int?
+  entity         Entity?      @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  clientId       Int?
+  client         Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  opportunityId  Int?
+  opportunity    Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  jobId          Int?
+  job            Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  vatRate        Float        @default(20)
+  validUntil     DateTime?
+  terms          String? // shown on the PDF
+  internalNotes  String? // never on the PDF
+  showSubtotals  Boolean      @default(false) // a subtotal after each section on the PDF
+  pdfDetail      String       @default("lines") // lines: full breakdown | items: one price per section (item)
+  // Sales-quote boxes on a space's PDF (TWS layout, 27 Nov 2026)
+  customerPo     String?
+  paymentTerms   String? // e.g. "50 / 30 / 20"
+  dueDate        DateTime?
+  shippingMethod String? // e.g. Client collection, TWS delivery
+  shipTo         String?
+  sentAt         DateTime?
+  decidedAt      DateTime?
+  createdById    Int?
+  createdBy      User?        @relation("QuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  lines          QuoteLine[]
 
   @@index([opportunityId])
   @@index([jobId])

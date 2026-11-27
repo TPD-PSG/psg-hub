@@ -7,10 +7,10 @@ import { nextNumber, JOB_TYPES, QUOTE_STATUSES } from "@/lib/quotes";
 export const QUOTE_INCLUDE = {
   lines: { orderBy: { sortOrder: "asc" as const } },
   // Branding for the PDF: a company with its own space (e.g. TWS) gets its own logo and colours
-  entity: { select: { id: true, name: true, hasSpace: true, slug: true, color: true, logoMime: true, updatedAt: true } },
+  entity: { select: { id: true, name: true, hasSpace: true, slug: true, color: true, logoMime: true, updatedAt: true, address: true, phone: true } },
   client: { select: { id: true, name: true, billingName: true, billingAddress: true, billingEmail: true, address: true } },
   opportunity: { select: { id: true, title: true, stage: true } },
-  job: { select: { id: true, number: true, title: true } },
+  job: { select: { id: true, number: true, title: true, endDate: true, deliveryMethod: true, deliveryNotes: true } },
   createdBy: { select: { id: true, name: true } },
 };
 
@@ -65,6 +65,9 @@ export function quoteFields(body: Record<string, unknown>) {
   if (has("internalNotes")) d.internalNotes = text(body.internalNotes);
   if (has("showSubtotals")) d.showSubtotals = !!body.showSubtotals;
   if (has("pdfDetail") && (body.pdfDetail === "lines" || body.pdfDetail === "items")) d.pdfDetail = body.pdfDetail;
+  // Sales-quote boxes (a space's PDF layout)
+  for (const k of ["customerPo", "paymentTerms", "shippingMethod", "shipTo"] as const) if (has(k)) d[k] = text(body[k]);
+  if (has("dueDate")) { const t = typeof body.dueDate === "string" && body.dueDate ? new Date(body.dueDate) : null; d.dueDate = t && !isNaN(t.getTime()) ? t : null; }
   if (has("status") && (QUOTE_STATUSES as readonly string[]).includes(body.status as string)) d.status = body.status;
   return d;
 }

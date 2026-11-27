@@ -18,10 +18,10 @@ export default function EntitiesPanel({ initial }: { initial: EntityRow[] | null
   const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   // Space settings for one company at a time
-  const [space, setSpace] = useState<{ id: number; hasSpace: boolean; slug: string; shortName: string; color: string } | null>(null);
+  const [space, setSpace] = useState<{ id: number; hasSpace: boolean; slug: string; shortName: string; color: string; address: string; phone: string } | null>(null);
   const openSpace = (en: EntityRow) => setSpace({
     // A company setting up its space for the first time starts switched on, in the workshop brass
-    id: en.id, hasSpace: en.hasSpace || !en.slug, shortName: en.shortName ?? "", color: en.color ?? DEFAULT_SPACE_ACCENT,
+    id: en.id, hasSpace: en.hasSpace || !en.slug, shortName: en.shortName ?? "", color: en.color ?? DEFAULT_SPACE_ACCENT, address: en.address ?? "", phone: en.phone ?? "",
     slug: en.slug ?? en.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30),
   });
   async function saveSpace(e: React.FormEvent) {
@@ -31,7 +31,7 @@ export default function EntitiesPanel({ initial }: { initial: EntityRow[] | null
     let on = space.hasSpace;
     if (!on && !was?.hasSpace && space.slug && await confirmDialog("The space isn't switched on yet, so nobody can open it. Switch it on now?")) on = true;
     // Address first, so switching the space on in the same save has one to use
-    if (await call(`/api/entities/${space.id}`, "PUT", { slug: space.slug, shortName: space.shortName, color: space.color })
+    if (await call(`/api/entities/${space.id}`, "PUT", { slug: space.slug, shortName: space.shortName, color: space.color, address: space.address, phone: space.phone })
       && await call(`/api/entities/${space.id}`, "PUT", { hasSpace: on })) { setSpace(null); reload(); }
   }
   async function uploadLogo(id: number, file: File | undefined) {
@@ -195,6 +195,10 @@ export default function EntitiesPanel({ initial }: { initial: EntityRow[] | null
                               <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => uploadLogo(en.id, e.target.files?.[0])} />
                             </label>
                           </div></div>
+                        <div><label htmlFor={`sp-addr-${en.id}`} className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Address (letterhead on its quotes)</label>
+                          <textarea id={`sp-addr-${en.id}`} rows={3} className={inp} style={inpStyle} value={space.address} maxLength={300} onChange={e => setSpace({ ...space, address: e.target.value })} placeholder={"Unit 2\nCockshute Industrial Estate\nStoke on Trent ST4 7AW"} /></div>
+                        <div><label htmlFor={`sp-phone-${en.id}`} className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Phone (on its quotes)</label>
+                          <input id={`sp-phone-${en.id}`} className={inp} style={inpStyle} value={space.phone} maxLength={40} onChange={e => setSpace({ ...space, phone: e.target.value })} /></div>
                         {/* Preview of the top bar */}
                         <div className="md:col-span-2 rounded h-10 flex items-center px-3 text-xs font-semibold tracking-widest uppercase" style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(space.color) ? space.color : DEFAULT_SPACE_ACCENT, color: "#fff" }}>
                           {space.shortName || en.name} · PSG Hub <span className="ml-auto normal-case tracking-normal font-normal opacity-80">top bar preview</span>

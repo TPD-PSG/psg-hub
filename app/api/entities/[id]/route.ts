@@ -12,7 +12,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const body = await req.json().catch(() => ({}));
   const blank = blanked(body, { name: "The name can't be blank" });
   if (blank) return blank;
-  const data: { name?: string; archived?: boolean; sortOrder?: number; hasSpace?: boolean; slug?: string | null; shortName?: string | null; color?: string | null } = {};
+  const data: { name?: string; archived?: boolean; sortOrder?: number; hasSpace?: boolean; slug?: string | null; shortName?: string | null; color?: string | null; address?: string | null; phone?: string | null } = {};
   if (typeof body.name === "string") {
     const name = body.name.trim();
     if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
@@ -32,6 +32,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     data.slug = r.slug;
   }
   if ("shortName" in body) data.shortName = typeof body.shortName === "string" && body.shortName.trim() ? body.shortName.trim().slice(0, 12) : null;
+  // Letterhead on the company's documents (e.g. its sales quotes)
+  if ("address" in body) data.address = typeof body.address === "string" && body.address.trim() ? body.address.trim().slice(0, 300) : null;
+  if ("phone" in body) data.phone = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim().slice(0, 40) : null;
   if ("color" in body) {
     const c = checkColor(body.color);
     if (c === undefined) return NextResponse.json({ error: "Colour must look like #1a2b3c" }, { status: 400 });

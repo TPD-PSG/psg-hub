@@ -32,27 +32,27 @@ export type QuoteForPdf = {
   kind?: string; // what the document is called (default "Quote"; a variation says "Variation")
   extraLines?: string[]; // small lines under the dates, e.g. "Approved by …"
   validUntil: string | null; terms: string | null; createdAt: string; sentAt: string | null;
-  entity: { name: string; hasSpace?: boolean; slug?: string | null; color?: string | null; logoMime?: string | null; updatedAt?: string | Date } | null;
+  entity: { name: string; hasSpace?: boolean; slug?: string | null; color?: string | null; logoMime?: string | null; updatedAt?: string | Date; address?: string | null; phone?: string | null } | null;
+  // Sales-quote boxes (a space's layout); each falls back to the linked job where it can
+  customerPo?: string | null; paymentTerms?: string | null; dueDate?: string | null; shippingMethod?: string | null; shipTo?: string | null;
+  createdBy?: { name: string } | null;
+  job?: { endDate?: string | null; deliveryMethod?: string | null; deliveryNotes?: string | null } | null;
   client: { name: string; billingName: string | null; billingAddress: string | null; address: string | null; billingEmail: string | null } | null;
   lines: { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number }[];
 };
 
 export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = brandFor(q.entity)): jsPDF {
+  // A company with its own space (TWS) sends a sales quote in its own letterhead layout
+  if (brand.rule) return buildSalesQuotePDF(q, logo, brand);
   const doc = pdfSafe(new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }));
   const W = 210, M = 14;
   doc.setFillColor(...brand.header);
   doc.rect(0, 0, W, 24, "F");
-  if (brand.rule) { doc.setFillColor(...brand.rule); doc.rect(0, 24, W, 1.4, "F"); }
   let x = M;
   if (logo) {
     const h = 16, w = Math.min(36, (logo.w / logo.h) * h);
     const lh = w / (logo.w / logo.h);
-    if (brand.rule) {
-      // A space's logo sits on its paper ground (TWS's logo has a white T that would vanish on white)
-      doc.setFillColor(245, 242, 236);
-      doc.rect(M - 1.5, 4 - 1.5, w + 3, lh + 3, "F");
-      doc.addImage(logo.dataUrl, "PNG", M, 4, w, lh, undefined, "FAST");
-    } else drawPsgLogo(doc, logo, M, 4, w, lh);
+    drawPsgLogo(doc, logo, M, 4, w, lh);
     x = M + w + 5;
   }
   doc.setTextColor(255, 255, 255);
@@ -72,6 +72,9 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
     `${q.kind ?? "Quote"} ${q.number}`,
     `Date ${fmtDate(q.sentAt ?? q.createdAt)}`,
     q.validUntil ? `Valid until ${fmtDate(q.validUntil)}` : null,
+    q.customerPo ? `Your PO ${q.customerPo}` : null,
+    q.paymentTerms ? `Payment ${q.paymentTerms}` : null,
+    q.dueDate ? `Due ${fmtDate(q.dueDate)}` : null,
     ...(q.extraLines ?? []),
   ].filter(Boolean) as string[];
   right.forEach((t, i) => doc.text(t, W - M, y - 4 + i * 4.5, { align: "right" }));
@@ -185,4 +188,167 @@ export async function downloadQuotePDF(q: QuoteForPdf) {
   const brand = brandFor(q.entity);
   const logo = await fetchLogoAsset(brand.logoUrl ?? undefined);
   buildQuotePDF(q, logo, brand).save(`${q.number} ${q.title}.pdf`.replace(/[\\/:*?"<>|]/g, "-"));
+}
+
+// ── Sales quote layout (TWS, 27 Nov 2026) ─────────────────────────────────────
+// Modelled on the workshop's existing sales quotes: letterhead with logo, address and phone; the
+// document name and number on the right; boxed client / ship-to and details; lines grouped by
+// section with a total under each; totals on the right; page count and print time at the foot.
+
+const TIME_UNITS = /^(hours?|days?|weeks?|shows?)$/i;
+/** The resource type column, from the line's section (else its unit: time is labour). */
+export function resourceType(section: string | null, unit?: string | null): string {
+  const s = (section ?? "").trim().toLowerCase();
+  const byUnit = unit && /^(hours?|days?|weeks?)$/i.test(unit.trim()) ? "Labour" : "Misc";
+  if (!s) return byUnit;
+  if (["labour", "design", "fit-up", "get-out", "running", "pre-production"].includes(s)) return "Labour";
+  if (s === "transport") return "Transport";
+  if (s === "tools & kit") return "Kit";
+  if (["timber", "sheet materials", "steel & metal", "paint & finishes", "fixings & hardware", "fabric & soft goods", "consumables", "materials"].includes(s)) return "Material";
+  return byUnit;
+}
+const cap = (u: string | null) => (u ? u.charAt(0).toUpperCase() + u.slice(1) : "Each");
+const money = (n: number) => new Intl.NumberFormat("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+const SHIPPING: Record<string, string> = { collection: "Client collection", delivery: "Delivered by us" };
+
+export function buildSalesQuotePDF(q: QuoteForPdf, logo: LogoAsset | undefined, brand: Brand): jsPDF {
+  const doc = pdfSafe(new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }));
+  const W = 210, M = 12, ink: Rgb = [25, 25, 28], soft: Rgb = [95, 98, 105], line: Rgb = [70, 72, 78];
+  const kind = q.kind === "Variation" ? "Variation" : "Sales Quote";
+
+  // Letterhead: logo, then the company's address and phone
+  let x = M;
+  if (logo) {
+    const h = 22, w = Math.min(46, (logo.w / logo.h) * h), lh = w / (logo.w / logo.h);
+    // On the company's paper ground (TWS's logo has a white T that would vanish on white)
+    doc.setFillColor(245, 242, 236); doc.rect(M - 1.5, 10 - 1.5, w + 3, lh + 3, "F");
+    doc.addImage(logo.dataUrl, "PNG", M, 10, w, lh, undefined, "FAST");
+    x = M + w + 6;
+  }
+  doc.setTextColor(...ink); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
+  const letter = [q.entity?.name ?? "", ...(q.entity?.address ?? "").split(/\r?\n/).map(l => l.trim()).filter(Boolean), q.entity?.phone ? `Phone: ${q.entity.phone}` : ""].filter(Boolean);
+  letter.forEach((t, i) => { if (i === 0) doc.setFont("helvetica", "bold"); else doc.setFont("helvetica", "normal"); doc.text(t, x, 13 + i * 4.2); });
+
+  // Document name, number and title on the right
+  const cx = W - M - 38;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.text(kind, cx, 17, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.text(`Number: ${q.number}`, cx, 23, { align: "center" });
+  doc.setFontSize(10);
+  const title = (doc.splitTextToSize(q.title, 76) as string[]).slice(0, 2);
+  doc.text(title, cx, 28.5, { align: "center" });
+  const headBottom = Math.max(13 + letter.length * 4.2, 28.5 + title.length * 4.2, 34) + 2;
+  // The company's own colour as a rule under the letterhead
+  doc.setFillColor(...(brand.rule ?? brand.header)); doc.rect(M, headBottom, W - 2 * M, 1.2, "F");
+
+  doc.setDrawColor(...line); doc.setLineWidth(0.25);
+  // Client / Ship to boxes
+  let y = headBottom + 5;
+  const half = (W - 2 * M - 6) / 2;
+  const client = q.client ? [q.client.billingName ?? q.client.name, q.client.billingAddress ?? q.client.address, q.client.billingEmail].filter(Boolean).join("\n") : "";
+  const shipTo = q.shipTo ?? (q.job?.deliveryMethod === "delivery" ? q.job.deliveryNotes ?? "" : "");
+  doc.setFontSize(9.5);
+  const cl = doc.splitTextToSize(client, half - 4) as string[], sl = doc.splitTextToSize(shipTo, half - 4) as string[];
+  const bodyH = Math.max(cl.length, sl.length, 1) * 4.2 + 3;
+  const box = (bx: number, label: string, lines: string[]) => {
+    doc.setFillColor(...brand.tint); doc.rect(bx, y, half, 6, "FD");
+    doc.setFont("helvetica", "bold"); doc.setTextColor(...ink); doc.text(label, bx + 2, y + 4.2);
+    doc.rect(bx, y + 6, half, bodyH);
+    doc.setFont("helvetica", "normal"); doc.text(lines, bx + 2, y + 10.2);
+  };
+  box(M, "Client", cl); box(M + half + 6, "Ship To", sl);
+  y += 6 + bodyH + 5;
+
+  // Two rows of details
+  const day = (iso: string | null | undefined) => (iso ? fmtDate(iso) : "");
+  const rows: [string, string][][] = [
+    [["Sales Person", q.createdBy?.name ?? ""], ["Customer PO", q.customerPo ?? ""], ["Terms", q.paymentTerms ?? ""], ["Sales Tax", `VAT ${q.vatRate}%`]],
+    [["Date", day(q.sentAt ?? q.createdAt)], ["Due Date", day(q.dueDate ?? q.job?.endDate)], ["Shipping Method", q.shippingMethod ?? SHIPPING[q.job?.deliveryMethod ?? ""] ?? ""], ["Valid Until", day(q.validUntil)]],
+  ];
+  const cw = (W - 2 * M) / 4;
+  doc.setFontSize(8.5);
+  for (const r of rows) {
+    r.forEach(([label, value], i) => {
+      const bx = M + i * cw;
+      doc.setFillColor(...brand.tint); doc.rect(bx, y, cw, 5, "FD");
+      doc.setFont("helvetica", "bold"); doc.text(label, bx + cw / 2, y + 3.5, { align: "center" });
+      doc.rect(bx, y + 5, cw, 5);
+      doc.setFont("helvetica", "normal"); doc.text((doc.splitTextToSize(value, cw - 3) as string[])[0] ?? "", bx + cw / 2, y + 8.6, { align: "center" });
+    });
+    y += 13;
+  }
+  y += 2;
+
+  // Lines, grouped by section in the order they first appear, each with its total
+  const sections: string[] = [];
+  for (const l of q.lines) if (!sections.includes(l.section ?? "")) sections.push(l.section ?? "");
+  const R = (c: string, bold = false) => ({ content: c, styles: { halign: "right" as const, fontStyle: bold ? ("bold" as const) : ("normal" as const) } });
+  const body: unknown[][] = [];
+  const sectionTotal = (sec: string) => q.lines.filter(l => (l.section ?? "") === sec).reduce((a, l) => a + l.quantity * l.unitPrice, 0);
+  if (q.pdfDetail === "items") {
+    // One price per item: each section is one line at its total (the breakdown stays in the Hub)
+    for (const sec of sections) {
+      const ls = q.lines.filter(l => (l.section ?? "") === sec);
+      const items: [string, number][] = sec ? [[sec, sectionTotal(sec)]] : ls.map(l => [l.description, l.quantity * l.unitPrice]);
+      for (const [name, v] of items) {
+        body.push([{ content: name, colSpan: 6, styles: { fontStyle: "bold", textColor: brand.accentInk } }]);
+        body.push([resourceType(sec || null), "1", name, "Each", R(money(v)), R(money(v))]);
+        body.push([{ content: `${name} Total`, colSpan: 5, styles: { halign: "right", fontStyle: "bold" } }, R(`£${money(v)}`, true)]);
+      }
+    }
+  } else {
+    for (const sec of sections) {
+      const ls = q.lines.filter(l => (l.section ?? "") === sec);
+      if (sec) body.push([{ content: sec, colSpan: 6, styles: { fontStyle: "bold", textColor: brand.accentInk } }]);
+      for (const l of ls) {
+        const unit = l.unit && !TIME_UNITS.test(l.unit) ? cap(l.unit) : l.unit ? cap(l.unit.replace(/s$/, "")) : "Each";
+        body.push([resourceType(l.section, l.unit), qty(l.quantity), l.description, unit, R(money(l.unitPrice)), R(money(l.quantity * l.unitPrice))]);
+      }
+      if (sec) body.push([{ content: `${sec} Total`, colSpan: 5, styles: { halign: "right", fontStyle: "bold" } }, R(`£${money(sectionTotal(sec))}`, true)]);
+    }
+  }
+  autoTable(doc, {
+    startY: y,
+    theme: "plain",
+    head: [["Type", "Qty", "Description", "Rate", R("Price", true), R("Amount", true)]] as never,
+    body: body as never,
+    styles: { fontSize: 8.5, cellPadding: { top: 1.4, bottom: 1.4, left: 1.5, right: 1.5 }, textColor: ink },
+    headStyles: { fontStyle: "bold", textColor: ink, lineWidth: { bottom: 0.4 }, lineColor: line },
+    columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 12, halign: "right" }, 3: { cellWidth: 18 }, 4: { cellWidth: 24 }, 5: { cellWidth: 26 } },
+    margin: { left: M, right: M, bottom: 18 },
+  });
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+
+  // Totals, right-aligned
+  const t = quoteTotals(q.lines, q.vatRate);
+  if (y > 255) { doc.addPage(); y = 20; }
+  const tx = W - M - 75;
+  const totals: [string, number, boolean][] = [["Subtotal:", t.net, false], [`Sales Tax (VAT ${q.vatRate}%):`, t.vat, false], ["Total:", t.gross, true]];
+  doc.setFontSize(10.5);
+  totals.forEach(([label, v, bold], i) => {
+    const ty = y + i * 6.5;
+    if (bold) { doc.setDrawColor(...line); doc.line(tx, ty - 4.6, W - M, ty - 4.6); }
+    doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setTextColor(...ink);
+    doc.text(label, tx, ty); doc.text(`£${money(v)}`, W - M, ty, { align: "right" });
+  });
+  y += totals.length * 6.5 + 6;
+
+  if (q.terms || q.extraLines?.length) {
+    const text = [...(q.extraLines ?? []), q.terms ?? ""].filter(Boolean).join("\n\n");
+    const tl = doc.splitTextToSize(text, W - 2 * M) as string[];
+    if (y + tl.length * 4 > 278) { doc.addPage(); y = 20; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...brand.accentInk); doc.text("Terms", M, y);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...soft); doc.text(tl, M, y + 4.5);
+  }
+
+  // Footer: company and number left, page count centre, when it was printed right
+  const pages = (doc as unknown as { internal: { getNumberOfPages(): number } }).internal.getNumberOfPages();
+  const printed = new Date().toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }).replace(",", "");
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...soft);
+    doc.text(`${q.entity?.name ?? ""} · ${kind} ${q.number}`, M, 289);
+    doc.text(`Page ${i} of ${pages}`, W / 2, 289, { align: "center" });
+    doc.text(printed, W - M, 289, { align: "right" });
+  }
+  return doc;
 }

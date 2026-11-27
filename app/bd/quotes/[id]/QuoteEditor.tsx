@@ -20,7 +20,8 @@ export type QuoteDetail = {
   id: number; number: string; title: string; jobType: string; status: string; vatRate: number;
   validUntil: string | null; terms: string | null; internalNotes: string | null; showSubtotals?: boolean; pdfDetail?: string; createdAt: string; sentAt: string | null; decidedAt: string | null;
   entity: Option | null; client: (Option & { billingName: string | null; billingAddress: string | null; billingEmail: string | null; address: string | null }) | null;
-  opportunity: { id: number; title: string; stage: string } | null; job: { id: number; number: string; title: string } | null;
+  opportunity: { id: number; title: string; stage: string } | null; job: { id: number; number: string; title: string; endDate?: string | null; deliveryMethod?: string | null; deliveryNotes?: string | null } | null;
+  customerPo?: string | null; paymentTerms?: string | null; dueDate?: string | null; shippingMethod?: string | null; shipTo?: string | null;
   createdBy: Option | null; lines: Line[];
 };
 type Row = { section: string; description: string; quantity: string; unit: string; unitCost: string; unitPrice: string };
@@ -51,6 +52,8 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     opportunityId: initial.opportunity ? String(initial.opportunity.id) : "", vatRate: String(initial.vatRate),
     validUntil: initial.validUntil?.slice(0, 10) ?? "", terms: initial.terms ?? "", internalNotes: initial.internalNotes ?? "",
     showSubtotals: !!initial.showSubtotals, pdfDetail: initial.pdfDetail === "items" ? "items" : "lines",
+    customerPo: initial.customerPo ?? "", paymentTerms: initial.paymentTerms ?? "", dueDate: initial.dueDate?.slice(0, 10) ?? "",
+    shippingMethod: initial.shippingMethod ?? "", shipTo: initial.shipTo ?? "",
   });
   const [rows, setRows] = useState<Row[]>(initial.lines.map(toRow));
   // The "Add a line" bar: fill it in, press Add (or Enter), it joins the quote and the boxes clear
@@ -212,6 +215,19 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
           <input id="q-valid" type="date" className={inp} style={inpStyle} value={head.validUntil} onChange={e => setH({ validUntil: e.target.value })} /></div>
         <div><label htmlFor="q-vat" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>VAT %</label>
           <input id="q-vat" type="number" min={0} max={100} step="0.5" className={inp} style={inpStyle} value={head.vatRate} onChange={e => setH({ vatRate: e.target.value })} /></div>
+        {/* Sales-quote details (boxes on a company space's PDF, e.g. TWS) */}
+        <div><label htmlFor="q-po" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Customer PO</label>
+          <input id="q-po" className={inp} style={inpStyle} value={head.customerPo} maxLength={60} onChange={e => setH({ customerPo: e.target.value })} /></div>
+        <div><label htmlFor="q-pay" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Payment terms</label>
+          <input id="q-pay" className={inp} style={inpStyle} value={head.paymentTerms} maxLength={60} list="q-pay-list" onChange={e => setH({ paymentTerms: e.target.value })} placeholder="e.g. 50 / 30 / 20" />
+          <datalist id="q-pay-list"><option value="50 / 30 / 20" /><option value="50 / 50" /><option value="100% on order" /><option value="30 days" /></datalist></div>
+        <div><label htmlFor="q-due" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Due date{q.job?.endDate && !head.dueDate ? " (else the build's due-out)" : ""}</label>
+          <input id="q-due" type="date" className={inp} style={inpStyle} value={head.dueDate} onChange={e => setH({ dueDate: e.target.value })} /></div>
+        <div><label htmlFor="q-ship" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Shipping method</label>
+          <input id="q-ship" className={inp} style={inpStyle} value={head.shippingMethod} maxLength={60} list="q-ship-list" onChange={e => setH({ shippingMethod: e.target.value })} placeholder="e.g. Client collection" />
+          <datalist id="q-ship-list"><option value="Client collection" /><option value="Client shipping" /><option value="Delivered by us" /><option value="Night Run" /></datalist></div>
+        <div className="md:col-span-2"><label htmlFor="q-shipto" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Ship to</label>
+          <textarea id="q-shipto" rows={2} className={inp} style={inpStyle} value={head.shipTo} maxLength={300} onChange={e => setH({ shipTo: e.target.value })} placeholder="Delivery address, if it's going somewhere" /></div>
       </div>
 
       {/* Lines */}

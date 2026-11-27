@@ -72,6 +72,17 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
   const [entry, setEntry] = useState<Row>({ ...BLANK_ROW, section: initial.lines[initial.lines.length - 1]?.section ?? "" });
   const [insertAt, setInsertAt] = useState<number | null>(null); // add the next line below this row instead of at the end
   const [newItem, setNewItem] = useState<string | null>(null); // "+ New item": the name being typed
+  // Collapsed items (big jobs): just the header and subtotal show. Remembered per quote in this browser.
+  const collapseKey = `quote-collapsed-${initial.id}`;
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read once from this browser after the page shows (not on the server)
+    try { setCollapsed(new Set(JSON.parse(localStorage.getItem(collapseKey) ?? "[]"))); } catch { /* not remembered */ }
+  }, [collapseKey]);
+  const saveCollapsed = (next: Set<string>) => { setCollapsed(next); try { localStorage.setItem(collapseKey, JSON.stringify([...next])); } catch { /* private window: not remembered */ } };
+  const isCollapsed = (name: string) => collapsed.has(name.trim().toLowerCase());
+  const toggleItem = (name: string) => { const k = name.trim().toLowerCase(), n = new Set(collapsed); if (n.has(k)) n.delete(k); else n.add(k); saveCollapsed(n); };
+  const expandItem = (name: string) => { if (isCollapsed(name)) toggleItem(name); };
   const [markup, setMarkup] = useState("30");
   const [found, setFound] = useState<Lookup | null>(null);
   const [inStock, setInStock] = useState<{ quantity: number; unit: string } | null>(null);
@@ -173,6 +184,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
   function addEntry(e?: React.FormEvent) {
     e?.preventDefault();
     if (!entry.description.trim()) { descRef.current?.focus(); return; }
+    expandItem(entry.section); // show the line just added
     const row: Row = {
       ...entry, unitPrice: entry.unitPrice.trim() === "" && entry.unitCost.trim() !== "" ? String(priced(num(entry.unitCost))) : entry.unitPrice,
       kind: entry.kind || defaultKind(entry.section, entry.unit),
@@ -323,6 +335,12 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
             </>
           )}
           <span className="text-xs ml-auto" style={{ color: "var(--psg-muted)" }}>An item groups its lines with a subtotal. Drag lines between items with ⋮⋮.</span>
+          {items.filter(g => g.name.trim()).length > 1 && (
+            <span className="flex gap-2 text-xs">
+              <button type="button" onClick={() => saveCollapsed(new Set(items.filter(g => g.name.trim()).map(g => g.name.trim().toLowerCase())))} className="text-blue-400">Collapse all</button>
+              <button type="button" onClick={() => saveCollapsed(new Set())} className="text-blue-400">Expand all</button>
+            </span>
+          )}
         </div>
         <table className="w-full text-sm" style={{ minWidth: 1200 }}>
           <thead>
@@ -344,9 +362,13 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
                   <tr className="border-t-2" {...dropProps(`item:${g.name}`, from => moveLine(from, g.name, null))}
                     style={{ borderColor: "var(--psg-card-border)", backgroundColor: dropOn === `item:${g.name}` ? "rgba(91,141,239,0.3)" : "rgba(91,141,239,0.08)" }}>
                     <td colSpan={2} className="px-2 py-1.5">
+                      <div className="flex items-center gap-1.5">
+                      <button type="button" onClick={() => toggleItem(g.name)} aria-expanded={!isCollapsed(g.name)} aria-label={`${isCollapsed(g.name) ? "Open" : "Collapse"} ${g.name || "these lines"}`}
+                        className="w-6 shrink-0 text-sm" style={{ color: "var(--psg-muted)" }}>{isCollapsed(g.name) ? "▸" : "▾"}</button>
                       {named ? (
                         <input aria-label={`Item name: ${g.name}`} className={`${inp} font-semibold`} style={inpStyle} value={g.name} onChange={e => renameItem(g, e.target.value)} />
                       ) : <span className="text-xs font-semibold" style={{ color: "var(--psg-muted)" }}>Lines not in an item</span>}
+                      </div>
                     </td>
                     <td colSpan={2} className="px-2 py-1.5 text-xs" style={{ color: "var(--psg-muted)" }}>{g.idx.length} line{g.idx.length === 1 ? "" : "s"}</td>
                     <td className="px-2 py-1.5 text-xs tabular-nums" style={{ color: "var(--psg-muted)" }} title="Our cost for this item">{gbp(sub.cost)}</td><td />
@@ -364,11 +386,11 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
                       </label>}
                     </td>
                     <td className="px-1 py-1.5 text-xs whitespace-nowrap">
-                      <button type="button" title="Add a line to this item" onClick={() => { setInsertAt(g.idx[g.idx.length - 1]); setEntry(en => ({ ...en, section: g.name })); descRef.current?.focus(); }} style={{ color: "var(--psg-muted)" }}>＋ line</button>
+                      <button type="button" title="Add a line to this item" onClick={() => { expandItem(g.name); setInsertAt(g.idx[g.idx.length - 1]); setEntry(en => ({ ...en, section: g.name })); descRef.current?.focus(); }} style={{ color: "var(--psg-muted)" }}>＋ line</button>
                     </td>
                   </tr>
                 )}
-                {g.idx.map(i => {
+                {!((named || items.length > 1) && isCollapsed(g.name)) && g.idx.map(i => {
                   const r = rows[i];
                   const total = num(r.quantity) * num(r.unitPrice), cost = num(r.quantity) * num(r.unitCost);
                   const m = total ? Math.round(((total - cost) / total) * 100) : null;

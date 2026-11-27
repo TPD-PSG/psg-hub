@@ -76,8 +76,8 @@ export default () => run("compliance-register", async ({ db, users, login, resul
     else {
       await db.complianceItem.update({ where: { id: pl }, data: { expiresAt: new Date(`${day(30)}T00:00:00Z`) } });
       await fetch(`${BASE}/api/notify/daily`, { method: "POST", headers: { "x-notify-secret": secret } });
-      ok((await db.notification.count({ where: { userId: member.id, createdAt: { gte: since }, title: "ZZ Public liability (ZC1): renewal in 30 days" } })) === 1, "the owner is reminded 30 days before the renewal");
-      ok((await db.notification.count({ where: { userId: admin.id, createdAt: { gte: since }, title: "ZZ Public liability (ZC1): renewal in 30 days" } })) === 1, "and so are the admins");
+      ok((await db.notification.count({ where: { userId: member.id, createdAt: { gte: since }, title: "ZZ Public liability (ZC1): renewal due in 30 days" } })) === 1, "the owner is reminded 30 days before the renewal");
+      ok((await db.notification.count({ where: { userId: admin.id, createdAt: { gte: since }, title: "ZZ Public liability (ZC1): renewal due in 30 days" } })) === 1, "and so are the admins");
     }
   } finally {
     await db.notification.deleteMany({ where: { createdAt: { gte: since }, link: { startsWith: "/compliance?item=" } } }).catch(() => {});

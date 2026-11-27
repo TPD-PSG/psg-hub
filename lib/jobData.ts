@@ -21,7 +21,8 @@ export async function requireJobViewer(): Promise<JobViewer | { error: NextRespo
   return { userId: Number(user.id), role, seeMoney: role === "admin" || canAccess(perms, "bd", role) || canAccess(perms, "finance", role) };
 }
 
-const QUOTE_LINES = { select: { id: true, number: true, status: true, vatRate: true, lines: { select: { quantity: true, unitCost: true, unitPrice: true } } } };
+// Newest decision first, so a job's accepted quote is always the latest one accepted (audit round 2)
+const QUOTE_LINES = { orderBy: { decidedAt: "desc" as const }, select: { id: true, number: true, status: true, vatRate: true, lines: { select: { quantity: true, unitCost: true, unitPrice: true } } } };
 const VARIATION_LINES = { where: { status: "approved" }, select: { status: true, lines: { select: { quantity: true, unitCost: true, unitPrice: true } } } };
 
 async function psgExpensesFor(productionIds: number[]) {

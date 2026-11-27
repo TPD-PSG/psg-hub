@@ -12,13 +12,20 @@ export async function clockOff(userId: number, at = new Date()) {
   const open = await prisma.clockEntry.findFirst({ where: { userId, endAt: null }, orderBy: { startAt: "desc" } });
   if (!open) return null;
   const ms = at.getTime() - open.startAt.getTime();
-  if (ms < 15 * 60e3) { await prisma.clockEntry.delete({ where: { id: open.id } }); return { days: 0, jobId: open.jobId }; }
+  if (ms < 15 * 60e3) { await prisma.clockEntry.deleteMany({ where: { id: open.id, endAt: null } }); return { days: 0, jobId: open.jobId }; }
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { costDayRate: true } });
   const days = daysFor(ms);
   const hours = Math.round((ms / 3600e3) * 10) / 10;
-  const entry = await prisma.timeEntry.create({
-    data: { jobId: open.jobId, userId, date: new Date(Date.UTC(open.startAt.getUTCFullYear(), open.startAt.getUTCMonth(), open.startAt.getUTCDate())), days, dayRate: user?.costDayRate ?? null, note: `Clocked ${hm(open.startAt)}–${hm(at)} (${hours} h)` },
+  // Close the entry first, only if it's still open, then log the day, all in one transaction: two
+  // taps at once can't log the same time twice (audit round 2)
+  const logged = await prisma.$transaction(async tx => {
+    const closed = await tx.clockEntry.updateMany({ where: { id: open.id, endAt: null }, data: { endAt: at } });
+    if (!closed.count) return false;
+    const entry = await tx.timeEntry.create({
+      data: { jobId: open.jobId, userId, date: new Date(Date.UTC(open.startAt.getUTCFullYear(), open.startAt.getUTCMonth(), open.startAt.getUTCDate())), days, dayRate: user?.costDayRate ?? null, note: `Clocked ${hm(open.startAt)}–${hm(at)} (${hours} h)` },
+    });
+    await tx.clockEntry.update({ where: { id: open.id }, data: { timeEntryId: entry.id } });
+    return true;
   });
-  await prisma.clockEntry.update({ where: { id: open.id }, data: { endAt: at, timeEntryId: entry.id } });
-  return { days, jobId: open.jobId };
+  return logged ? { days, jobId: open.jobId } : null;
 }

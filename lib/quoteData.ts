@@ -23,6 +23,19 @@ export async function requireStaff(): Promise<{ userId: number; role: string } |
   return { userId: Number((session.user as { id?: string }).id), role };
 }
 
+/** Run a create that takes a new number; if someone else took that number at the same moment,
+ *  try again with the next one (audit round 2). */
+export async function retryOnNumberClash<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const clash = e instanceof Error && /Unique constraint/i.test(e.message) && /number/i.test(e.message);
+      if (!clash || i >= tries - 1) throw e;
+    }
+  }
+}
+
 export async function newNumber(prefix: "Q" | "J" | "PO") {
   const year = new Date().getFullYear();
   const like = { startsWith: `${prefix}-${year}-` };

@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { parseStages } from "@/lib/feeStages";
-import { newNumber } from "@/lib/quoteData";
+import { newNumber, retryOnNumberClash } from "@/lib/quoteData";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const outOfScope = await denyOutOfScope("opportunity", (await params).id); // companies they can see
@@ -30,7 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const day = (v: unknown) => (typeof v === "string" && v ? new Date(v) : null);
 
   const team = [...new Set([userId, deal.ownerUserId].filter((x): x is number => !!x))];
-  const production = await prisma.$transaction(async tx => {
+  const production = await retryOnNumberClash(() => prisma.$transaction(async tx => {
     const p = await tx.production.create({
       data: {
         name,
@@ -57,7 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await tx.quote.updateMany({ where: { opportunityId: id, jobId: null }, data: { jobId: job.id } });
     await tx.bDActivity.create({ data: { opportunityId: id, kind: "stage", text: `Became the production "${p.name}"`, userId } });
     return p;
-  }).catch((err: Error) => (err.message === "already linked" ? null : Promise.reject(err)));
+  })).catch((err: Error) => (err.message === "already linked" ? null : Promise.reject(err)));
   if (!production) return NextResponse.json({ error: "This deal already has a production" }, { status: 409 });
   return NextResponse.json(production, { status: 201 });
 }

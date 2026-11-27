@@ -3,7 +3,7 @@
 import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { newNumber } from "@/lib/quoteData";
+import { newNumber, retryOnNumberClash } from "@/lib/quoteData";
 import { requireJobViewer } from "@/lib/jobData";
 import { JOB_TYPES } from "@/lib/quotes";
 
@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (deal.job) return NextResponse.json({ error: "This deal already has a job", jobId: deal.job.id }, { status: 409 });
   const body = await req.json().catch(() => ({}));
   const jobType = JOB_TYPES.some(t => t.key === body.jobType) ? body.jobType : deal.type === "scenic" ? "workshop" : "other";
-  const job = await prisma.$transaction(async tx => {
+  const job = await retryOnNumberClash(() => prisma.$transaction(async tx => {
     const j = await tx.job.create({
       // A won deal has been confirmed, so workshop builds start at Confirmation
       data: {
@@ -31,6 +31,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await tx.quote.updateMany({ where: { opportunityId: id, jobId: null }, data: { jobId: j.id } });
     await tx.bDActivity.create({ data: { opportunityId: id, kind: "stage", text: `Became job ${j.number}`, userId: v.userId } });
     return j;
-  });
+  }));
   return NextResponse.json(job, { status: 201 });
 }

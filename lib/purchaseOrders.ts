@@ -35,8 +35,10 @@ export async function stockUsedByJob(jobIds: number[]) {
 export async function posByJob(jobIds: number[]) {
   const map = new Map<number, { status: string; total: number }[]>();
   if (!jobIds.length) return map;
-  const pos = await prisma.purchaseOrder.findMany({ where: { jobId: { in: jobIds }, status: { not: "cancelled" } }, select: { jobId: true, status: true, lines: { select: { quantity: true, unitCost: true } } } });
-  for (const p of pos) map.set(p.jobId!, [...(map.get(p.jobId!) ?? []), { status: p.status, total: poTotal(p.lines) }]);
+  const pos = await prisma.purchaseOrder.findMany({ where: { jobId: { in: jobIds }, status: { not: "cancelled" } }, select: { jobId: true, status: true, lines: { select: { quantity: true, unitCost: true, stockItemId: true } } } });
+  // Lines bought into stock aren't the job's cost yet: they count when booked out to it, so they're
+  // left out here (otherwise booking them out counted them twice; audit round 2)
+  for (const p of pos) map.set(p.jobId!, [...(map.get(p.jobId!) ?? []), { status: p.status, total: poTotal(p.lines.filter(l => !l.stockItemId)) }]);
   return map;
 }
 
@@ -67,18 +69,18 @@ export async function createPurchaseOrder(o: {
   entityId: number; userId: number; jobId: number | null; supplierId: number | null; supplierName: string | null; notes: string | null; submit: boolean;
   lines: { description: string; quantity: number; unit: string | null; unitCost: number; stockItemId: number | null; sortOrder: number }[];
 }) {
-  const { newNumber } = await import("@/lib/quoteData");
+  const { newNumber, retryOnNumberClash } = await import("@/lib/quoteData");
   const total = poTotal(o.lines);
   const limit = await poApprovalLimit();
   const status = !o.submit ? "draft" : total <= limit ? "approved" : "awaiting_approval";
-  const po = await prisma.purchaseOrder.create({
+  const po = await retryOnNumberClash(async () => prisma.purchaseOrder.create({
     data: {
       number: await newNumber("PO"), entityId: o.entityId, jobId: o.jobId, supplierId: o.supplierId, supplierName: o.supplierName, status,
       notes: o.notes, raisedById: o.userId, approvedAt: status === "approved" ? new Date() : null,
       lines: { create: o.lines },
     },
     include: PO_INCLUDE,
-  });
+  }));
   return { ...po, total };
 }
 

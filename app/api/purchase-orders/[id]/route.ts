@@ -65,14 +65,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if (action === "deliver") {
     if (po.status !== "approved" && po.status !== "ordered") return bad("Only an approved or ordered PO can be marked as delivered");
-    // Delivered lines linked to stock items top the stock up (and set the item's latest cost)
-    await prisma.$transaction([
-      prisma.purchaseOrder.update({ where: { id }, data: { status: "delivered", deliveredAt: now, orderedAt: po.orderedAt ?? now } }),
-      ...po.lines.filter(l => l.stockItemId).flatMap(l => [
-        prisma.stockMove.create({ data: { itemId: l.stockItemId!, change: l.quantity, kind: "delivery", poId: id, unitCost: l.unitCost, note: po.number, userId: u.userId } }),
-        prisma.stockItem.update({ where: { id: l.stockItemId! }, data: { quantity: { increment: l.quantity }, ...(l.unitCost > 0 ? { unitCost: l.unitCost } : {}) } }),
-      ]),
-    ]);
+    // Delivered lines linked to stock items top the stock up (and set the item's latest cost).
+    // Only the request that actually moves it to "delivered" adds the stock, so a double-click
+    // or retry can't deliver twice (audit round 2).
+    const moved = await prisma.$transaction(async tx => {
+      const r = await tx.purchaseOrder.updateMany({ where: { id, status: { in: ["approved", "ordered"] } }, data: { status: "delivered", deliveredAt: now, orderedAt: po.orderedAt ?? now } });
+      if (!r.count) return false;
+      for (const l of po.lines.filter(x => x.stockItemId)) {
+        await tx.stockMove.create({ data: { itemId: l.stockItemId!, change: l.quantity, kind: "delivery", poId: id, unitCost: l.unitCost, note: po.number, userId: u.userId } });
+        await tx.stockItem.update({ where: { id: l.stockItemId! }, data: { quantity: { increment: l.quantity }, ...(l.unitCost > 0 ? { unitCost: l.unitCost } : {}) } });
+      }
+      return true;
+    });
+    if (!moved) return bad("This PO has already been marked as delivered", 409);
     return done(id);
   }
   if (action === "cancel") {

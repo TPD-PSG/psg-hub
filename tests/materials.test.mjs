@@ -65,13 +65,14 @@ export default () => run("materials", async ({ db, users, login, results }) => {
     ok((await send(m, P, "POST", { lines: [{ description: "x", quantity: 1, unitCost: 1, stockItemId: 999999 }] })).status === 400, "stock items must be this company's");
 
     let jd = (await json(await a(`/api/jobs/${made.job.id}`))).job;
-    ok(jd.figures.committed === 650 && jd.figures.materials === 120, "job: £650 committed on open POs, £120 of stock used");
+    // The ply line goes into stock, so it's not the job's cost until booked out (audit round 2)
+    ok(jd.figures.committed === 500 && jd.figures.materials === 120, "job: £500 committed on open POs (the ply is for stock), £120 of stock used");
     ok((await json(await send(m, `/api/purchase-orders/${small.id}`, "PATCH", { action: "order" }))).status === "ordered", "PO marked ordered");
     ok((await json(await send(m, `/api/purchase-orders/${small.id}`, "PATCH", { action: "deliver" }))).status === "delivered", "PO marked delivered");
     mat = await json(await m(`${S}/materials`));
     ok(mat.items.find(i => i.id === ply.id)?.quantity === 12, "delivered ply goes into stock (7 + 5)");
     jd = (await json(await a(`/api/jobs/${made.job.id}`))).job;
-    ok(jd.figures.materials === 270 && jd.figures.committed === 500, "delivered PO moves from committed into the job's actual cost");
+    ok(jd.figures.materials === 120 && jd.figures.committed === 500, "delivered ply goes into stock, not the job's cost (it counts when booked out)");
     ok((await send(m, `/api/purchase-orders/${small.id}`, "PATCH", { action: "sage", inSage: true })).status === 403, "only Finance/admin tick 'in Sage'");
     ok((await json(await send(a, `/api/purchase-orders/${small.id}`, "PATCH", { action: "sage", inSage: true }))).inSage === true, "admin ticks 'in Sage'");
     ok((await send(m, `/api/purchase-orders/${small.id}`, "PATCH", { action: "cancel" })).status === 400, "a delivered PO can't be cancelled");

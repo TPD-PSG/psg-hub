@@ -90,7 +90,7 @@ export default () => run("machine-inductions", async ({ db, users, login, result
       const start = new Date(); start.setHours(0, 0, 0, 0);
       await db.machineInduction.create({ data: { machineId: saw.id, userId: free.id, personName: "x", trainerName: "y", trainerId: member.id, inductedAt: old, expiresAt: new Date(start.getTime() + 30 * 86400e3 + 3600e3), traineeSignature: SIG, trainerSignature: SIG } });
       await fetch(`${BASE}/api/notify/daily`, { method: "POST", headers: { "x-notify-secret": secret } });
-      ok((await db.notification.count({ where: { userId: free.id, createdAt: { gte: since }, title: { startsWith: "Your Panel saw induction needs a refresher in 30 days" } } })) === 1, "the person is reminded 30 days before their refresher");
+      ok((await db.notification.count({ where: { userId: free.id, createdAt: { gte: since }, title: { startsWith: "Your Panel saw induction refresher is due in 30 days" } } })) === 1, "the person is reminded 30 days before their refresher");
       ok((await db.notification.count({ where: { userId: member.id, createdAt: { gte: since }, title: { contains: "Panel saw refresher is due in 30 days" } } })) === 1, "and so is the machine's trainer");
     }
   } finally {

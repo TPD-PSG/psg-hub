@@ -1,4 +1,4 @@
-import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/companyScope";
+import { myCompanyLimit, optionalProductionWhere } from "@/lib/companyScope";
 import { NextRequest, NextResponse } from "next/server";
 import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
@@ -8,8 +8,8 @@ import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a serve
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  const role = (session?.user as any)?.role ?? "member";
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "member";
+  const userId = (session?.user as { id?: string } | undefined)?.id ? Number((session!.user as { id?: string }).id) : null;
 
   const { searchParams } = new URL(req.url);
   const productionId = searchParams.get("productionId");
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     const access = await requireProductionAccess(body.productionId, "tasks");
     if ("error" in access) return access.error;
   }
-  body.createdByUserId = Number((session.user as any).id);
+  body.createdByUserId = Number((session.user as { id?: string }).id);
   const {
     title, description, productionId, taskListId, assigneeUserId, assigneeName,
     status, priority, dueDate, requiresSignoff, signoffUserId, createdByUserId,

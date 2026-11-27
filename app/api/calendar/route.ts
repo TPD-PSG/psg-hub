@@ -53,9 +53,9 @@ function computePerformanceDates(
 
 export async function GET() {
   const session = await auth();
-  const role = (session?.user as any)?.role ?? "member";
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : undefined;
-  const perms = parsePerms((session?.user as any)?.permissions ?? null);
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "member";
+  const userId = (session?.user as { id?: string } | undefined)?.id ? Number((session!.user as { id?: string }).id) : undefined;
+  const perms = parsePerms((session?.user as { permissions?: string | null } | undefined)?.permissions ?? null);
 
   const limit = role !== "admin" && userId ? await companyLimit(userId) : null;
   const where = {

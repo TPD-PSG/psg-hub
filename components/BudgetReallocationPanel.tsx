@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { confirmDialog } from "@/components/Dialogs";
 import { fmtDate, fmtMoney as fmt } from "@/lib/format";
 
@@ -62,14 +62,15 @@ export default function BudgetReallocationPanel({
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     const data = await fetch(`/api/budget-reallocation?productionId=${productionId}`).then(r => r.json());
     if (Array.isArray(data)) setVariations(data);
     setLoading(false);
-  }
+  }, [productionId]);
 
-  useEffect(() => { load(); }, [productionId]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loads when the production changes; shows the loading state first
+  useEffect(() => { load(); }, [load]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

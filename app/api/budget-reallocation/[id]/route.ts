@@ -11,7 +11,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const rec = await requireRecordAccess("budgetVariation", id);
   if ("error" in rec) return rec.error;
-  const userId = Number((session.user as any)?.id);
+  const userId = Number((session.user as { id?: string })?.id);
   const body = await req.json().catch(() => ({}));
 
   const existing = await prisma.budgetVariation.findUnique({ where: { id: Number(id) } });

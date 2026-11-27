@@ -1,6 +1,5 @@
 const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const fs = require("fs");
-const path = require("path");
 
 const { snapshotDatabase } = require("../lib/db-snapshot");
 const { createPrismaClient } = require("../lib/prisma-client");

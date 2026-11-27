@@ -21,7 +21,7 @@ async function runBackup(req: NextRequest): Promise<Response> {
   } else {
     // No NOTIFY_SECRET set — fall back to requiring an admin session
     const session = await auth();
-    if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if ((session?.user as { role?: string } | undefined)?.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.R2_ACCOUNT_ID;

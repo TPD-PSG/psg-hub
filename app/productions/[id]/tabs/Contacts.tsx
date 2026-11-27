@@ -57,7 +57,7 @@ export default function ContactsTab({ prod, setProd }: TabProps) {
   }
 
   async function confirmContactImport() {
-    const toImport = importedContacts.filter(c => c._selected).map(({ _selected, ...c }) => c);
+    const toImport = importedContacts.filter(c => c._selected).map(c => { const rest: Partial<ImportedContact> = { ...c }; delete rest._selected; return rest; });
     if (!toImport.length) return;
     setContactImportState("importing");
     const fd = new FormData();

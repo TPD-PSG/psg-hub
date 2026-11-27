@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { confirmDialog } from "@/components/Dialogs";
-import { fmtDay as fmtDate, fmtDayTime as fmtDateTime } from "@/lib/format";
+import { fmtDayTime as fmtDateTime } from "@/lib/format";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ export type MarketingInitial = { month: string; posts: MarketingPost[]; producti
 
 export default function MarketingView({ initial, role: serverRole }: { initial: MarketingInitial; role?: string }) {
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role ?? serverRole;
+  const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? serverRole;
 
   const [posts, setPosts] = useState<MarketingPost[]>(initial?.posts ?? []);
   const [productions, setProductions] = useState<Production[]>(initial?.productions ?? []);

@@ -44,11 +44,11 @@ function formFromProd(data: Production) {
 function ProductionPageInner({ id, initialProd }: { id: string; initialProd: Production }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const isAdmin = (session?.user as any)?.role === "admin";
-  const userRole = (session?.user as any)?.role ?? "member";
+  const isAdmin = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role === "admin";
+  const userRole = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? "member";
   const canManageTeam = isAdmin || userRole === "member";
   const DEFAULT_HIDDEN: Record<string, string[]> = { client: ["budget", "crew", "advancing", "links"], freelancer: ["budget", "crew", "advancing", "links"] };
-  const userPermsHidden = parsePerms((session?.user as any)?.permissions ?? null);
+  const userPermsHidden = parsePerms((session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.permissions ?? null);
   const hiddenSections = new Set<string>(isAdmin ? [] : (userPermsHidden.hiddenSections ?? DEFAULT_HIDDEN[userRole] ?? []));
   const searchParams = useSearchParams();
   const [prod, setProd] = useState<Production | null>(initialProd);

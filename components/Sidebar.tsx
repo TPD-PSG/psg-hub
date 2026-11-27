@@ -187,8 +187,8 @@ function SidebarInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { data: session } = useSession();
-  const userRole: string = (session?.user as any)?.role ?? "member";
-  const userPerms = parsePerms((session?.user as any)?.permissions ?? null);
+  const userRole: string = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? "member";
+  const userPerms = parsePerms((session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.permissions ?? null);
   const hiddenSections = new Set<string>(
     userPerms.hiddenSections ?? DEFAULT_HIDDEN_SECTIONS[userRole] ?? []
   );
@@ -201,6 +201,7 @@ function SidebarInner() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem("sidebar-collapsed");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount (keeps server and client render the same)
       setCollapsed(saved === "true");
     } catch {
       setCollapsed(false);
@@ -223,6 +224,7 @@ function SidebarInner() {
   const prodId = prodMatch?.[1] ?? null;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the production name when leaving a production page
     if (!prodId) { setProdName(null); setProdIsTour(null); return; }
     // Lightweight endpoint: just name, tour flag and stops (the full production includes budget, crew, etc.)
     fetch(`/api/productions/${prodId}/summary`)
@@ -232,6 +234,7 @@ function SidebarInner() {
   }, [prodId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the calendar list when leaving the calendar
     if (pathname !== "/calendar") { setCalProductions([]); return; }
     fetch("/api/productions")
       .then(r => r.json())

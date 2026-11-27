@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if ((session?.user as { role?: string } | undefined)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const name = String((await req.json()).name ?? "").trim();
   if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
   if (await prisma.entity.findUnique({ where: { name } })) return NextResponse.json({ error: "An entity with that name already exists" }, { status: 409 });

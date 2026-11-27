@@ -20,10 +20,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   // Returns all submissions for the current user (pending) + all published (in a roundup)
   const session = await auth();
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
+  const userId = (session?.user as { id?: string } | undefined)?.id ? Number((session!.user as { id?: string }).id) : null;
   if (!userId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
-  const isAdmin = (session?.user as any)?.role === "admin";
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
 
   const [mine, roundups] = await Promise.all([
     // Pending submissions: admins see all, others see only their own
@@ -57,7 +57,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
+  const userId = (session?.user as { id?: string } | undefined)?.id ? Number((session!.user as { id?: string }).id) : null;
   if (!userId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
   const formData = await req.formData().catch(() => null);

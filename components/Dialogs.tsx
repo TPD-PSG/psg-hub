@@ -51,6 +51,7 @@ export function DialogHost() {
 
   useEffect(() => {
     show = r => setQueue(q => [...q, r]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- picks up dialogs requested before the host mounted
     if (pending.length) setQueue(q => [...q, ...pending.splice(0)]);
     return () => { show = null; };
   }, []);

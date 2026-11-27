@@ -262,11 +262,13 @@ function PerformanceSchedulePanel({
   const [matineePattern, setMatineePattern] = useState(schedule?.matineePattern ?? 0);
   const [saving, setSaving] = useState(false);
 
-  // Sync when schedule prop changes (e.g. after first save)
-  useEffect(() => {
+  // Sync when schedule prop changes (e.g. after first save) — adjusted during render rather than in an effect
+  const [syncedPatterns, setSyncedPatterns] = useState({ week: schedule?.weekPattern, matinee: schedule?.matineePattern });
+  if (syncedPatterns.week !== schedule?.weekPattern || syncedPatterns.matinee !== schedule?.matineePattern) {
+    setSyncedPatterns({ week: schedule?.weekPattern, matinee: schedule?.matineePattern });
     setWeekPattern(schedule?.weekPattern ?? 0);
     setMatineePattern(schedule?.matineePattern ?? 0);
-  }, [schedule?.weekPattern, schedule?.matineePattern]);
+  }
 
   function toggleBit(pattern: number, bit: number) { return pattern ^ (1 << bit); }
   function hasBit(pattern: number, bit: number) { return !!(pattern & (1 << bit)); }

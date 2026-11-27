@@ -1,6 +1,6 @@
-import { run, BASE } from "./lib.mjs";
+import { run } from "./lib.mjs";
 
-export default () => run("access", async ({ db, users, login, anon, check, results }) => {
+export default () => run("access", async ({ db, users, login, anon, check }) => {
   const f = await login(users[0].email), c = await login(users[1].email), m = await login(users[2].email), a = await login(users[3].email);
   await check("freelancer", "open own production (1)", f("/api/productions/1"), 200);
   await check("freelancer", "open other production (2)", f("/api/productions/2"), 403);

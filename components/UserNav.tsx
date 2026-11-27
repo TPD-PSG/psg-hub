@@ -31,8 +31,8 @@ export default function UserNav() {
         className="flex items-center gap-2 text-sm text-white/75 hover:text-white transition-colors py-5"
       >
         <span className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold text-white shrink-0 relative" style={{ backgroundColor: "var(--psg-blue)" }}>
-          {(session.user as any).avatarUrl ? (
-            <Image src={(session.user as any).avatarUrl} alt={session.user.name ?? ""} fill className="object-cover" />
+          {(session.user as { avatarUrl?: string | null; role?: string }).avatarUrl ? (
+            <Image src={(session.user as { avatarUrl: string }).avatarUrl} alt={session.user.name ?? ""} fill className="object-cover" />
           ) : initials}
         </span>
         <span className="hidden md:block">{session.user.name}</span>
@@ -49,7 +49,7 @@ export default function UserNav() {
           <Link href="/profile" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
             My Profile
           </Link>
-          {(session.user as any).role === "admin" && (
+          {(session.user as { avatarUrl?: string | null; role?: string }).role === "admin" && (
             <Link href="/admin/users" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
               Manage Users
             </Link>

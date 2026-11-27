@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { parseShowReportPdf } from "@/lib/showReportParser";
+import { parseShowReportPdf, type ParsedReport } from "@/lib/showReportParser";
 import { toDate } from "@/lib/parse";
 import { loadBase64 } from "@/lib/storage";
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!session && !isCron) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const callerRole = (session?.user as any)?.role;
+  const callerRole = (session?.user as { role?: string } | undefined)?.role;
   if (!isCron && callerRole !== "admin" && callerRole !== "member") {
     return NextResponse.json({ error: "Only PSG staff can run the report import" }, { status: 403 });
   }
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "Nothing to reparse", reparsed: 0 });
   }
 
-  const results: { id: number; subject: string | null; status: string; parsed?: any }[] = [];
+  const results: { id: number; subject: string | null; status: string; parsed?: ParsedReport }[] = [];
 
   // Parse in parallel so four PDFs fit comfortably inside Railway's 60s request limit
   await Promise.all(incomplete.map(async record => {
@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
       });
 
       results.push({ id: record.id, subject: record.emailSubject, status: "updated", parsed: match });
-    } catch (err: any) {
-      results.push({ id: record.id, subject: record.emailSubject, status: `error: ${err?.message}` });
+    } catch (err) {
+      results.push({ id: record.id, subject: record.emailSubject, status: `error: ${(err as { message?: string } | null)?.message}` });
     }
   }));
 

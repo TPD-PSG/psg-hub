@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = (session.user as any).role;
-  const userId = Number((session.user as any).id);
+  const role = (session.user as { role?: string }).role;
+  const userId = Number((session.user as { id?: string }).id);
   const { id } = await params;
 
   // Non-admins can only edit their own pending expenses
@@ -52,8 +52,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = (session.user as any).role;
-  const userId = Number((session.user as any).id);
+  const role = (session.user as { role?: string }).role;
+  const userId = Number((session.user as { id?: string }).id);
   const { id } = await params;
 
   if (role !== "admin") {

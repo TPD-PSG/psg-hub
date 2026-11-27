@@ -1,7 +1,7 @@
-import { run, BASE } from "./lib.mjs";
+import { run } from "./lib.mjs";
 
 export default () => run("permissions", async ({ db, users, login, anon, check, results }) => {
-  const f = await login(users[0].email), c = await login(users[1].email), m = await login(users[2].email), a = await login(users[3].email);
+  const f = await login(users[0].email), m = await login(users[2].email), a = await login(users[3].email);
   await db.productionTeam.upsert({ where: { productionId_userId: { productionId: 1, userId: users[2].id } }, create: { productionId: 1, userId: users[2].id }, update: {} });
   const otherStop = await db.tourStop.findFirst({ where: { productionId: { not: 1 } }, select: { id: true, venueId: true } });
   const otherReport = await db.showReport.findFirst({ where: { productionId: { not: 1 } }, select: { id: true } });

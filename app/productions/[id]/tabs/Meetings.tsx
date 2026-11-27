@@ -7,6 +7,18 @@ import MeetingActions from "@/components/MeetingActions";
 import { parseTranscript, TRANSCRIPT_MAX_CHARS } from "@/lib/transcript";
 import { inp, inpStyle, sendJson, useList, type ProdContact, type TabProps } from "../shared";
 
+// The parts of the browser's (webkit)SpeechRecognition API used here
+type SpeechResultEvent = { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }>> };
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((e: SpeechResultEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
 export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boolean }) {
   const id = String(prod.id);
   type Meeting = { id: number; title: string; meetingDate: string; location: string | null; attendees: string | null; agenda: string | null; minutes: string | null; transcript: string | null; recordingUrl: string | null; createdByUser: { id: number; name: string } | null };
@@ -22,7 +34,7 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
   const [meetingRecording, setMeetingRecording] = useState(false);
   const [meetingTranscript, setMeetingTranscript] = useState("");
   const [generatingMinutes, setGeneratingMinutes] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptFileRef = useRef<HTMLInputElement>(null);
 
   // A transcript file from Zoom or Teams (.vtt), .srt, or Word's Transcribe saved as .txt
@@ -98,14 +110,15 @@ export default function MeetingsTab({ prod, canEdit }: TabProps & { canEdit: boo
   }
 
   function startRecording() {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
+    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) { alertDialog("Your browser doesn't support live transcription. Please use Chrome."); return; }
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
     recognition.lang = "en-GB";
-    recognition.onresult = (e: any) => {
-      const text = Array.from(e.results).slice(e.resultIndex).map((r: any) => r[0].transcript).join(" ");
+    recognition.onresult = (e: SpeechResultEvent) => {
+      const text = Array.from(e.results).slice(e.resultIndex).map((r) => r[0].transcript).join(" ");
       setMeetingTranscript(prev => prev + (prev ? " " : "") + text);
     };
     recognition.start();

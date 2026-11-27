@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   // Creating productions is for PSG staff (it was open to anyone signed in)
   const session = await auth();
-  const role = (session?.user as any)?.role;
+  const role = (session?.user as { role?: string } | undefined)?.role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Only PSG staff can create productions" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const bad = missing(body, { name: "Give the production a name" });

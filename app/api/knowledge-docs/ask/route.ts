@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
         type: "document",
         source: { type: "base64", media_type: "application/pdf", data: await (async () => { const d = (await loadBase64(doc.fileKey, doc.file)) ?? ""; total += d.length; return d; })() },
         title: doc.name,
-      } as any);
+      });
     } else {
       // For non-PDF docs, include as text with a header
       const text = ((await loadFile(doc.fileKey, doc.file)) ?? Buffer.alloc(0)).toString("utf-8");

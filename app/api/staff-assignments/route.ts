@@ -1,4 +1,4 @@
-import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/companyScope";
+import { myCompanyLimit, productionWhere } from "@/lib/companyScope";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";

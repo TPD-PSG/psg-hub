@@ -7,8 +7,8 @@ import { requireRecordAccess } from "@/lib/access";
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = (session.user as any).role;
-  const userId = Number((session.user as any).id);
+  const role = (session.user as { role?: string }).role;
+  const userId = Number((session.user as { id?: string }).id);
   const { id } = await params;
   const rec = await requireRecordAccess("productionNote", id);
   if ("error" in rec) return rec.error;
@@ -35,8 +35,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = (session.user as any).role;
-  const userId = Number((session.user as any).id);
+  const role = (session.user as { role?: string }).role;
+  const userId = Number((session.user as { id?: string }).id);
   const { id } = await params;
   const rec = await requireRecordAccess("productionNote", id);
   if ("error" in rec) return rec.error;

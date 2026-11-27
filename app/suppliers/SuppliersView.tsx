@@ -45,7 +45,7 @@ const BLANK: Omit<Supplier, "id"> = {
 // The list arrives with the page (loaded on the server by page.tsx); if that failed it loads here
 export default function SuppliersView({ initial }: { initial: Supplier[] | null }) {
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role ?? "member";
+  const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? "member";
 
   const [suppliers, setSuppliers] = useState<Supplier[]>(initial ?? []);
   const [catFilter, setCatFilter] = useState("all");
@@ -61,7 +61,7 @@ export default function SuppliersView({ initial }: { initial: Supplier[] | null 
     if (Array.isArray(d)) setSuppliers(d);
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- one fallback load on mount when the server sent no data
   useEffect(() => { if (!initial) load(); }, []);
 
   function startAdd() {

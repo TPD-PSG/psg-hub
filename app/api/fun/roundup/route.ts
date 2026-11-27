@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 // POST — admin triggers the monthly roundup
 export async function POST(req: NextRequest) {
   const session = await auth();
-  const role = (session?.user as any)?.role ?? "member";
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "member";
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));

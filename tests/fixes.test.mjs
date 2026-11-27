@@ -1,7 +1,7 @@
-import { run, BASE } from "./lib.mjs";
+import { run } from "./lib.mjs";
 
 export default () => run("fixes", async ({ db, users, login, anon, check, results }) => {
-  const f = await login(users[0].email), c = await login(users[1].email), m = await login(users[2].email), a = await login(users[3].email);
+  const f = await login(users[0].email), m = await login(users[2].email), a = await login(users[3].email);
   const made = [];
   const p2 = await db.production.findUnique({ where: { id: 2 }, select: { status: true, announcementStatus: true, archived: true } });
   await db.production.update({ where: { id: 2 }, data: { status: "in-production", announcementStatus: "open", archived: false } }); // old numeric toolbox links only open live shows

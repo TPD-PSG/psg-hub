@@ -124,10 +124,12 @@ export default function VenuesView({ initialVenues }: { initialVenues: Venue[] |
   // Fallback: the server couldn't load the list, so load it here
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (!initialVenues) reload(); }, []);
+  const selectedId = selected?.id;
   useEffect(() => {
-    if (!selected) { setDocs([]); return; }
-    fetch(`/api/venues/${selected.id}/documents`).then(r => r.json()).then(setDocs).catch(() => {});
-  }, [selected?.id]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the document list when no venue is selected
+    if (selectedId === undefined) { setDocs([]); return; }
+    fetch(`/api/venues/${selectedId}/documents`).then(r => r.json()).then(setDocs).catch(() => {});
+  }, [selectedId]);
 
   async function reload() {
     const data = await fetch("/api/venues").then((r) => r.json());

@@ -4,8 +4,8 @@ import { auth } from "@/auth";
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
-  const role = (session?.user as any)?.role;
+  const userId = (session?.user as { id?: string } | undefined)?.id ? Number((session!.user as { id?: string }).id) : null;
+  const role = (session?.user as { role?: string } | undefined)?.role;
   if (!userId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
   const id = Number((await params).id);
@@ -23,7 +23,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  const role = (session?.user as any)?.role;
+  const role = (session?.user as { role?: string } | undefined)?.role;
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const id = Number((await params).id);

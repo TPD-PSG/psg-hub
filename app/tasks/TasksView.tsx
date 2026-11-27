@@ -21,8 +21,8 @@ export type TasksInitial = { userId: number; role: string; signoff: SignoffTask[
 
 export default function TasksView({ initial }: { initial: TasksInitial }) {
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role ?? initial?.role ?? "member";
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : (initial?.userId ?? null);
+  const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? initial?.role ?? "member";
+  const userId = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.id ? Number((session!.user as { id?: string }).id) : (initial?.userId ?? null);
   const [signoffTasks, setSignoffTasks] = useState<SignoffTask[]>(initial?.signoff ?? []);
 
   useEffect(() => {

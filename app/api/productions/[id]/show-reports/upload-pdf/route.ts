@@ -42,7 +42,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const stored = await saveFile("show-reports", file.name, buffer, "application/pdf");
 
   // A PDF can hold several performances (e.g. matinee + evening): save each one
-  const createdBy = (session.user as any)?.id ? parseInt((session.user as any).id) : null;
+  const sessionUserId = (session.user as { id?: string })?.id;
+  const createdBy = sessionUserId ? parseInt(sessionUserId) : null;
   const reports = [];
   for (const r of parsed) {
     reports.push(await prisma.showReport.create({

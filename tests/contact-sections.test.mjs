@@ -1,6 +1,6 @@
-import { run, BASE } from "./lib.mjs";
+import { run } from "./lib.mjs";
 
-export default () => run("contact-sections", async ({ db, users, login, anon, check, results }) => {
+export default () => run("contact-sections", async ({ db, users, login, check, results }) => {
   const f = await login(users[0].email), c = await login(users[1].email), a = await login(users[3].email);
   const before = await db.setting.findUnique({ where: { key: "contact_sections" } });
   const prodBefore = (await db.production.findUnique({ where: { id: 1 }, select: { contactSections: true } })).contactSections;

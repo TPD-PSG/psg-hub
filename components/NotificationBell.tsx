@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 
 type Notification = {
   id: number;
@@ -27,6 +26,7 @@ export default function NotificationBell() {
   // Check every 30 seconds while the tab is visible; a hidden tab waits and checks as soon as it's
   // shown again (audit round 2: every open tab used to poll all the time)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- first check on mount; setState happens after the fetch resolves
     load();
     const interval = setInterval(() => { if (!document.hidden) load(); }, 30000);
     const onShow = () => { if (!document.hidden) load(); };

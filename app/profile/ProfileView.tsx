@@ -9,7 +9,7 @@ export type ProfileUser = { id: number; name: string | null; email: string; avat
 export default function ProfileView({ initial }: { initial: ProfileUser | null }) {
   const { data: session, update } = useSession();
   // The server sends the user with the page, so it renders before the browser session loads
-  const user = (session?.user ?? initial) as any;
+  const user = (session?.user ?? initial) as { name?: string | null; email?: string | null; avatarUrl?: string | null } | null | undefined;
 
   // Avatar — always fetch fresh from DB in case session token is stale
   const fileRef = useRef<HTMLInputElement>(null);
@@ -99,7 +99,7 @@ export default function ProfileView({ initial }: { initial: ProfileUser | null }
         <div className="flex items-center gap-5">
           <div className="relative w-20 h-20 rounded-full overflow-hidden shrink-0" style={{ backgroundColor: "var(--psg-blue)" }}>
             {(liveAvatarUrl ?? user?.avatarUrl) ? (
-              <Image src={liveAvatarUrl ?? user.avatarUrl} alt={user.name ?? ""} fill className="object-cover" />
+              <Image src={(liveAvatarUrl ?? user!.avatarUrl) as string} alt={user!.name ?? ""} fill className="object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-white">
                 {initials}

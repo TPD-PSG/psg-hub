@@ -10,8 +10,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const userId = Number((session.user as any).id);
-  const role = (session.user as any).role;
+  const userId = Number((session.user as { id?: string }).id);
+  const role = (session.user as { role?: string }).role;
   const existing = await prisma.roadmapItem.findUnique({ where: { id: Number(id) } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (existing.createdByUserId !== userId && role !== "admin") {
@@ -38,8 +38,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const userId = Number((session.user as any).id);
-  const role = (session.user as any).role;
+  const userId = Number((session.user as { id?: string }).id);
+  const role = (session.user as { role?: string }).role;
   const item = await prisma.roadmapItem.findUnique({ where: { id: Number(id) } });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (item.createdByUserId !== userId && role !== "admin") {

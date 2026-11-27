@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = Number((session.user as any).id);
-  const role = (session.user as any).role;
+  const userId = Number((session.user as { id?: string }).id);
+  const role = (session.user as { role?: string }).role;
 
   const where = role === "admin" ? {} : { submittedByUserId: userId };
 
@@ -28,7 +28,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = Number((session.user as any).id);
+  const userId = Number((session.user as { id?: string }).id);
   const body = await req.json().catch(() => ({}));
   const bad = missing(body, { description: "Say what the expense was for" });
   if (bad) return bad;

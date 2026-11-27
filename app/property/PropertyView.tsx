@@ -130,7 +130,7 @@ function PropertyPageInner({ initial }: { initial: Property | null }) {
     const data = await fetch("/api/property").then((r) => r.json());
     setProp(data);
   }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- one fallback load on mount when the server sent no data
   useEffect(() => { if (!initial) reload(); }, []);
 
   // ── Contacts ──

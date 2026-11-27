@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = Number((session.user as any)?.id);
+  const userId = Number((session.user as { id?: string })?.id);
   const body = await req.json().catch(() => ({}));
   const { productionId, type, title, justification, clientRef, notes, items } = body;
   if (!productionId || !type || !title) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });

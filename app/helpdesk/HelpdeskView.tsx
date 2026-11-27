@@ -60,7 +60,7 @@ export type HelpdeskInitial = { tickets: Ticket[]; all: boolean } | null;
 
 export default function HelpdeskView({ initial, isAdmin }: { initial: HelpdeskInitial; isAdmin: boolean }) {
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role ?? (isAdmin ? "admin" : "member");
+  const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? (isAdmin ? "admin" : "member");
   const [tickets, setTickets] = useState<Ticket[]>(initial?.tickets ?? []);
   // Admins start on every ticket; the server knows the role, so this is right from the first render
   const [showAll, setShowAll] = useState(initial?.all ?? isAdmin);

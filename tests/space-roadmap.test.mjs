@@ -4,8 +4,8 @@ import { run, BASE } from "./lib.mjs";
 // tagged to it and show on PSG's roadmap too; only people who can open the space get in.
 export default () => run("space-roadmap", async ({ db, users, login, results }) => {
   const ok = (c, l) => results.push(`${c ? "PASS" : "FAIL"}  ${l}`);
-  const [free, client, member, admin] = users;
-  const a = await login(admin.email), c = await login(client.email), m = await login(member.email);
+  const [, client, member, admin] = users;
+  const a = await login(admin.email), c = await login(client.email);
   const html = async r => (await r.text()).replace(/<!-- -->/g, "");
   const send = (who, path, method, body) => fetch(`${BASE}${path}`, { method, headers: { cookie: who.cookie, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   const made = { e: null, items: [] };

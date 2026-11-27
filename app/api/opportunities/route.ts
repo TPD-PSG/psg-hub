@@ -1,4 +1,4 @@
-import { myCompanyLimit, entityWhere, scopedEntityId, entityChangeError } from "@/lib/companyScope";
+import { myCompanyLimit, entityWhere, scopedEntityId } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -14,9 +14,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = (session.user as any).role;
+  const role = (session.user as { role?: string }).role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const userId = Number((session.user as any).id) || null;
+  const userId = Number((session.user as { id?: string }).id) || null;
   const data = opportunityData(await req.json());
   if (!data.title) return NextResponse.json({ error: "Title required" }, { status: 400 });
   const ent = scopedEntityId(await myCompanyLimit(), (data.entityId as number | null | undefined) ?? null);

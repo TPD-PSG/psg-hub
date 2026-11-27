@@ -14,7 +14,7 @@ export type Production = {
 // Archived productions arrive with the page (loaded on the server by page.tsx)
 export default function ArchivedView({ initialProductions }: { initialProductions: Production[] }) {
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role ?? "member";
+  const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? "member";
   const [productions, setProductions] = useState<Production[]>(initialProductions);
   const [unarchiving, setUnarchiving] = useState<number | null>(null);
 

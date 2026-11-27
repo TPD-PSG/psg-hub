@@ -7,7 +7,7 @@ import { ENTITY_SELECT, checkSlug, checkColor } from "@/lib/entities";
 // Rename, reorder, archive, or set up its space: web address, short name, colour (admins only)
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if ((session?.user as { role?: string } | undefined)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = parseInt((await params).id);
   const body = await req.json().catch(() => ({}));
   const blank = blanked(body, { name: "The name can't be blank" });
@@ -51,7 +51,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // Delete only an entity nothing uses yet; otherwise archive it, so past deals keep their entity
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if ((session?.user as { role?: string } | undefined)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = parseInt((await params).id);
   // Anything a company's history or safety records depend on keeps it: archive instead (audit round 2)
   const [deals, productions, jobs, incidents, machines, stock, pieces] = await Promise.all([

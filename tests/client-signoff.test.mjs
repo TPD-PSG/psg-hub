@@ -36,9 +36,9 @@ export default () => run("client-signoff", async ({ db, users, login, results })
     ok((await m("/api/my-builds")).status === 403 && (await f("/api/my-builds")).status === 403, "staff and freelancers don't get the client page");
 
     // Drawings go up; the client is told
-    let d = await json(await form(m, `/api/jobs/${j1.id}/drawings`, { number: "GA-01", title: "General arrangement" }));
-    d = await json(await form(m, `/api/jobs/${j1.id}/drawings`, { number: "DT-01", title: "Revolve detail" }));
-    d = await json(await form(m, `/api/jobs/${j1.id}/drawings`, { number: "DT-02", title: "Truck detail" }));
+    await json(await form(m, `/api/jobs/${j1.id}/drawings`, { number: "GA-01", title: "General arrangement" }));
+    await json(await form(m, `/api/jobs/${j1.id}/drawings`, { number: "DT-01", title: "Revolve detail" }));
+    await json(await form(m, `/api/jobs/${j1.id}/drawings`, { number: "DT-02", title: "Truck detail" }));
     await form(m, `/api/jobs/${j2.id}/drawings`, { number: "X-01", title: "Not yours" });
     const told = await db.notification.findMany({ where: { userId: client.id, createdAt: { gte: since } } });
     ok(told.length === 3 && told.every(n => n.link === "/my-builds" && n.title.includes("CT revolve")), "the client is notified of each new drawing on their build");

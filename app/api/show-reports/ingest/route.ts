@@ -51,8 +51,11 @@ function matchProduction(subject: string, productions: { id: number; name: strin
   return null;
 }
 
-async function fetchAllMessages(token: string, url: string): Promise<{ messages: any[]; error?: string }> {
-  const all: any[] = [];
+// The Graph message fields this route asks for ($select below)
+type GraphMessage = { id: string; subject: string; from?: { emailAddress?: { address?: string } }; receivedDateTime: string; hasAttachments?: boolean };
+
+async function fetchAllMessages(token: string, url: string): Promise<{ messages: GraphMessage[]; error?: string }> {
+  const all: GraphMessage[] = [];
   let next: string | null = url;
   while (next && all.length < 500) {
     const res: Response = await fetch(next, { headers: { Authorization: `Bearer ${token}` } });
@@ -60,7 +63,7 @@ async function fetchAllMessages(token: string, url: string): Promise<{ messages:
       const errText = await res.text();
       return { messages: all, error: `Graph ${res.status}: ${errText}` };
     }
-    const data: any = await res.json();
+    const data = (await res.json()) as { value?: GraphMessage[]; "@odata.nextLink"?: string };
     all.push(...(data.value ?? []));
     next = data["@odata.nextLink"] ?? null;
   }
@@ -95,7 +98,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
   if (!session && !isCron) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const callerRole = (session?.user as any)?.role;
+  const callerRole = (session?.user as { role?: string } | undefined)?.role;
   if (!isCron && callerRole !== "admin" && callerRole !== "member") {
     return NextResponse.json({ error: "Only PSG staff can run the report import" }, { status: 403 });
   }
@@ -110,7 +113,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
   const onlyIds = url.searchParams.get("productionIds");
   const only = onlyIds ? new Set(onlyIds.split(",").map(Number).filter(Number.isInteger)) : null;
   // Raw Claude output only for admins, never for the cron caller
-  const debug = url.searchParams.get("debug") === "true" && (session?.user as any)?.role === "admin";
+  const debug = url.searchParams.get("debug") === "true" && (session?.user as { role?: string } | undefined)?.role === "admin";
 
   const token = await getGraphToken();
   const productions = await prisma.production.findMany({ select: { id: true, name: true }, where: { archived: false } });
@@ -123,7 +126,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
   const importedKeys = new Set(existing.map(r => `${r.emailSubject}||${r.emailFrom}`));
 
   // Collect messages to process
-  let messages: any[] = [];
+  let messages: GraphMessage[] = [];
   const fields = "$select=id,subject,from,receivedDateTime,hasAttachments";
 
   const graphErrors: string[] = [];
@@ -163,7 +166,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
   const processedFolderId = await getOrCreateProcessedFolder(token);
   const results: { subject: string; from?: string | null; receivedAt?: string | null; status: string; reportId?: number; production?: string; parsed?: ParsedReport[] }[] = [];
   // Who sent it and when, so emails that need attention can be listed in Hub Settings
-  const about = (msg: any) => ({ subject: msg?.subject, from: msg?.from?.emailAddress?.address ?? null, receivedAt: msg?.receivedDateTime ?? null });
+  const about = (msg: GraphMessage) => ({ subject: msg?.subject, from: msg?.from?.emailAddress?.address ?? null, receivedAt: msg?.receivedDateTime ?? null });
   // Railway ends requests at 60s. Stop starting new PDFs after 40s and parse a few at once;
   // anything left is reported as "deferred" and picked up by the next call.
   const started = Date.now();
@@ -172,7 +175,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
   let deferred = 0;
   const inFlight = new Set<string>();
 
-  const handle = async (msg: any): Promise<void> => {
+  const handle = async (msg: GraphMessage): Promise<void> => {
     const dedupKey = `${msg.subject}||${msg.from?.emailAddress?.address ?? ""}`;
 
     if (importedKeys.has(dedupKey)) {
@@ -219,7 +222,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
     const { value: attachments } = await attRes.json();
 
     // Every PDF on the email (some emails carry one report per attachment, e.g. matinee + evening)
-    const pdfMetas: { id: string; name: string }[] = (attachments ?? []).filter((a: any) =>
+    const pdfMetas: { id: string; name: string }[] = (attachments ?? []).filter((a: { contentType?: string; name?: string }) =>
       a.contentType === "application/pdf" ||
       (a.contentType === "application/octet-stream" && (a.name as string)?.toLowerCase().endsWith(".pdf"))
     );
@@ -339,7 +342,7 @@ async function runIngest(req: NextRequest): Promise<Response> {
   const queue = [...messages];
   await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
     while (queue.length) {
-      const msg = queue.shift();
+      const msg = queue.shift() as GraphMessage; // the while condition means there is one
       try {
         await handle(msg);
       } catch (err) {

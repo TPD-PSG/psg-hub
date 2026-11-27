@@ -47,10 +47,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.role = (user as any).role;
+        // authorize() above returns these extra fields alongside the standard ones
+        const u = user as { role?: string; permissions?: string | null; avatarUrl?: string | null };
+        token.role = u.role;
         token.id = user.id;
-        token.permissions = (user as any).permissions ?? null;
-        token.avatarUrl = (user as any).avatarUrl ?? null;
+        token.permissions = u.permissions ?? null;
+        token.avatarUrl = u.avatarUrl ?? null;
         token.permissionsCheckedAt = Date.now();
       }
       if (trigger === "update" && session) {
@@ -81,10 +83,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     session({ session, token }) {
       if (session.user) {
-        (session.user as any).role = token.role;
-        (session.user as any).id = token.id;
-        (session.user as any).permissions = token.permissions ?? null;
-        (session.user as any).avatarUrl = token.avatarUrl ?? null;
+        const u = session.user as { role?: unknown; id?: unknown; permissions?: unknown; avatarUrl?: unknown };
+        u.role = token.role;
+        u.id = token.id;
+        u.permissions = token.permissions ?? null;
+        u.avatarUrl = token.avatarUrl ?? null;
       }
       return session;
     },

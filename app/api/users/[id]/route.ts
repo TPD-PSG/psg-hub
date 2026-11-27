@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 
 async function requireAdmin() {
   const session = await auth();
-  if (!session || (session.user as any).role !== "admin") return false;
+  if (!session || (session.user as { role?: string }).role !== "admin") return false;
   return true;
 }
 

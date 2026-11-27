@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const session = await auth();
-  const userId = (session?.user as any)?.id;
+  const userId = (session?.user as { id?: string } | undefined)?.id;
   if (!userId) return NextResponse.json([]);
 
   const notifications = await prisma.notification.findMany({
@@ -15,9 +15,9 @@ export async function GET(_req: NextRequest) {
   return NextResponse.json(notifications);
 }
 
-export async function PUT(_req: NextRequest) {
+export async function PUT() {
   const session = await auth();
-  const userId = (session?.user as any)?.id;
+  const userId = (session?.user as { id?: string } | undefined)?.id;
   if (!userId) return NextResponse.json({ ok: false });
 
   await prisma.notification.updateMany({

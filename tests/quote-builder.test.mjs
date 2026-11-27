@@ -5,7 +5,7 @@ import { run } from "./lib.mjs";
 export default () => run("quote-builder", async ({ db, users, login, results }) => {
   const ok = (c, l) => results.push(`${c ? "PASS" : "FAIL"}  ${l}`);
   const [free, , member, admin] = users;
-  const a = await login(admin.email), f = await login(free.email), m = await login(member.email);
+  const a = await login(admin.email), f = await login(free.email);
   const json = r => r.json();
   const made = { e: null, other: null, quote: null };
   try {

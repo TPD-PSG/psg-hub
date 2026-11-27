@@ -12,6 +12,8 @@ export default function CrewTab({ prod, reload }: TabProps) {
   const BLANK_CREW = { crewId: "", role: "", startDate: "", endDate: "", dayRate: "", notes: "" };
   const [showCrewForm, setShowCrewForm] = useState(false);
   const [crewForm, setCrewForm] = useState(BLANK_CREW);
+  // Read the clock once when the tab opens (calling Date.now() during render is impure)
+  const [nowMs] = useState(() => Date.now());
 
   async function saveCrewAssignment(e: React.FormEvent) {
     e.preventDefault();
@@ -58,7 +60,7 @@ export default function CrewTab({ prod, reload }: TabProps) {
               <tbody>
                 {prod.crew.map((pc) => {
                   const insExpired = pc.crew.insuranceExpiry && new Date(pc.crew.insuranceExpiry) < new Date();
-                  const insExpiringSoon = !insExpired && pc.crew.insuranceExpiry && (new Date(pc.crew.insuranceExpiry).getTime() - Date.now()) < 60 * 24 * 60 * 60 * 1000;
+                  const insExpiringSoon = !insExpired && pc.crew.insuranceExpiry && (new Date(pc.crew.insuranceExpiry).getTime() - nowMs) < 60 * 24 * 60 * 60 * 1000;
                   return (
                     <tr key={pc.id} className="border-t hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
                       <td className="px-4 py-3">

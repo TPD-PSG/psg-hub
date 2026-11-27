@@ -1,7 +1,11 @@
 // One-line summaries of background job runs for the Hub Settings status panel (lib/job-status.js).
 
+type ImportBody = { error?: string; results?: { status: string }[]; graphErrors?: string[] } | null;
+type DailyBody = { error?: string; created?: number; failed?: string[] } | null;
+type BackupBody = { error?: string; sizeMB?: number | string; backupsRetained?: number } | null;
+
 /** "20 emails: 2 imported, 18 skipped" — failing only when the mailbox couldn't be read. */
-export function summariseImport(res: Response, body: any): { ok: boolean; summary: string } {
+export function summariseImport(res: Response, body: ImportBody): { ok: boolean; summary: string } {
   if (!res.ok) return { ok: false, summary: body?.error ?? `HTTP ${res.status}` };
   const results: { status: string }[] = body?.results ?? [];
   const count = (test: (s: string) => boolean) => results.filter(r => test(r.status)).length;
@@ -23,7 +27,7 @@ export function summariseImport(res: Response, body: any): { ok: boolean; summar
   return { ok: !graph, summary: graph ? `${graph}. ${summary}` : summary };
 }
 
-export function summariseDaily(res: Response, body: any): { ok: boolean; summary: string } {
+export function summariseDaily(res: Response, body: DailyBody): { ok: boolean; summary: string } {
   if (!res.ok) return { ok: false, summary: body?.error ?? `HTTP ${res.status}` };
   const made = `${body?.created ?? 0} notification${body?.created === 1 ? "" : "s"} created`;
   // A section that failed (the rest still ran) marks the run as failed, naming it
@@ -31,7 +35,7 @@ export function summariseDaily(res: Response, body: any): { ok: boolean; summary
   return { ok: true, summary: made };
 }
 
-export function summariseBackup(res: Response, body: any): { ok: boolean; summary: string } {
+export function summariseBackup(res: Response, body: BackupBody): { ok: boolean; summary: string } {
   if (!res.ok) return { ok: false, summary: body?.error ?? `HTTP ${res.status}` };
   return { ok: true, summary: `${body?.sizeMB ?? "?"} MB saved, ${body?.backupsRetained ?? "?"} daily copies kept` };
 }

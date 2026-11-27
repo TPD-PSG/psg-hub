@@ -277,6 +277,7 @@ export default function DashboardView({ viewer, initial }: { viewer: Viewer; ini
   const userId = viewer.id;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount (keeps server and client render the same)
     try { if (localStorage.getItem("news-dismissed") === "true") setNewsDismissed(true); } catch {}
     if (initial.complete) return;
     // Fallback: something didn't load on the server, so load everything here as before

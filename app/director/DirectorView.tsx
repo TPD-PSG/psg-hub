@@ -60,7 +60,7 @@ export type DirectorInitial = { productions: Production[]; invoices: Invoice[]; 
 // Admin overview; everything arrives with the page (loaded on the server by page.tsx)
 export default function DirectorView({ initial, forecast }: { initial: DirectorInitial; forecast?: Forecast | null }) {
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role ?? "member";
+  const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? "member";
   const router = useRouter();
 
   const [productions, setProductions] = useState<Production[]>(initial?.productions ?? []);
@@ -79,6 +79,7 @@ export default function DirectorView({ initial, forecast }: { initial: DirectorI
     fetch("/api/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setTasks(d); });
     fetch("/api/help-tickets").then(r => r.json()).then(d => { if (Array.isArray(d)) setTickets(d); });
     fetch("/api/expenses").then(r => r.json()).then(d => { if (Array.isArray(d)) setExpenses(d); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `initial` is only checked when the role is known; re-running on a new server object would refire the fallback check
   }, [role, router]);
 
   const now = new Date();

@@ -92,11 +92,6 @@ export type StaffAssignment = {
   tourStop: { id: number; venue: { name: string; city: string | null } } | null;
 };
 
-const PROD_COLORS = [
-  "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b",
-  "#ef4444", "#06b6d4", "#ec4899", "#84cc16",
-];
-
 const ACTIVITY_TYPES = ["GET IN", "FIT UP", "TECH", "DRESS", "PREVIEW", "PERF", "PERF+OUT", "REH", "IN", "OUT", "TBC"] as const;
 
 const ACTIVITY_COLORS: Record<string, string> = {
@@ -388,7 +383,6 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
 
   // Only show productions with activity (key dates, tour stops, or assignments) this month
   // kdLookup and lookup are built below — filter after both are populated
-  const allProductions = productions; // placeholder; filtered version computed after lookups
 
   // Build key-date + tour-stop activity lookup: prodId → date → { activity, venue? }
   const kdLookup: Record<number, Record<string, { activity: string; venue?: string }>> = {};

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { requireProductionAccess } from "@/lib/access";
 import { removeFile } from "@/lib/storage";
 import { loadProductionForViewer } from "@/lib/productionData";
 import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
@@ -16,7 +15,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  const role = (session?.user as any)?.role ?? "member";
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "member";
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
@@ -51,7 +50,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  const role = (session?.user as any)?.role ?? "member";
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "member";
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
@@ -73,7 +72,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if ((session?.user as { role?: string } | undefined)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const pid = Number(id);
   // Accident and incident reports (including RIDDOR) must be kept: archive the show instead (audit round 2)

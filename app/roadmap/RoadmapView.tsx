@@ -51,8 +51,8 @@ function Avatar({ user }: { user: UserInfo | null }) {
 // The list arrives with the page (loaded on the server by page.tsx); if that failed it loads here
 export default function RoadmapView({ initial }: { initial: RoadmapItem[] | null }) {
   const { data: session } = useSession();
-  const userId = Number((session?.user as any)?.id);
-  const isAdmin = (session?.user as any)?.role === "admin";
+  const userId = Number((session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.id);
+  const isAdmin = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role === "admin";
 
   const [items, setItems] = useState<RoadmapItem[]>(initial ?? []);
   const [expandedDone, setExpandedDone] = useState<Set<number>>(new Set());
@@ -66,7 +66,7 @@ export default function RoadmapView({ initial }: { initial: RoadmapItem[] | null
     if (Array.isArray(data)) setItems(data);
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- one fallback load on mount when the server sent no data
   useEffect(() => { if (!initial) reload(); }, []);
 
   async function save(e: React.FormEvent) {

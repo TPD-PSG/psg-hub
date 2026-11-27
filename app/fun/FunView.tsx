@@ -79,8 +79,8 @@ export type FunInitial = { pending: Submission[]; roundups: Roundup[] } | null;
 // Submissions and roundups arrive with the page (loaded on the server by page.tsx)
 export default function FunView({ initial }: { initial: FunInitial }) {
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role ?? "member";
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
+  const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? "member";
+  const userId = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.id ? Number((session!.user as { id?: string }).id) : null;
 
   const [pending, setPending] = useState<Submission[]>(initial?.pending ?? []);
   const [roundups, setRoundups] = useState<Roundup[]>(initial?.roundups ?? []);

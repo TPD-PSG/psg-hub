@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = (session.user as any)?.role;
+  const role = (session.user as { role?: string })?.role;
   // Admins get the full list for user management. Everyone else gets just
   // enough for pickers (assign task, add to team): no roles or permissions,
   // and clients/freelancers don't see staff email addresses.
@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session || (session.user as any).role !== "admin") {
+  if (!session || (session.user as { role?: string }).role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));

@@ -12,9 +12,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const outOfScope = await denyOutOfScope("opportunity", (await params).id); // companies they can see
   if (outOfScope) return outOfScope;
   const session = await auth();
-  const role = (session?.user as any)?.role;
+  const role = (session?.user as { role?: string } | undefined)?.role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Only PSG staff can create productions" }, { status: 403 });
-  const userId = Number((session!.user as any).id);
+  const userId = Number((session!.user as { id?: string }).id);
   const id = parseInt((await params).id);
   const deal = await prisma.opportunity.findUnique({ where: { id }, select: { id: true, stage: true, productionId: true, clientId: true, entityId: true, ownerUserId: true } });
   if (!deal) return NextResponse.json({ error: "Not found" }, { status: 404 });

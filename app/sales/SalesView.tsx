@@ -91,9 +91,6 @@ function SalesInner({ initial }: { initial: SalesInitial }) {
   const [filterStage, setFilterStage] = useState("all");
   const [showDone, setShowDone]       = useState(false);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!initial) reload(); }, []);
-
   async function reload() {
     setLoading(true);
     const [b, t] = await Promise.all([
@@ -104,6 +101,9 @@ function SalesInner({ initial }: { initial: SalesInitial }) {
     if (Array.isArray(t)) setTasks(t);
     setLoading(false);
   }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- one fallback load on mount when the server sent no data
+  useEffect(() => { if (!initial) reload(); }, []);
 
   function setTab(t: string) {
     const p = new URLSearchParams(searchParams.toString());
@@ -196,7 +196,6 @@ function SalesInner({ initial }: { initial: SalesInitial }) {
 
   const filteredBrands = brands.filter(b => filterStage === "all" || b.stage === filterStage);
   const pendingTasks   = tasks.filter(t => !t.completedAt);
-  const doneTasks      = tasks.filter(t => !!t.completedAt);
   const displayTasks   = showDone ? tasks : pendingTasks;
 
   // Group brands by stage for pipeline view

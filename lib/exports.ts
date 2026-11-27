@@ -3,6 +3,9 @@ import rawAutoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 
+// jspdf-autotable records where the last table ended on the doc, but its types don't declare it
+type WithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
+
 export async function saveXlsx(wb: ExcelJS.Workbook, filename: string) {
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -176,7 +179,7 @@ export function basePDF(title: string, subtitle?: string, logo?: LogoAsset, prod
 export function addFooters(doc: jsPDF, landscape = true) {
   const pageW = landscape ? 297 : 210;
   const pageH = landscape ? 210 : 297;
-  const pageCount = (doc as any).internal.getNumberOfPages();
+  const pageCount = (doc.internal as typeof doc.internal & { getNumberOfPages(): number }).getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
@@ -429,7 +432,7 @@ export async function exportVenueStopPDF(productionName: string, stop: TourStopR
     margin: { left: 10, right: 10 },
   });
   if (stop.notes) {
-    const finalY = (doc as any).lastAutoTable?.finalY ?? 60;
+    const finalY = (doc as WithAutoTable).lastAutoTable?.finalY ?? 60;
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 120);
     doc.text("Notes", 10, finalY + 10);
@@ -690,7 +693,7 @@ export async function exportProductionSpendPDF(
       columnStyles: { 4: { halign: "right" }, 6: { halign: "center" } },
       margin: { left: 10, right: 10 },
     });
-    y = (doc as any).lastAutoTable.finalY + 8;
+    y = (doc as WithAutoTable).lastAutoTable.finalY + 8;
   }
 
   // ── Rechargeable Haulage ─────────────────────────────────────────────────
@@ -718,7 +721,7 @@ export async function exportProductionSpendPDF(
       columnStyles: { 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "center" } },
       margin: { left: 10, right: 10 },
     });
-    y = (doc as any).lastAutoTable.finalY + 8;
+    y = (doc as WithAutoTable).lastAutoTable.finalY + 8;
   }
 
   // ── Production Expenses ───────────────────────────────────────────────────

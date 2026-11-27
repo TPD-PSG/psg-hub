@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if ((session?.user as { role?: string } | undefined)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const now = new Date();
   const asked = Number(new URL(req.url).searchParams.get("year"));
   const year = Number.isInteger(asked) && asked >= 2000 && asked <= 2100 ? asked : now.getUTCFullYear();

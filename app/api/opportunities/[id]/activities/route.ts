@@ -26,7 +26,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (outOfScope) return outOfScope;
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = (session.user as any).role;
+  const role = (session.user as { role?: string }).role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const opportunityId = parseInt((await params).id);
   const body = await req.json().catch(() => ({}));
@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const [activity] = await prisma.$transaction([
     prisma.bDActivity.create({
-      data: { opportunityId, kind, text: text.slice(0, 4000), userId: Number((session.user as any).id) || null },
+      data: { opportunityId, kind, text: text.slice(0, 4000), userId: Number((session.user as { id?: string }).id) || null },
       include: { user: { select: { id: true, name: true } } },
     }),
     // "followUpDate" in the body (even empty) replaces the deal's next follow-up

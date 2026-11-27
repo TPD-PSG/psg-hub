@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = (session.user as any).role;
-  const userId = Number((session.user as any).id);
+  const role = (session.user as { role?: string }).role;
+  const userId = Number((session.user as { id?: string }).id);
   const { searchParams } = new URL(req.url);
   const all = searchParams.get("all") === "1" && role === "admin";
 
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = Number((session.user as any).id);
+  const userId = Number((session.user as { id?: string }).id);
   const body = await req.json().catch(() => ({}));
   const bad = missing(body, { title: "Give the ticket a title" });
   if (bad) return bad;

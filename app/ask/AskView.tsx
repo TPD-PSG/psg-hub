@@ -12,7 +12,7 @@ type Message = { role: "user" | "assistant"; content: string };
 // The document list arrives with the page (loaded on the server by page.tsx)
 export default function AskView({ initial }: { initial: Doc[] | null }) {
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role ?? "member";
+  const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? "member";
 
   const [docs, setDocs] = useState<Doc[]>(initial ?? []);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -29,7 +29,7 @@ export default function AskView({ initial }: { initial: Doc[] | null }) {
     if (Array.isArray(d)) setDocs(d);
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- one fallback load on mount when the server sent no data
   useEffect(() => { if (!initial) loadDocs(); }, []);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 

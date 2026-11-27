@@ -35,8 +35,8 @@ export default function ReportsTab({ prod }: TabProps) {
       const doneMsg = await work();
       await reloadReports();
       flashImportStatus(doneMsg, 5000);
-    } catch (e: any) {
-      flashImportStatus(`Error: ${e.message}`, 8000);
+    } catch (e) {
+      flashImportStatus(`Error: ${e instanceof Error ? e.message : String(e)}`, 8000);
     } finally {
       setImportingReports(false);
     }
@@ -54,7 +54,7 @@ export default function ReportsTab({ prod }: TabProps) {
         const res = await fetch(url, { method: "POST" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Failed");
-        const imported = data.results?.filter((r: any) => r.status.startsWith("imported")).length ?? 0;
+        const imported = data.results?.filter((r: { status: string }) => r.status.startsWith("imported")).length ?? 0;
         totalImported += imported;
         setImportStatus(`Batch ${batch} done — ${totalImported} imported so far…`);
         // Keep going while the server had to leave reports for the next batch
@@ -164,15 +164,15 @@ export default function ReportsTab({ prod }: TabProps) {
         fd.append("pdf", f);
         const res = await fetch(`/api/productions/${id}/show-reports/upload-pdf`, { method: "POST", body: fd });
         const text = await res.text();
-        let data: any;
+        let data: { error?: string };
         try { data = JSON.parse(text); } catch { throw new Error(`Server error on "${f.name}": ${text.slice(0, 200)}`); }
         if (!res.ok) throw new Error(data.error ?? "Upload failed");
         imported++;
       }
       await reloadReports();
       flashPdfStatus(`✓ ${imported} report${imported !== 1 ? "s" : ""} imported`, 5000);
-    } catch (e: any) {
-      flashPdfStatus(`Error: ${e.message}`, 8000);
+    } catch (e) {
+      flashPdfStatus(`Error: ${e instanceof Error ? e.message : String(e)}`, 8000);
     } finally {
       setUploadingPdfs(false);
     }

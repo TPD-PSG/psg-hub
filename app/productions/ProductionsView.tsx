@@ -36,7 +36,7 @@ export default function ProductionsView({ initialProductions }: { initialProduct
   const [productions] = useState<Production[]>(initialProductions);
   const [tab, setTab] = useState<"all" | "mine">("all");
 
-  const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
+  const userId = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.id ? Number((session!.user as { id?: string }).id) : null;
 
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);

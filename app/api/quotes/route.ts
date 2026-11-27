@@ -1,6 +1,6 @@
 // Quotes list and create (PSG staff). ?opportunityId= lists one deal's quotes. A new quote can
 // start from a template (templateId) or from a deal (opportunityId: takes its client, entity, type).
-import { myCompanyLimit, entityWhere, scopedEntityId, entityChangeError } from "@/lib/companyScope";
+import { myCompanyLimit, entityWhere, scopedEntityId } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseLines, quoteTotals, type LineInput } from "@/lib/quotes";

@@ -3,7 +3,7 @@ import { fileHeaders } from "@/lib/fileHeaders";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
-import { saveFile, loadFile, removeFile } from "@/lib/storage";
+import { loadFile, removeFile } from "@/lib/storage";
 
 export async function GET(_: NextRequest, {
  params }: { params: Promise<{ id: string }> }) {

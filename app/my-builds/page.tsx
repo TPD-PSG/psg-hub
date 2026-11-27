@@ -5,15 +5,18 @@ import { serverApi } from "@/lib/serverApi";
 import { spaceTokens } from "@/lib/spaceTheme";
 import ClientShell from "./ClientShell";
 import MyBuilds, { type MyBuildsData } from "./MyBuilds";
+import { prisma } from "@/lib/prisma";
 
 export default async function MyBuildsPage() {
   const session = await auth();
   if (!session) redirect("/login?callbackUrl=/my-builds");
   const data = await serverApi<Partial<MyBuildsData> & { error?: string }>("/api/my-builds");
   const brand = data?.brand ?? null;
+  // Hires (PSG Rentals & Crew) sit alongside builds once there's a rentals space
+  const rentals = await prisma.entity.count({ where: { spaceKind: "rentals", hasSpace: true, archived: false } });
   return (
     <div style={{ ...spaceTokens(brand?.color ?? null), fontFamily: "var(--tws-font), system-ui, sans-serif" } as React.CSSProperties}>
-      <ClientShell brand={brand} company={data?.me?.company ?? null}>
+      <ClientShell brand={brand} company={data?.me?.company ?? null} nav={rentals ? [{ href: "/my-builds", label: "Builds", on: true }, { href: "/my-hires", label: "Hires" }] : undefined}>
         {data?.builds && data.me ? <MyBuilds initial={{ me: data.me, builds: data.builds, brand }} /> : (
           <div className="px-4 sm:px-10 py-10">
             <div className="max-w-xl p-6" style={{ background: "var(--tws-card)", border: "1px solid var(--tws-line)" }}>

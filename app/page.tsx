@@ -25,7 +25,14 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     const space = await homeSpaceFor(Number(user.id));
     if (space) redirect(user.role === "admin" || user.role === "member" ? `/spaces/${space.slug}` : `/spaces/${space.slug}/my-work`);
     // Client logins linked to a client company land on their builds
-    if (user.role === "client" && (await prisma.user.count({ where: { id: Number(user.id), clientId: { not: null } } }))) redirect("/my-builds");
+    if (user.role === "client") {
+      const me = await prisma.user.findUnique({ where: { id: Number(user.id) }, select: { clientId: true } });
+      // Client logins land on their builds, or on their hires if they only hire kit from us
+      if (me?.clientId) {
+        const [builds, hires] = await Promise.all([prisma.job.count({ where: { clientId: me.clientId } }), prisma.rentalHire.count({ where: { clientId: me.clientId } })]);
+        redirect(!builds && hires ? "/my-hires" : "/my-builds");
+      }
+    }
   }
   const viewer = { id: Number(user.id), name: user.name ?? "", role: user.role ?? "member", permissions: user.permissions ?? null };
 

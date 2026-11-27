@@ -3,7 +3,7 @@ title: Rentals & Crew: kit, hires and availability
 summary: Rental kit with a barcode on every unit, packages, hires and their prices, quote PDFs, invoicing and availability
 section: Rentals & Crew
 order: 1
-paths: /spaces/*/kit, /spaces/*/hires, /spaces/*/availability, /spaces/*/packages, /spaces/*/warehouse
+paths: /spaces/*/kit, /spaces/*/hires, /spaces/*/availability, /spaces/*/packages, /spaces/*/warehouse, /spaces/*/crew, /spaces/*/rates, /my-hires
 ---
 ## What this space is for
 
@@ -15,6 +15,8 @@ The space's menu has:
 - **Hires**: every quote and hire.
 - **Availability**: how many of each product are free, day by day.
 - **Warehouse**: prep hires by scanning their kit out, and check it back in.
+- **Crew**: the crew diary, who's free on a day, and the crew directory.
+- **Rate card**: the price list clients see, with a PDF to send out.
 - **Kit**: every product and every unit.
 - **Packages**: ready-made groups of kit.
 
@@ -135,6 +137,29 @@ Open a hire from **Out now** and choose **Check in**, then scan each unit as it 
 - **Mark the rest missing** marks everything still out as missing in one go.
 
 When every unit is back (or marked missing), the hire is marked **Returned** automatically. A hire can't be marked returned or cancelled while units are still out.
+
+## The Crew page
+
+- **Diary**: every crew job on this space's hires for the next three months, with who's booked and how many places are still to fill. Click a hire to ask people and book them.
+- **Who's free**: pick a day to see everyone in the crew directory who isn't already booked that day, on a hire or a production. It doesn't know about work they have elsewhere, so check with them.
+- **Directory**: the crew list with phone, email and who's booked on the chosen day. Add or change people in the crew directory (it's shared with the rest of the Hub).
+
+## The rate card
+
+**Rate card** lists every product that has a day or week rate and at least one unit in service, by category, ex VAT. Cases, unpriced kit and retired kit are left off, and it never shows stock levels or what kit costs us. **Download PDF** makes a rate card in the company's letterhead to send to anyone. Client logins see the same rate card.
+
+## Client logins
+
+A client company's logins get a **Hires** tab. (An admin sets a login up in **Admin → Users**: role **Client**, and their **Client company**.)
+
+To link a hire to a client company, choose it under **Client company** on the hire. Its name and billing email fill in.
+
+- **What they see**: confirmed, out and past hires, plus **quotes once you've marked them as sent**. Quotes you're still working on stay hidden. They see the kit, dates, charges and totals. They never see internal notes, sub-hires or what kit costs us.
+- **PDFs**: they can download the quote or confirmation PDF.
+- **Accept quote**: on a quote they've been sent that's still in date. You're told (with a notification), and the hire shows **Accepted by …: confirm it**. Accepting doesn't book anything: you confirm the hire as usual, and the kit check runs then.
+- **Ask for a quote**: they give a name, dates, collection or delivery, and pick kit and quantities from the rate card, with a note for anything else. It arrives as a new quote marked **Requested by the client: price it**, with their note in the hire's internal notes. Price it, then send it (and mark it sent) so it shows on their login.
+
+Notifications go to people whose home company is this space, or to admins if nobody is.
 
 ## Availability
 

@@ -410,6 +410,7 @@ model Client {
   quotes         Quote[]
   jobs           Job[]
   users          User[]        @relation("ClientUsers")
+  rentalHires    RentalHire[]
 }
 
 model Contact {
@@ -2358,6 +2359,11 @@ model RentalHire {
   title        String
   clientName   String?
   clientEmail  String?
+  clientId     Int? // the client company: its client logins see this hire (stage 5)
+  client       Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  requestedAt  DateTime? // asked for by the client from their login
+  acceptedAt   DateTime? // the client accepted the quote from their login (the team still confirms)
+  acceptedBy   String?
   productionId Int?
   production   Production?        @relation(fields: [productionId], references: [id], onDelete: SetNull)
   status       String             @default("quote") // quote | confirmed | out | returned | cancelled

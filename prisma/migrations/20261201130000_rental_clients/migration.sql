@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "RentalHire" ADD COLUMN "clientId" INTEGER REFERENCES "Client" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "RentalHire" ADD COLUMN "requestedAt" DATETIME;
+ALTER TABLE "RentalHire" ADD COLUMN "acceptedAt" DATETIME;
+ALTER TABLE "RentalHire" ADD COLUMN "acceptedBy" TEXT;

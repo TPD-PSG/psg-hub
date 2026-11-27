@@ -10,7 +10,7 @@ export default function AppChrome({ header, children, newLook = false, spaces = 
   const pathname = usePathname() ?? "";
   // Company spaces and the client builds page draw their own chrome in the builder's brand; the
   // no-login incident form (QR on site) and crew offer links are pages of their own
-  if (pathname.startsWith("/spaces/") || pathname === "/my-builds" || pathname.startsWith("/report-incident/") || pathname.startsWith("/crew-offer/")) return <>{children}</>;
+  if (pathname.startsWith("/spaces/") || pathname === "/my-builds" || pathname === "/my-hires" || pathname.startsWith("/report-incident/") || pathname.startsWith("/crew-offer/")) return <>{children}</>;
   // New look (beta): its own sidebar shell (same routes and pages)
   if (newLook && pathname !== "/login") return <NewShell spaces={spaces}>{children}</NewShell>;
   return (

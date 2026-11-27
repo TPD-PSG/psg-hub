@@ -22,6 +22,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     }),
     prisma.production.findMany({ where: { archived: false }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
+  const clients = await prisma.client.findMany({ select: { id: true, name: true, billingEmail: true }, orderBy: { name: "asc" } });
   const owned = await ownedFor(space.id);
   const counts = new Map<number, Record<string, number>>();
   for (const r of unitRows) counts.set(r.productId, { ...(counts.get(r.productId) ?? {}), [r.status]: r._count });
@@ -38,6 +39,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     }),
     packages,
     hires: hires.map(({ lines, charges, ...h }) => ({ ...h, items: lines.reduce((a, l) => a + l.quantity, 0), net: hireTotals({ ...h, lines, charges }).net })),
-    productions,
+    productions, clients,
   });
 }

@@ -7,9 +7,11 @@ paths: /my-builds
 ---
 ## Setting up a client login
 
-An admin adds the person in Admin → Users, sets their role to **Client** and picks their **Client company**. A client login sees that company's builds and nothing else in the Hub.
+An admin adds the person in Admin → Users, sets their role to **Client** and picks their **Client company**. A client login sees that company's builds (and hires) and nothing else in the Hub.
 
 When a client logs in they see **Your builds**. The page is in the builder's own brand, so a TWS build shows the TWS logo and colours.
+
+If PSG Rentals & Crew also hires kit to them, they get a **Hires** tab too: see [Rentals & Crew](/help/rentals-and-hires#client-logins). A client who only hires kit lands on Hires when they sign in.
 
 ## What the client sees on each build
 

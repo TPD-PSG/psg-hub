@@ -11,9 +11,9 @@ export type Pkg = { id: number; name: string; description: string | null; items:
 export type HireRow = {
   id: number; number: string; title: string; clientName: string | null; clientEmail: string | null; status: string;
   outDate: string; returnDate: string; notes: string | null; items: number; productionId: number | null; production: { id: number; name: string } | null;
-  net?: number; invoice?: { id: number; status: string } | null;
+  net?: number; invoice?: { id: number; status: string } | null; clientId?: number | null; requestedAt?: string | null; acceptedAt?: string | null; acceptedBy?: string | null;
 };
-export type RentalsData = { space: SpaceTheme; isAdmin: boolean; products: Product[]; packages: Pkg[]; hires: HireRow[]; productions: { id: number; name: string }[] };
+export type RentalsData = { space: SpaceTheme; isAdmin: boolean; products: Product[]; packages: Pkg[]; hires: HireRow[]; productions: { id: number; name: string }[]; clients?: { id: number; name: string; billingEmail: string | null }[] };
 
 export const gbp = (n: number | null | undefined) => (n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n));
 export const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });

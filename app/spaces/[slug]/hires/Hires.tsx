@@ -21,7 +21,7 @@ type Full = HireRow & Omit<HireForPdf, "lines" | "charges"> & { lines: (HireForP
 type SubHire = { id: number; description: string; quantity: number; status: string; supplierName: string | null; cost: number | null; product: { id: number; name: string } | null };
 const SUB_STATUS: Record<string, string> = { needed: "Needed", ordered: "Ordered", received: "Received", returned: "Sent back" };
 type Charge = { description: string; quantity: string; unitPrice: string };
-type Form = { id?: number; status: string; title: string; clientName: string; clientEmail: string; productionId: string; outDate: string; returnDate: string; notes: string; lines: EditLine[];
+type Form = { id?: number; status: string; title: string; clientId: string; clientName: string; clientEmail: string; productionId: string; outDate: string; returnDate: string; notes: string; lines: EditLine[];
   chargeDays: string; discountPct: string; vatRate: string; paymentTerms: string; customerPo: string; delivery: string; deliveryTo: string; validUntil: string; terms: string; charges: Charge[] };
 const str = (n: number | null | undefined) => (n == null ? "" : String(n));
 const FILTERS = [["live", "Coming up & out"], ["quote", "Quotes"], ["done", "Returned"], ["cancelled", "Cancelled"], ["all", "All"]] as const;
@@ -30,7 +30,7 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
   const [data, setData] = useState(initial);
   const { space, products, packages, productions } = data;
   const S = `/api/spaces/${space.slug}/rentals`;
-  const fresh = (): Form => ({ status: "quote", title: "", clientName: "", clientEmail: "", productionId: "", outDate: todayIso(), returnDate: addDays(todayIso(), 2), notes: "", lines: [],
+  const fresh = (): Form => ({ status: "quote", title: "", clientId: "", clientName: "", clientEmail: "", productionId: "", outDate: todayIso(), returnDate: addDays(todayIso(), 2), notes: "", lines: [],
     chargeDays: "", discountPct: "", vatRate: "20", paymentTerms: "", customerPo: "", delivery: "", deliveryTo: "", validUntil: addDays(todayIso(), 30), terms: "", charges: [] });
   const [form, setForm] = useState<Form | null>(startNew ? fresh() : null);
   const [shorts, setShorts] = useState<Short[]>([]);
@@ -49,7 +49,7 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
   };
   const loaded = (h: Full) => {
     setShorts(h.shortages); setFull(h);
-    setForm({ id: h.id, status: h.status, title: h.title, clientName: h.clientName ?? "", clientEmail: h.clientEmail ?? "", productionId: h.productionId ? String(h.productionId) : "", outDate: h.outDate.slice(0, 10), returnDate: h.returnDate.slice(0, 10), notes: h.notes ?? "",
+    setForm({ id: h.id, status: h.status, title: h.title, clientId: h.clientId ? String(h.clientId) : "", clientName: h.clientName ?? "", clientEmail: h.clientEmail ?? "", productionId: h.productionId ? String(h.productionId) : "", outDate: h.outDate.slice(0, 10), returnDate: h.returnDate.slice(0, 10), notes: h.notes ?? "",
       lines: h.lines.map(l => ({ productId: l.productId, quantity: l.quantity, dayRate: l.dayRate, weekRate: l.weekRate ?? null, unitPrice: l.unitPrice ?? null, discountPct: l.discountPct ?? null, note: l.note })),
       chargeDays: str(h.chargeDays), discountPct: str(h.discountPct), vatRate: str(h.vatRate), paymentTerms: h.paymentTerms ?? "", customerPo: h.customerPo ?? "", delivery: h.delivery ?? "", deliveryTo: h.deliveryTo ?? "",
       validUntil: h.validUntil?.slice(0, 10) ?? "", terms: h.terms ?? "", charges: h.charges.filter(c => !c.crewJobId).map(c => ({ description: c.description, quantity: String(c.quantity), unitPrice: String(c.unitPrice) })) });
@@ -83,7 +83,7 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
     lines: form.lines.map(l => ({ quantity: l.quantity, unitPrice: l.unitPrice, discountPct: l.discountPct, dayRate: l.dayRate !== undefined ? l.dayRate : products.find(p => p.id === l.productId)?.dayRate ?? null, weekRate: l.weekRate !== undefined ? l.weekRate : products.find(p => p.id === l.productId)?.weekRate ?? null })),
     charges: [...form.charges.map(c => ({ quantity: Number(c.quantity) || 0, unitPrice: Number(c.unitPrice) || 0 })), ...crewCharges],
   }) : null;
-  const body = (f: Form) => ({ title: f.title, clientName: f.clientName, clientEmail: f.clientEmail, productionId: f.productionId || null, outDate: f.outDate, returnDate: f.returnDate, notes: f.notes,
+  const body = (f: Form) => ({ title: f.title, clientId: f.clientId || null, clientName: f.clientName, clientEmail: f.clientEmail, productionId: f.productionId || null, outDate: f.outDate, returnDate: f.returnDate, notes: f.notes,
     ...(["returned", "cancelled"].includes(f.status) ? {} : { lines: f.lines.filter(l => l.quantity > 0) }), chargeDays: f.chargeDays, discountPct: f.discountPct, vatRate: f.vatRate === "" ? 20 : f.vatRate, paymentTerms: f.paymentTerms, customerPo: f.customerPo,
     delivery: f.delivery, deliveryTo: f.deliveryTo, validUntil: f.validUntil, terms: f.terms,
     charges: f.charges.filter(c => c.description.trim()).map(c => ({ description: c.description, quantity: c.quantity || 1, unitPrice: c.unitPrice || 0 })) });
@@ -191,6 +191,7 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
                     <span className="text-[11px] font-bold px-2 py-0.5 shrink-0" style={HIRE_TONE[h.status]}>{HIRE_LABEL[h.status]}</span>
                   </span>
                   <span className="text-xs" style={muted}>{day(h.outDate)} – {day(h.returnDate)} · {h.items} item{h.items === 1 ? "" : "s"}{h.clientName ? ` · ${h.clientName}` : ""}{h.production ? ` · ${h.production.name}` : ""}{h.net ? ` · ${gbp(h.net)} + VAT` : ""}{h.invoice ? " · invoiced" : ""}</span>
+                  {(h.status === "quote" && (h.acceptedAt || h.requestedAt)) && <span className="text-[11px] font-bold self-start px-2 py-0.5" style={{ background: "var(--tws-warn-bg)", color: "var(--tws-warn-ink)" }}>{h.acceptedAt ? `Accepted by ${h.acceptedBy ?? "the client"}: confirm it` : "Requested by the client: price it"}</span>}
                 </button>
               </li>
             ))}
@@ -205,7 +206,10 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2"><label style={lbl} htmlFor="h-title">Name of the hire</label><input id="h-title" style={input} required maxLength={160} {...set("title")} placeholder="e.g. Lighting for the Lowry gala" /></div>
-              <div><label style={lbl} htmlFor="h-client">Client</label><input id="h-client" style={input} maxLength={160} {...set("clientName")} /></div>
+              <div><label style={lbl} htmlFor="h-clientco">Client company <span className="font-normal">(their client logins see this hire)</span></label>
+                <select id="h-clientco" style={input} value={form.clientId} onChange={e => { const c = (data.clients ?? []).find(x => String(x.id) === e.target.value); setForm({ ...form, clientId: e.target.value, clientName: c ? c.name : form.clientName, clientEmail: c?.billingEmail && !form.clientEmail ? c.billingEmail : form.clientEmail }); }}>
+                  <option value="">Not one of our clients yet</option>{(data.clients ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              <div><label style={lbl} htmlFor="h-client">Client name (on the quote)</label><input id="h-client" style={input} maxLength={160} {...set("clientName")} /></div>
               <div><label style={lbl} htmlFor="h-email">Client email</label><input id="h-email" type="email" style={input} maxLength={160} {...set("clientEmail")} /></div>
               <div><label style={lbl} htmlFor="h-out">Goes out</label><input id="h-out" type="date" style={input} required {...set("outDate")} /></div>
               <div><label style={lbl} htmlFor="h-back">Comes back</label><input id="h-back" type="date" style={input} required min={form.outDate} {...set("returnDate")} /></div>

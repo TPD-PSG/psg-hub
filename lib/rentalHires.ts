@@ -38,6 +38,17 @@ export async function hireFields(b: HireBody, entityId: number, creating: boolea
     data.clientEmail = e;
   }
   if ("notes" in b) data.notes = typeof b.notes === "string" && b.notes.trim() ? b.notes.trim().slice(0, 4000) : null;
+  if ("clientId" in b) {
+    if (b.clientId == null || b.clientId === "") data.clientId = null;
+    else {
+      const c = await prisma.client.findUnique({ where: { id: Number(b.clientId) }, select: { id: true, name: true, billingEmail: true } });
+      if (!c) return { error: "No such client" };
+      data.clientId = c.id;
+      // The client's name (and billing email) fill in unless given
+      if (!text(b.clientName, 160)) data.clientName = c.name;
+      if (!("clientEmail" in b) || !text(b.clientEmail, 160)) { if (c.billingEmail) data.clientEmail = c.billingEmail; }
+    }
+  }
   if ("productionId" in b) {
     if (b.productionId == null || b.productionId === "") data.productionId = null;
     else {

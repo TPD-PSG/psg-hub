@@ -41,7 +41,7 @@ Each column shows how many items it holds. Pinned items show at the top with a *
 
 ## Moving and changing items
 
-Hover over a card to see its buttons. The arrow buttons, such as **→ Planned**, move it to another column. **Edit** changes the title, description, category or status. **Delete** removes it after you confirm.
+Hover over a card to see its buttons. On ideas you added (or any idea, if you are an admin), the arrow buttons, such as **→ Planned**, move it to another column. **Edit** changes the title, description, category or status. **Delete** removes it after you confirm.
 
 You can move, edit and delete the ideas you added. Admins can do this for every item, and can also **Pin** or **Unpin** an item to keep it at the top.
 

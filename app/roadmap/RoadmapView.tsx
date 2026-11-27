@@ -82,6 +82,7 @@ export default function RoadmapView({ initial }: { initial: RoadmapItem[] | null
     reload();
   }
 
+  // Moving an idea is for the person who added it, or an admin (the server's rule); others don't see the buttons
   async function moveStatus(item: RoadmapItem, status: string) {
     await fetch(`/api/roadmap/${item.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     reload();
@@ -180,7 +181,7 @@ export default function RoadmapView({ initial }: { initial: RoadmapItem[] | null
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-1 mt-2">
-                              {STATUSES.filter(s => s.key !== item.status).map(s => (
+                              {(isAdmin || item.createdByUser?.id === userId) && STATUSES.filter(s => s.key !== item.status).map(s => (
                                 <button key={s.key} onClick={() => moveStatus(item, s.key)}
                                   className="text-[10px] px-1.5 py-0.5 rounded border hover:bg-white/10 transition-colors"
                                   style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>→ {s.label}</button>
@@ -218,7 +219,7 @@ export default function RoadmapView({ initial }: { initial: RoadmapItem[] | null
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {STATUSES.filter(s => s.key !== item.status).map(s => (
+                      {(isAdmin || item.createdByUser?.id === userId) && STATUSES.filter(s => s.key !== item.status).map(s => (
                         <button key={s.key} onClick={() => moveStatus(item, s.key)}
                           className="text-[10px] px-1.5 py-0.5 rounded border hover:bg-white/10 transition-colors"
                           style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>→ {s.label}</button>

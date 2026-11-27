@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useState } from "react";
 import ExportMenu from "@/components/ExportMenu";
@@ -64,7 +65,7 @@ export default function CrewTab({ prod, reload }: TabProps) {
                   return (
                     <tr key={pc.id} className="border-t hover:bg-white/5 transition-colors group" style={{ borderColor: "var(--psg-card-border)" }}>
                       <td className="px-4 py-3">
-                        <a href={`/crew/${pc.crewId}`} className="font-medium text-white hover:underline">{pc.crew.name}</a>
+                        <Link href={`/crew?q=${encodeURIComponent(pc.crew.name)}`} className="font-medium text-white hover:underline">{pc.crew.name}</Link>
                         <p className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>{pc.crew.discipline}</p>
                       </td>
                       <td className="px-4 py-3" style={{ color: "var(--psg-muted)" }}>{pc.role || pc.crew.discipline}</td>

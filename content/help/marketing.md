@@ -42,7 +42,7 @@ Click a post to open its details. Click a status there to change it straight awa
 
 The page opens on **calendar**, showing one month. Use the arrows to move between months. Posts sit on the day they are scheduled, coloured by status and marked with their platforms. Only posts with a scheduled date appear on the calendar.
 
-Click **list** to see every post in a table, including drafts with no date yet.
+Click **list** to see every post in a table, including drafts with no date yet. The **Post list** link in the menu opens straight onto the list.
 
 In either view, use the status buttons to show one status only, and click a platform to show only its posts. Click **All** to clear a filter.
 

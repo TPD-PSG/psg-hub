@@ -46,7 +46,7 @@ export async function GET(req: Request) {
     ...venues.map(v => ({ type: "Venues", label: v.name, line: v.city, href: `/venues?venue=${v.id}` })),
     ...hotels.map(h => ({ type: "Hotels", label: h.name, line: h.city, href: `/hotels?hotel=${h.id}` })),
     ...people.map(p => ({ type: "People", label: p.name, line: "PSG", href: `/admin/users?user=${p.id}` })),
-    ...crew.map(c => ({ type: "People", label: c.name, line: c.discipline, href: `/crew?crew=${c.id}` })),
+    ...crew.map(c => ({ type: "People", label: c.name, line: c.discipline, href: `/crew?q=${encodeURIComponent(c.name)}` })),
     ...suppliers.map(s => ({ type: "Suppliers", label: s.name, href: `/suppliers?supplier=${s.id}` })),
     ...clients.map(c => ({ type: "Clients", label: c.name, line: c.type, href: `/bd?client=${c.id}` })),
     ...deals.map(d => ({ type: "Deals", label: d.title, line: d.stage, href: `/bd?deal=${d.id}` })),

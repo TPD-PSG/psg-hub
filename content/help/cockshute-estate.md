@@ -48,6 +48,6 @@ Add the landlord, agents, contractors and anyone else you call about the estate.
 
 **Keys** records each key or padlock, who holds it and how many there are.
 
-**Alarms** records each system, such as the intruder or fire alarm. You can store the code, zones, monitoring company and phone number, and the keyholders. Anyone with the Property module can see alarm codes, so only add them if that is acceptable.
+**Alarms** records each system, such as the intruder or fire alarm. It holds the code, zones, monitoring company and phone number, and the keyholders. Alarm codes are for admins only: everyone else sees the alarm records with "Code: admins only", and only admins can add, edit or delete alarms.
 
 Company-wide insurances and certificates belong on the [Compliance register](/help/compliance-register). Estate contractors you use often can also go in the [Supplier register](/help/suppliers).

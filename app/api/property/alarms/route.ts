@@ -8,6 +8,8 @@ const PROPERTY_ID = 1;
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Alarm records hold the alarm codes: admins only (28 Nov 2026)
+  if ((session.user as { role?: string } | undefined)?.role !== "admin") return NextResponse.json({ error: "Only admins can change alarm records" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
   const bad = missing(body, { name: "Add the alarm's name" });

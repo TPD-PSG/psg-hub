@@ -14,8 +14,8 @@ type Document = { id: number; name: string; type: string; expiryDate: string | n
 type Maintenance = { id: number; title: string; description: string | null; status: string; priority: string; contractor: string | null; cost: number | null; reportedAt: string; resolvedAt: string | null; notes: string | null };
 type Rent = { amount: number | null; frequency: string | null; nextPaymentDate: string | null; nextReviewDate: string | null; landlordRef: string | null; notes: string | null } | null;
 type Key = { id: number; description: string; holder: string | null; quantity: number; notes: string | null };
-type Alarm = { id: number; name: string; code: string | null; zones: string | null; monitoringCo: string | null; monitoringPhone: string | null; keyholders: string | null; notes: string | null };
-export type Property = { id: number; name: string; address: string | null; notes: string | null; contacts: Contact[]; documents: Document[]; maintenance: Maintenance[]; rent: Rent; keys: Key[]; alarms: Alarm[] };
+type Alarm = { id: number; name: string; code: string | null; zones: string | null; monitoringCo: string | null; monitoringPhone: string | null; keyholders: string | null; notes: string | null; codeHidden?: boolean };
+export type Property = { id: number; name: string; address: string | null; notes: string | null; contacts: Contact[]; documents: Document[]; maintenance: Maintenance[]; rent: Rent; keys: Key[]; alarms: Alarm[]; alarmAdmin?: boolean };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -424,7 +424,7 @@ function PropertyPageInner({ initial }: { initial: Property | null }) {
           {/* Alarms */}
           <div className="rounded-xl border" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
             <div className="p-5 border-b" style={{ borderColor: "var(--psg-card-border)" }}>
-              <SectionHeader title="Alarms" onAdd={openAddAlarm} />
+              <SectionHeader title="Alarms" onAdd={prop.alarmAdmin ? openAddAlarm : undefined} />
             </div>
             {prop.alarms.length === 0 ? <EmptyState text="No alarm records added yet." /> : (
               <div className="divide-y" style={{ borderColor: "var(--psg-card-border)" }}>
@@ -434,6 +434,7 @@ function PropertyPageInner({ initial }: { initial: Property | null }) {
                       <div className="font-medium text-white mb-1">{a.name}</div>
                       <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-sm">
                         {a.code && <div style={{ color: "var(--psg-muted)" }}>Code: <span className="text-white font-mono">{a.code}</span></div>}
+                        {!a.code && a.codeHidden && <div style={{ color: "var(--psg-muted)" }}>Code: admins only</div>}
                         {a.zones && <div style={{ color: "var(--psg-muted)" }}>Zones: <span className="text-white">{a.zones}</span></div>}
                         {a.monitoringCo && <div style={{ color: "var(--psg-muted)" }}>Monitoring: <span className="text-white">{a.monitoringCo}</span></div>}
                         {a.monitoringPhone && <div style={{ color: "var(--psg-muted)" }}>Phone: <a href={`tel:${a.monitoringPhone}`} className="text-white hover:text-blue-300">{a.monitoringPhone}</a></div>}
@@ -442,8 +443,10 @@ function PropertyPageInner({ initial }: { initial: Property | null }) {
                       {a.notes && <div className="text-xs mt-1" style={{ color: "var(--psg-muted)" }}>{a.notes}</div>}
                     </div>
                     <div className="flex gap-1 shrink-0">
+                      {prop.alarmAdmin && <>
                       <button onClick={() => openEditAlarm(a)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Edit</button>
                       <button onClick={() => deleteAlarm(a.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>
+                      </>}
                     </div>
                   </div>
                 ))}

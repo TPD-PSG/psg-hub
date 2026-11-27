@@ -10,11 +10,12 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const monthYear: string = body.monthYear; // e.g. "2026-11"
+  if (typeof monthYear !== "string" || !/^\d{4}-\d{2}$/.test(monthYear)) return NextResponse.json({ error: "Month should look like 2026-11" }, { status: 400 });
 
-  // Only approved, pending submissions go into the roundup
-  const pending = await prisma.funSubmission.findMany({
-    where: { monthYear, roundupId: null, approved: true },
-  });
+  // Approved stories not in a roundup yet: this month's, plus any from earlier months that were
+  // approved after their own month's roundup went out (they used to stay pending for good)
+  const waiting = { monthYear: { lte: monthYear }, roundupId: null, approved: true };
+  const pending = await prisma.funSubmission.findMany({ where: waiting });
   if (pending.length === 0) {
     return NextResponse.json({ error: "No approved submissions for this month" }, { status: 400 });
   }
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   // Link approved submissions to the roundup
   await prisma.funSubmission.updateMany({
-    where: { monthYear, roundupId: null, approved: true },
+    where: { id: { in: pending.map(p => p.id) } },
     data: { roundupId: roundup.id },
   });
 

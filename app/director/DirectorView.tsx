@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import UserAvatar from "@/components/UserAvatar";
 import { fmtDate, fmtMoney } from "@/lib/format";
+import { STAGES } from "@/lib/bdPipeline";
 const fmt = (n: number) => fmtMoney(n, { whole: true });
 
 export type Production = { id: number; name: string; status: string; startDate: string | null; endDate: string | null; announcementStatus?: string; budgetLines?: { estimated: number; committed: number; spent: number }[] };
@@ -39,11 +40,10 @@ function SectionHeader({ title, href }: { title: string; href?: string }) {
   );
 }
 
-const STAGE_ORDER = ["prospecting", "qualified", "proposal", "negotiation", "won", "lost"];
-const STAGE_LABELS: Record<string, string> = {
-  prospecting: "Prospecting", qualified: "Qualified", proposal: "Proposal",
-  negotiation: "Negotiation", won: "Won", lost: "Lost",
-};
+// The pipeline's own stages (lead, qualified, proposal, negotiating, won, lost), so new deals don't
+// show as raw keys here (28 Nov 2026: this list still had the old names)
+const STAGE_ORDER: string[] = STAGES.map(st => st.key);
+const STAGE_LABELS: Record<string, string> = Object.fromEntries(STAGES.map(st => [st.key, st.label]));
 
 const ANN_COLORS: Record<string, string> = {
   not_announced: "bg-gray-800 text-gray-400",

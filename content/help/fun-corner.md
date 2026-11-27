@@ -39,7 +39,7 @@ Admins see **All pending submissions** for the month.
 2. Click **Delete** to remove a story that should not go in. This cannot be undone.
 3. The **Send Roundup** panel shows how many stories are approved. Click **Send Roundup** and confirm.
 
-Only approved stories from the current month go in. Stories you did not approve stay pending. Everyone with a Hub login gets a notification that the roundup is out. Sending cannot be undone.
+Approved stories from the month go in, along with any approved stories from earlier months that missed their own roundup. Stories you have not approved stay pending. Everyone with a Hub login gets a notification that the roundup is out. Sending cannot be undone.
 
 ## Past roundups
 

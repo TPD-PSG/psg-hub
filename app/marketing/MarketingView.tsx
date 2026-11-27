@@ -75,7 +75,7 @@ const BLANK = {
 // `initial`: this month's posts (calendar view, all statuses) and productions, loaded with the page
 export type MarketingInitial = { month: string; posts: MarketingPost[]; productions: Production[] } | null;
 
-export default function MarketingView({ initial, role: serverRole }: { initial: MarketingInitial; role?: string }) {
+export default function MarketingView({ initial, role: serverRole, initialView = "calendar" }: { initial: MarketingInitial; role?: string; initialView?: "calendar" | "list" }) {
   const { data: session } = useSession();
   const role = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role ?? serverRole;
 
@@ -86,7 +86,8 @@ export default function MarketingView({ initial, role: serverRole }: { initial: 
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
-  const [view, setView] = useState<"calendar" | "list">("calendar");
+  // ?view=list (the Post list link) opens on the list
+  const [view, setView] = useState<"calendar" | "list">(initialView);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPlatform, setFilterPlatform] = useState<string>("all");
 
@@ -105,7 +106,7 @@ export default function MarketingView({ initial, role: serverRole }: { initial: 
   }, [view, viewMonth, filterStatus]);
 
   // Skip the first load when the posts for the opening view arrived with the page
-  const arrivedWithPage = useRef(!!initial);
+  const arrivedWithPage = useRef(!!initial && initialView === "calendar"); // the page only brings this month's posts
   useEffect(() => {
     if (arrivedWithPage.current) { arrivedWithPage.current = false; return; }
     loadPosts();

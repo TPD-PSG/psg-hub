@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { serverApi } from "@/lib/serverApi";
 import MarketingView, { type MarketingPost, type Production } from "./MarketingView";
 
-export default async function MarketingPage() {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role;
   const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
@@ -12,5 +12,6 @@ export default async function MarketingPage() {
     serverApi<MarketingPost[]>(`/api/marketing?month=${month}`),
     serverApi<Production[]>("/api/productions"),
   ]);
-  return <MarketingView role={role} initial={Array.isArray(posts) && Array.isArray(productions) ? { month, posts, productions } : null} />;
+  const initialView = (await searchParams).view === "list" ? "list" : "calendar";
+  return <MarketingView role={role} initialView={initialView} initial={Array.isArray(posts) && Array.isArray(productions) ? { month, posts, productions } : null} />;
 }

@@ -38,7 +38,7 @@ Each person can ask up to 30 questions an hour. After that, you are asked to try
 The **Knowledge Base** panel on the left lists every document and the date it was added.
 
 1. Click **+ Add**, or drag a file onto the box marked **Drop PDF or text file here**.
-2. Choose the policy document. PDF works best.
+2. Choose the policy document: a PDF, or a plain text file (.txt or .md). Save a Word or Excel file as a PDF first. If a file can't be added, the Hub says why.
 3. It appears in the list straight away and is used for the next question.
 
 Click the cross beside a document to remove it from the Knowledge Base. You are asked to confirm.

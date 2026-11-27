@@ -57,9 +57,9 @@ function isExpired(expiry: string | null) {
 }
 
 // The list arrives with the page (loaded on the server by page.tsx); if that failed it loads here
-export default function CrewView({ initial }: { initial: CrewMember[] | null }) {
+export default function CrewView({ initial, initialSearch = "" }: { initial: CrewMember[] | null; initialSearch?: string }) {
   const [crew, setCrew] = useState<CrewMember[]>(initial ?? []);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [filterDiscipline, setFilterDiscipline] = useState("All");
   const [showForm, setShowForm] = useState(false);
   const [editMember, setEditMember] = useState<CrewMember | null>(null);

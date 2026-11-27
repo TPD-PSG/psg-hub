@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { confirmDialog } from "@/components/Dialogs";
+import { confirmDialog, alertDialog } from "@/components/Dialogs";
 import { fmtDate } from "@/lib/format";
 
 export type Doc = { id: number; name: string; mime: string; createdAt: string };
@@ -37,7 +37,8 @@ export default function AskView({ initial }: { initial: Doc[] | null }) {
     setUploading(true);
     const fd = new FormData();
     fd.append("file", file);
-    await fetch("/api/knowledge-docs", { method: "POST", body: fd });
+    const res = await fetch("/api/knowledge-docs", { method: "POST", body: fd }).catch(() => null);
+    if (!res?.ok) await alertDialog((await res?.json().catch(() => null))?.error ?? "Couldn't add that file");
     await loadDocs();
     setUploading(false);
   }

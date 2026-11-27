@@ -7,6 +7,7 @@ const PROPERTY_ID = 1;
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const isAdmin = (session.user as { role?: string } | undefined)?.role === "admin";
 
   const property = await prisma.property.findUnique({
     where: { id: PROPERTY_ID },
@@ -32,7 +33,13 @@ export async function GET() {
         alarms: true,
       },
     });
-    return NextResponse.json(created);
+    return NextResponse.json(forViewer(created, isAdmin));
   }
-  return NextResponse.json(property);
+  return NextResponse.json(forViewer(property, isAdmin));
+}
+
+// Alarm codes are for admins only (Toby, 28 Nov 2026): everyone else sees the alarm records
+// (name, zones, monitoring company, keyholders) without the code, and can't change them
+function forViewer<T extends { alarms: { code: string | null }[] }>(p: T, isAdmin: boolean) {
+  return { ...p, alarmAdmin: isAdmin, alarms: isAdmin ? p.alarms : p.alarms.map(a => ({ ...a, code: null, codeHidden: !!a.code })) };
 }

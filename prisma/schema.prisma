@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  rentalHires     RentalHire[]   @relation("RentalHireBy")
   homeRole        String? // new look home: director | pm | office (admins set it in Users; none = director for admins, else pm)
   workshopManager Boolean        @default(false) // approves reschedule requests on its workshop's calendar
   stageRequests   StageRequest[] @relation("StageRequestBy")
@@ -81,6 +82,7 @@ model User {
 
 model Production {
   id                  Int          @id @default(autoincrement())
+  rentalHires         RentalHire[]
   name                String
   logoUrl             String?
   type                String
@@ -494,6 +496,10 @@ model Entity {
   machines         Machine[]
   disciplines      WorkshopDiscipline[]
   complianceItems  ComplianceItem[]
+  spaceKind        String               @default("workshop") // workshop (TWS) | rentals (PSG Rentals & Crew): which tools its space shows
+  rentalProducts   RentalProduct[]
+  rentalPackages   RentalPackage[]
+  rentalHires      RentalHire[]
 }
 
 // An entity's revenue target for a calendar year
@@ -2253,4 +2259,121 @@ model StageRequest {
 
   @@index([stageId])
   @@index([status])
+}
+
+// ── PSG Rentals & Crew (replacing Flex, 27 Nov 2026) ─────────────────────────────────────────
+// Rental kit by product (e.g. "Robe MegaPointe"); every unit is serialised with its own barcode,
+// cables included. Hires reserve products for their dates; availability is worked out from them.
+model RentalProduct {
+  id              Int                 @id @default(autoincrement())
+  entityId        Int
+  entity          Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  name            String
+  category        String? // Lighting, Sound, Video, Rigging, Power, Cable, Cases… (null = Other)
+  manufacturer    String?
+  model           String?
+  dayRate         Float? // ex VAT
+  weekRate        Float? // ex VAT
+  replacementCost Float?
+  weightKg        Float?
+  powerW          Float?
+  isCase          Boolean             @default(false) // a case or rack whose units hold other units
+  notes           String?
+  archived        Boolean             @default(false)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  units           RentalUnit[]
+  packageItems    RentalPackageItem[]
+  hireLines       RentalHireLine[]
+
+  @@index([entityId])
+}
+
+// One physical item. Its barcode is the one on the sticker (kept from Flex where there is one).
+model RentalUnit {
+  id           Int           @id @default(autoincrement())
+  productId    Int
+  product      RentalProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  barcode      String        @unique
+  serial       String? // maker's serial number
+  status       String        @default("available") // available | repair | lost | retired (out on a hire comes from the hire)
+  containerId  Int? // the case it lives in
+  container    RentalUnit?   @relation("UnitCase", fields: [containerId], references: [id], onDelete: SetNull)
+  contents     RentalUnit[]  @relation("UnitCase")
+  location     String? // warehouse bay or shelf
+  purchasedAt  DateTime?
+  purchaseCost Float?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([productId])
+  @@index([containerId])
+}
+
+// A ready-made group of products for quoting (e.g. "Small PA"): adding it to a hire adds its lines
+model RentalPackage {
+  id          Int                 @id @default(autoincrement())
+  entityId    Int
+  entity      Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  archived    Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  items       RentalPackageItem[]
+
+  @@index([entityId])
+}
+
+model RentalPackageItem {
+  id        Int           @id @default(autoincrement())
+  packageId Int
+  package   RentalPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  productId Int
+  product   RentalProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int           @default(1)
+
+  @@unique([packageId, productId])
+}
+
+// A hire: quote → confirmed → out → returned (or cancelled). Confirmed and out hires hold their
+// kit from outDate to returnDate; quotes show as pencilled and hold nothing.
+model RentalHire {
+  id           Int              @id @default(autoincrement())
+  entityId     Int
+  entity       Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  number       String           @unique // H-2026-001
+  title        String
+  clientName   String?
+  clientEmail  String?
+  productionId Int?
+  production   Production?      @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  status       String           @default("quote") // quote | confirmed | out | returned | cancelled
+  outDate      DateTime // kit leaves (prep day included)
+  returnDate   DateTime // kit back in
+  notes        String?
+  createdById  Int?
+  createdBy    User?            @relation("RentalHireBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  lines        RentalHireLine[]
+
+  @@index([entityId, outDate])
+  @@index([productionId])
+}
+
+model RentalHireLine {
+  id        Int           @id @default(autoincrement())
+  hireId    Int
+  hire      RentalHire    @relation(fields: [hireId], references: [id], onDelete: Cascade)
+  productId Int
+  product   RentalProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Int           @default(1)
+  dayRate   Float? // copied from the product when added; editable on the quote (stage 2)
+  note      String?
+  sortOrder Int           @default(0)
+
+  @@index([hireId])
+  @@index([productId])
 }

@@ -1,12 +1,12 @@
 // What the entities API returns for each entity (with its yearly targets and space settings)
 export const ENTITY_SELECT = {
   id: true, name: true, archived: true, sortOrder: true,
-  hasSpace: true, slug: true, shortName: true, color: true, logoMime: true, updatedAt: true, address: true, phone: true,
+  hasSpace: true, slug: true, shortName: true, color: true, logoMime: true, updatedAt: true, address: true, phone: true, spaceKind: true,
   targets: { select: { year: true, amount: true }, orderBy: { year: "asc" as const } },
 };
 export type EntityRow = {
   id: number; name: string; archived: boolean; sortOrder: number;
-  hasSpace: boolean; slug: string | null; shortName: string | null; color: string | null; logoMime: string | null; updatedAt: string; address?: string | null; phone?: string | null;
+  hasSpace: boolean; slug: string | null; shortName: string | null; color: string | null; logoMime: string | null; updatedAt: string; address?: string | null; phone?: string | null; spaceKind?: string;
   targets: { year: number; amount: number }[];
 };
 

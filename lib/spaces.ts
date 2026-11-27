@@ -4,11 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { spaceLogoUrl } from "@/lib/entities";
 import { companyLimit } from "@/lib/companyScope";
 
-export type SpaceTheme = { id: number; name: string; shortName: string | null; slug: string; color: string | null; logoUrl: string | null };
+// kind: "workshop" (TWS tools) or "rentals" (PSG Rentals & Crew: kit, hires, availability)
+export type SpaceTheme = { id: number; name: string; shortName: string | null; slug: string; color: string | null; logoUrl: string | null; kind?: string };
 
-const THEME_SELECT = { id: true, name: true, shortName: true, slug: true, color: true, logoMime: true, updatedAt: true, hasSpace: true, archived: true };
-const toTheme = (e: { id: number; name: string; shortName: string | null; slug: string | null; color: string | null; logoMime: string | null; updatedAt: Date }): SpaceTheme =>
-  ({ id: e.id, name: e.name, shortName: e.shortName, slug: e.slug!, color: e.color, logoUrl: spaceLogoUrl(e) });
+const THEME_SELECT = { id: true, name: true, shortName: true, slug: true, color: true, logoMime: true, updatedAt: true, hasSpace: true, archived: true, spaceKind: true };
+const toTheme = (e: { id: number; name: string; shortName: string | null; slug: string | null; color: string | null; logoMime: string | null; updatedAt: Date; spaceKind?: string }): SpaceTheme =>
+  ({ id: e.id, name: e.name, shortName: e.shortName, slug: e.slug!, color: e.color, logoUrl: spaceLogoUrl(e), kind: e.spaceKind ?? "workshop" });
 
 /** The space of this person's home company, if it has one switched on. */
 export async function homeSpaceFor(userId: number): Promise<SpaceTheme | null> {

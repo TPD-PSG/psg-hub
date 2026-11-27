@@ -64,18 +64,18 @@ export default function NewHome({ viewer, data }: { viewer: { name: string; role
       <div className="nl-o-7 grid gap-3 md:grid-cols-3">
         <SpaceCard href="/productions" name="Production Solutions Group" line={data.director.live ? `${plural(data.director.live, "live show")}` : "Nothing on"} />
         {data.spaces.map(s => (
-          <SpaceCard key={s.slug} href={`/spaces/${s.slug}`} name={s.name} line={s.builds ? `${plural(s.builds, "build")} in the workshop` : "Nothing in the workshop"}
+          <SpaceCard key={s.slug} href={`/spaces/${s.slug}`} name={s.name} line={s.kind === "rentals" ? (s.hires ? `${plural(s.hires, "hire")} confirmed or out` : "No hires booked") : s.builds ? `${plural(s.builds, "build")} in the workshop` : "Nothing in the workshop"}
             ground="#f4efe6" ink="#1a1d21" rule={s.color ?? "#c49a6c"}
             /* eslint-disable-next-line @next/next/no-img-element -- the space's own logo */
             logo={s.logoUrl ? <img src={s.logoUrl} alt="" width={44} height={44} style={{ objectFit: "contain", width: 44, height: 44 }} /> : undefined} />
         ))}
-        <div className="flex items-center gap-4 p-4" style={{ background: "var(--nl-panel)", border: "1px dashed var(--nl-border)" }} aria-label="Rentals and Crew: coming">
+        {!data.spaces.some(s => s.kind === "rentals") && <div className="flex items-center gap-4 p-4" style={{ background: "var(--nl-panel)", border: "1px dashed var(--nl-border)" }} aria-label="Rentals and Crew: coming">
           <span className="flex flex-col min-w-0">
             <span className="font-extrabold">Rentals &amp; Crew</span>
             <span className="text-[13px]" style={{ color: "var(--nl-text-muted)" }}>Coming</span>
           </span>
           <span className="ml-auto"><Chip>Coming</Chip></span>
-        </div>
+        </div>}
       </div>
 
       {/* 4. Role panel */}

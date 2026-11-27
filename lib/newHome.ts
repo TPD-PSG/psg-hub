@@ -103,10 +103,14 @@ export async function newHomeData(viewer: { id: number; name: string; role: stri
   })) : null;
 
   // ── Spaces: PSG, the person's company spaces, and Rentals & Crew (coming) ───────────────
-  const spaceRows = staff ? await prisma.entity.findMany({ where: { hasSpace: true, archived: false, slug: { not: null }, ...(limit ? { id: { in: limit } } : {}) }, select: { id: true, name: true, slug: true, color: true, logoMime: true, updatedAt: true } }) : [];
+  const spaceRows = staff ? await prisma.entity.findMany({ where: { hasSpace: true, archived: false, slug: { not: null }, ...(limit ? { id: { in: limit } } : {}) }, select: { id: true, name: true, slug: true, color: true, logoMime: true, updatedAt: true, spaceKind: true } }) : [];
   const builds = spaceRows.length ? await prisma.job.groupBy({ by: ["entityId"], where: { entityId: { in: spaceRows.map(s => s.id) }, status: "active", stage: { in: ["build", "finish"] } }, _count: true }) : [];
+  // Rentals spaces: hires confirmed or out (PSG Rentals & Crew)
+  const rentalIds = spaceRows.filter(s => s.spaceKind === "rentals").map(s => s.id);
+  const hiresLive = rentalIds.length ? await prisma.rentalHire.groupBy({ by: ["entityId"], where: { entityId: { in: rentalIds }, status: { in: ["confirmed", "out"] } }, _count: true }) : [];
   const spaces = spaceRows.map(s => ({
-    slug: s.slug!, name: s.name, color: s.color,
+    slug: s.slug!, name: s.name, color: s.color, kind: s.spaceKind,
+    hires: hiresLive.find(h => h.entityId === s.id)?._count ?? 0,
     logoUrl: s.logoMime ? `/api/spaces/${s.slug}/logo?v=${s.updatedAt.getTime()}` : null,
     builds: builds.find(b => b.entityId === s.id)?._count ?? 0,
   }));

@@ -12,7 +12,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const body = await req.json().catch(() => ({}));
   const blank = blanked(body, { name: "The name can't be blank" });
   if (blank) return blank;
-  const data: { name?: string; archived?: boolean; sortOrder?: number; hasSpace?: boolean; slug?: string | null; shortName?: string | null; color?: string | null; address?: string | null; phone?: string | null } = {};
+  const data: { name?: string; archived?: boolean; sortOrder?: number; hasSpace?: boolean; slug?: string | null; shortName?: string | null; color?: string | null; address?: string | null; phone?: string | null; spaceKind?: string } = {};
   if (typeof body.name === "string") {
     const name = body.name.trim();
     if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
@@ -35,6 +35,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // Letterhead on the company's documents (e.g. its sales quotes)
   if ("address" in body) data.address = typeof body.address === "string" && body.address.trim() ? body.address.trim().slice(0, 300) : null;
   if ("phone" in body) data.phone = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim().slice(0, 40) : null;
+  // Which tools the space shows: the workshop's (TWS) or rental kit and hires (PSG Rentals & Crew)
+  if ("spaceKind" in body) {
+    if (body.spaceKind !== "workshop" && body.spaceKind !== "rentals") return NextResponse.json({ error: "A space is a workshop or a rentals space" }, { status: 400 });
+    data.spaceKind = body.spaceKind;
+  }
   if ("color" in body) {
     const c = checkColor(body.color);
     if (c === undefined) return NextResponse.json({ error: "Colour must look like #1a2b3c" }, { status: 400 });

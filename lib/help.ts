@@ -17,7 +17,7 @@ import { cache } from "react";
 export type HelpGuide = { slug: string; title: string; summary: string; section: string; order: number; paths: string[]; body: string };
 
 const DIR = path.join(process.cwd(), "content", "help");
-export const HELP_SECTIONS = ["Getting started", "Productions", "Money", "Business development", "The Workshop Stoke", "Company", "Your account", "Admin"];
+export const HELP_SECTIONS = ["Getting started", "Productions", "Money", "Business development", "The Workshop Stoke", "Rentals & Crew", "Company", "Your account", "Admin"];
 
 function parse(slug: string, raw: string): HelpGuide {
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);

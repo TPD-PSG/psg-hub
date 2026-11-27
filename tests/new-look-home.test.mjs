@@ -15,7 +15,10 @@ export default () => run("new-look-home", async ({ db, users, login, results }) 
     let h = await home(a);
     ok(h.includes("Weighted pipeline") && h.includes("Live shows") && h.includes("Next key date") && h.includes(">Companies<"), "an admin (director by default) sees the director panels and Companies");
     ok(!/\b(cash|bank balance)\b/i.test(h.replace(/<script[\s\S]*?<\/script>/g, "")), "no cash or bank figures on the home");
-    ok(h.includes("Rentals &amp; Crew") && h.includes("Coming"), "the Rentals & Crew card shows as coming");
+    // Until a rentals space exists the card says it's coming; after that the space shows in its place
+    const rentalsSpace = await db.entity.findFirst({ where: { hasSpace: true, archived: false, spaceKind: "rentals" }, select: { name: true } });
+    ok(rentalsSpace ? h.includes(rentalsSpace.name.replace(/&/g, "&amp;")) && !h.includes('aria-label="Rentals and Crew: coming"') : h.includes("Rentals &amp; Crew") && h.includes("Coming"),
+      rentalsSpace ? "the rentals space shows in place of the coming card" : "the Rentals & Crew card shows as coming");
 
     h = await home(m);
     ok(h.includes('aria-label="My productions"') && h.includes('aria-label="My tasks"') && !h.includes("Weighted pipeline"), "a member (PM by default) sees My productions and My tasks, not the director panels");

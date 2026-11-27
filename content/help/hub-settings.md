@@ -33,6 +33,7 @@ Click **Space** on the company's row and fill in:
 
 - **Switch the space on**: nobody can open it until this is ticked.
 - **Web address**: the short name in its address, such as tws.
+- **Kind of space**: **Workshop** (builds, planner, quotes and materials, like TWS) or **Rentals & Crew** (rental kit, packages, hires and availability; see [Rentals & Crew](/help/rentals-and-hires)).
 - **Short name**, shown in the top bar.
 - **Colour** and **Logo** (PNG, JPEG or WebP, under 1 MB).
 - **Address** and **Phone**, used as the letterhead on its quotes.

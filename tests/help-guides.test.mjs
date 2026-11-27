@@ -5,7 +5,7 @@ import { run } from "./lib.mjs";
 // section, the pages it covers), links between guides go to guides that exist, every page a guide
 // names is a real page, Help suggests the right guides for the page you came from, search finds
 // them, and the pages open.
-const SECTIONS = ["Getting started", "Productions", "Money", "Business development", "The Workshop Stoke", "Company", "Your account", "Admin"];
+const SECTIONS = ["Getting started", "Productions", "Money", "Business development", "The Workshop Stoke", "Rentals & Crew", "Company", "Your account", "Admin"];
 
 export default () => run("help-guides", async ({ users, login, results }) => {
   const ok = (c, l) => results.push(`${c ? "PASS" : "FAIL"}  ${l}`);

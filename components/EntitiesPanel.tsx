@@ -18,10 +18,10 @@ export default function EntitiesPanel({ initial }: { initial: EntityRow[] | null
   const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   // Space settings for one company at a time
-  const [space, setSpace] = useState<{ id: number; hasSpace: boolean; slug: string; shortName: string; color: string; address: string; phone: string } | null>(null);
+  const [space, setSpace] = useState<{ id: number; hasSpace: boolean; slug: string; shortName: string; color: string; address: string; phone: string; kind: string } | null>(null);
   const openSpace = (en: EntityRow) => setSpace({
     // A company setting up its space for the first time starts switched on, in the workshop brass
-    id: en.id, hasSpace: en.hasSpace || !en.slug, shortName: en.shortName ?? "", color: en.color ?? DEFAULT_SPACE_ACCENT, address: en.address ?? "", phone: en.phone ?? "",
+    id: en.id, hasSpace: en.hasSpace || !en.slug, shortName: en.shortName ?? "", color: en.color ?? DEFAULT_SPACE_ACCENT, address: en.address ?? "", phone: en.phone ?? "", kind: en.spaceKind ?? "workshop",
     slug: en.slug ?? en.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30),
   });
   async function saveSpace(e: React.FormEvent) {
@@ -31,7 +31,7 @@ export default function EntitiesPanel({ initial }: { initial: EntityRow[] | null
     let on = space.hasSpace;
     if (!on && !was?.hasSpace && space.slug && await confirmDialog("The space isn't switched on yet, so nobody can open it. Switch it on now?")) on = true;
     // Address first, so switching the space on in the same save has one to use
-    if (await call(`/api/entities/${space.id}`, "PUT", { slug: space.slug, shortName: space.shortName, color: space.color, address: space.address, phone: space.phone })
+    if (await call(`/api/entities/${space.id}`, "PUT", { slug: space.slug, shortName: space.shortName, color: space.color, address: space.address, phone: space.phone, spaceKind: space.kind })
       && await call(`/api/entities/${space.id}`, "PUT", { hasSpace: on })) { setSpace(null); reload(); }
   }
   async function uploadLogo(id: number, file: File | undefined) {
@@ -175,6 +175,11 @@ export default function EntitiesPanel({ initial }: { initial: EntityRow[] | null
                         <div><label htmlFor={`sp-slug-${en.id}`} className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Web address</label>
                           <div className="flex items-center gap-1 text-sm" style={{ color: "var(--psg-muted)" }}>/spaces/
                             <input id={`sp-slug-${en.id}`} className={inp} style={inpStyle} value={space.slug} onChange={e => setSpace({ ...space, slug: e.target.value.toLowerCase() })} placeholder="tws" /></div></div>
+                        <div className="md:col-span-2"><label htmlFor={`sp-kind-${en.id}`} className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Kind of space</label>
+                          <select id={`sp-kind-${en.id}`} className={inp} style={inpStyle} value={space.kind} onChange={e => setSpace({ ...space, kind: e.target.value })}>
+                            <option value="workshop">Workshop: builds, planner, quotes, materials (like TWS)</option>
+                            <option value="rentals">Rentals &amp; Crew: rental kit, packages, hires and availability</option>
+                          </select></div>
                         <div><label htmlFor={`sp-short-${en.id}`} className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Short name</label>
                           <input id={`sp-short-${en.id}`} className={inp} style={inpStyle} value={space.shortName} maxLength={12} onChange={e => setSpace({ ...space, shortName: e.target.value })} placeholder="TWS" /></div>
                         <div><label htmlFor={`sp-colour-${en.id}`} className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Colour</label>

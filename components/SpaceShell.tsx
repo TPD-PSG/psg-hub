@@ -19,7 +19,17 @@ export default function SpaceShell({ space, staff = true, children }: { space: S
   const pathname = usePathname() ?? "";
   const [menu, setMenu] = useState(false);
   const base = `/spaces/${space.slug}`;
-  const own = staff ? [
+  // A rentals space (PSG Rentals & Crew) shows rental kit and hires instead of the workshop's tools
+  const own = staff && space.kind === "rentals" ? [
+    { href: base, label: "Home" },
+    { href: `${base}/hires`, label: "Hires" },
+    { href: `${base}/availability`, label: "Availability" },
+    { href: `${base}/kit`, label: "Kit" },
+    { href: `${base}/packages`, label: "Packages" },
+    { href: `${base}/safety`, label: "Safety" },
+    { href: `${base}/noticeboard`, label: "Noticeboard" },
+    { href: `${base}/fun`, label: "Fun Corner" },
+  ] : staff ? [
     { href: base, label: "Home" },
     { href: `${base}/my-work`, label: "My work" },
     { href: `${base}/board`, label: "Build board" },

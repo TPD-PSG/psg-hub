@@ -1,0 +1,77 @@
+---
+title: Rentals & Crew: kit, hires and availability
+summary: Adding rental kit with a barcode on every unit, cases, packages, taking hires and checking what's free
+section: Rentals & Crew
+order: 1
+paths: /spaces/*/kit, /spaces/*/hires, /spaces/*/availability, /spaces/*/packages
+---
+## What this space is for
+
+The **Rentals & Crew** space is where PSG's rental kit and hires live, as the Hub takes over from Flex. It is for PSG staff. Freelancers don't see the kit, hires or prices.
+
+The space's menu has:
+
+- **Home**: what goes out this week, what's out now, open quotes and kit in repair.
+- **Hires**: every quote and hire.
+- **Availability**: how many of each product are free, day by day.
+- **Kit**: every product and every unit.
+- **Packages**: ready-made groups of kit.
+
+An admin makes a company's space a rentals space in **Admin → Settings**, under **Entities and revenue targets**: click **Space** on the company's row and choose **Rentals & Crew** under **Kind of space** (see [Hub settings](/help/hub-settings)).
+
+## Kit: products and units
+
+A **product** is a kind of thing you hire out, such as a Robe MegaPointe or a 16A 10m cable. A **unit** is one physical item. **Every unit has its own barcode, cables included**, so the Hub always knows exactly which item went where.
+
+Click **+ Add product** and fill in:
+
+- **Name**, **category** (Lighting, Sound, Cable and so on, or your own), make and model.
+- **Day rate** and **week rate** (ex VAT), **replacement cost**, **weight** and **power**.
+- **Units**: either say **how many**, and each one gets a new barcode (for example RC000001), or type or scan in **the barcodes already on the stickers**, one per line. Use the second way for kit that already has Flex barcodes.
+
+Click a product to see its units. For each unit you can set:
+
+- **Status**: Available, In repair, Lost or Retired. Only available units count towards what can go out.
+- **Serial** number and **shelf**.
+- **Case**: the barcode of the case it's packed in.
+
+To add more units later, use **Add units** at the bottom of the product. Delete a unit only if it was added by mistake. For real kit that's gone, mark it **Lost** or **Retired** so its history stays.
+
+## Cases
+
+Tick **This is a case or rack** on a product (for example "MegaPointe 2-way case"). Its units can then hold other units: type the case's barcode into a unit's **Case** box. A case lists what's packed in it. A case can't be packed inside itself, or inside something packed in it.
+
+## Finding a unit by its barcode
+
+The search box on **Kit** finds products by name. It also takes a barcode: scan it with a handheld scanner (which types the code and presses Enter), or type it and press **Find**. The unit's product opens with that unit highlighted. Phone-camera scanning comes with the warehouse stage.
+
+## Packages
+
+A package is a group of products you often send out together, such as "Small PA": 4 tops, a desk and 10 cables. Make one on **Packages** with **+ New package**. On a hire, **+ Add a package…** adds all its products as lines, which you can then change for that hire. Changing or deleting a package never changes hires it was already added to.
+
+## Hires
+
+Click **+ New hire** and fill in its name, the client, when the kit **goes out** and when it **comes back**, and (if it's for one of our shows) the production. Add kit with **+ Add a product…** or **+ Add a package…**.
+
+A hire moves through these steps:
+
+1. **Quote (pencilled).** A new hire starts here. It shows on Availability with a dot but **holds no kit**.
+2. **Confirmed.** Click **Confirm hire**. The kit is now held for every day from going out to coming back, including both of those days.
+3. **Out**, then **Returned**.
+
+You can **cancel** a confirmed hire, which frees its kit. Only quotes and cancelled hires can be deleted; anything that went out stays on record. A returned or cancelled hire can be reopened as a quote.
+
+While you edit a hire, each line shows **how many are free** over its dates, counting every other confirmed hire. If there aren't enough, the line shows **Short**. Confirming a hire that's short stops and tells you what's free; you can **Confirm anyway** if you'll sub-hire the rest. Changing the dates or kit of a confirmed hire is checked the same way.
+
+Prices on the quote, the quote PDF and invoicing come in the next stage.
+
+## Availability
+
+**Availability** shows each product against the next two weeks (or four): the number in each box is **how many are free that day**.
+
+- Pale shading: some are on hire.
+- Amber: none left.
+- Red: short, because more is booked than you have.
+- A dot (•): some are also pencilled on a quote.
+
+Use **Earlier**, **Today** and **Later** to move through the dates, or pick a start date. Tick **Only kit that's booked** to hide everything that's sitting on the shelf. Click a product to open it on Kit; the list underneath links to each hire in the dates.

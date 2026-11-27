@@ -258,7 +258,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
           <input id="q-po" className={inp} style={inpStyle} value={head.customerPo} maxLength={60} onChange={e => setH({ customerPo: e.target.value })} /></div>
         <div><label htmlFor="q-pay" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Payment terms</label>
           <input id="q-pay" className={inp} style={inpStyle} value={head.paymentTerms} maxLength={60} list="q-pay-list" onChange={e => setH({ paymentTerms: e.target.value })} placeholder="e.g. 50 / 30 / 20" />
-          <datalist id="q-pay-list"><option value="50 / 30 / 20" /><option value="50 / 50" /><option value="100% on order" /><option value="30 days" /></datalist></div>
+          <datalist id="q-pay-list"><option value="In advance" /><option value="50 / 30 / 20" /><option value="50 / 50" /><option value="100% on order" /><option value="30 days" /></datalist></div>
         <div><label htmlFor="q-due" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Due date{q.job?.endDate && !head.dueDate ? " (else the build's due-out)" : ""}</label>
           <input id="q-due" type="date" className={inp} style={inpStyle} value={head.dueDate} onChange={e => setH({ dueDate: e.target.value })} /></div>
         <div><label htmlFor="q-ship" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Shipping method</label>

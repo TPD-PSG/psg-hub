@@ -36,6 +36,7 @@ const card = { backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-ca
 const gbp = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 const toRow = (l: Line): Row => ({ section: l.section ?? "", description: l.description, quantity: String(l.quantity), unit: l.unit ?? "", unitCost: String(l.unitCost), unitPrice: String(l.unitPrice), kind: l.kind ?? defaultKind(l.section, l.unit), hideLine: !!l.hideLine, hidePrice: !!l.hidePrice, leaveOut: !!l.leaveOut });
 const num = (s: string) => (s.trim() === "" ? 0 : Number(s) || 0);
+const ADJUSTMENT = "Item price adjustment";
 const BLANK_ROW: Row = { section: "", description: "", quantity: "1", unit: "", unitCost: "", unitPrice: "", kind: "", hideLine: false, hidePrice: false, leaveOut: false };
 /** Lines of one item kept together, items in the order they first appear (workshop quoting, 28 Nov 2026). */
 const groupRows = (rs: Row[]) => {
@@ -102,6 +103,23 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     .reduce((a, r) => ({ cost: a.cost + num(r.quantity) * num(r.unitCost), price: a.price + num(r.quantity) * num(r.unitPrice) }), { cost: 0, price: 0 });
   const renameItem = (g: { idx: number[] }, name: string) => { setRowsRaw(rs => rs.map((r, j) => (g.idx.includes(j) ? { ...r, section: name } : r))); setDirty(true); };
   const setItem = (g: { idx: number[] }, patch: Partial<Row>) => { setRows(rs => rs.map((r, j) => (g.idx.includes(j) ? { ...r, ...patch } : r))); setDirty(true); };
+  // Set an item's price: a hidden "Item price adjustment" line in the item makes up the difference,
+  // so the item totals exactly what's typed and the lines keep their own prices (28 Nov 2026)
+  const setItemPrice = (g: { name: string; idx: number[] }, raw: string) => {
+    const target = Math.round(Number(raw) * 100) / 100;
+    if (raw.trim() === "" || !Number.isFinite(target)) return;
+    setRows(rs => {
+      const inItem = (r: Row) => sameSection(r.section, g.name);
+      const others = rs.filter(r => inItem(r) && r.description !== ADJUSTMENT && r.description.trim()).reduce((a, r) => a + num(r.quantity) * num(r.unitPrice), 0);
+      const delta = Math.round((target - others) * 100) / 100;
+      const without = rs.filter(r => !(inItem(r) && r.description === ADJUSTMENT));
+      if (Math.abs(delta) < 0.005) return without;
+      const lastAt = without.map(inItem).lastIndexOf(true);
+      const adj: Row = { ...BLANK_ROW, section: g.name, description: ADJUSTMENT, quantity: "1", unit: "each", unitCost: "0", unitPrice: String(delta), kind: "misc", hideLine: true, leaveOut: rs.some(r => inItem(r) && r.leaveOut) };
+      return [...without.slice(0, lastAt + 1), adj, ...without.slice(lastAt + 1)];
+    });
+    setDirty(true);
+  };
   const moveInItem = (g: { idx: number[] }, i: number, d: -1 | 1) => { const p = g.idx.indexOf(i), j = g.idx[p + d]; if (j != null) move(i, (j - i) as -1 | 1); };
 
   // Look up stock and last-paid prices as the description is typed
@@ -277,7 +295,13 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
                     </td>
                     <td colSpan={2} className="px-2 py-1.5 text-xs" style={{ color: "var(--psg-muted)" }}>{g.idx.length} line{g.idx.length === 1 ? "" : "s"}</td>
                     <td className="px-2 py-1.5 text-xs tabular-nums" style={{ color: "var(--psg-muted)" }} title="Our cost for this item">{gbp(sub.cost)}</td><td />
-                    <td className="px-2 py-1.5 text-right tabular-nums text-white font-semibold" title="Item subtotal">{gbp(sub.price)}</td>
+                    <td className="px-2 py-1.5">
+                      {/* The item's price: type a figure to set it (the difference goes on a hidden adjustment line) */}
+                      <input key={`${g.name}|${sub.price.toFixed(2)}`} aria-label={`Price for ${g.name || "these lines"}`} title="Item subtotal. Type a price to set it: a hidden adjustment line makes up the difference"
+                        type="number" step="any" className={`${inp} text-right font-semibold tabular-nums`} style={inpStyle} defaultValue={sub.price.toFixed(2)}
+                        onBlur={e => { if (Number(e.target.value) !== Math.round(sub.price * 100) / 100) setItemPrice(g, e.target.value); }}
+                        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }} />
+                    </td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-xs" style={{ color: "var(--psg-muted)" }}>{sub.price ? `${Math.round(((sub.price - sub.cost) / sub.price) * 100)}%` : "—"}</td>
                     <td className="px-2 py-1.5 text-xs">
                       {named && <label className="flex items-center gap-1.5 cursor-pointer" title="Leave the whole item out of the totals and the client's PDF (e.g. an option the client hasn't taken)" style={{ color: out ? "#fbbf24" : "var(--psg-muted)" }}>

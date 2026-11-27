@@ -92,3 +92,15 @@ export function navPages(groups: NavGroup[]): { label: string; href: string; wor
     ...(i.subs ?? []).filter(s => s.label !== i.label).map(s => ({ label: `${i.label} › ${s.label}`, href: s.href, words: [s.label, ...(s.keywords ?? [])].join(" ").toLowerCase() })),
   ]));
 }
+
+// A production's sections, grouped as in the brief (same ?section= values as today). A production
+// opens on Overview in the new look (stage 5).
+export const PRODUCTION_GROUPS = [
+  { label: "Plan", sections: [{ key: "overview", label: "Overview" }, { key: "schedule", label: "Schedule" }, { key: "tour", label: "Tour stops" }, { key: "advancing", label: "Advancing" }, { key: "callsheets", label: "Call sheets" }] },
+  { label: "People", sections: [{ key: "crew", label: "Crew" }, { key: "contacts", label: "Contacts" }, { key: "accommodation", label: "Accommodation" }] },
+  { label: "Money", sections: [{ key: "budget", label: "Budget" }] },
+  { label: "Logistics", sections: [{ key: "haulage", label: "Haulage" }] },
+  { label: "Records", sections: [{ key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "hs", label: "Health and safety" }, { key: "reports", label: "Show reports" }] },
+  { label: "Work", sections: [{ key: "tasks", label: "Tasks" }, { key: "notes", label: "Notes" }, { key: "meetings", label: "Meetings" }] },
+];
+

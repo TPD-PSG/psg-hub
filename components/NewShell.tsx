@@ -15,20 +15,10 @@ import {
 import Icon from "@/components/Icon";
 import NotificationBell from "@/components/NotificationBell";
 import UserNav from "@/components/UserNav";
-import { activeKey, navFor, navPages, type NavGroup } from "@/lib/newLookNav";
+import { activeKey, navFor, navPages, PRODUCTION_GROUPS, type NavGroup } from "@/lib/newLookNav";
 import { SectionMenu } from "@/components/nl";
 import { DEFAULT_HIDDEN_SECTIONS, parsePerms } from "@/lib/permissions";
 
-// A production's sections, grouped as in the brief (same ?section= values as today). Overview comes
-// in stage 5; until then a production still opens on Schedule.
-const PRODUCTION_GROUPS = [
-  { label: "Plan", sections: [{ key: "schedule", label: "Schedule" }, { key: "tour", label: "Tour stops" }, { key: "advancing", label: "Advancing" }, { key: "callsheets", label: "Call sheets" }] },
-  { label: "People", sections: [{ key: "crew", label: "Crew" }, { key: "contacts", label: "Contacts" }, { key: "accommodation", label: "Accommodation" }] },
-  { label: "Money", sections: [{ key: "budget", label: "Budget" }] },
-  { label: "Logistics", sections: [{ key: "haulage", label: "Haulage" }] },
-  { label: "Records", sections: [{ key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "hs", label: "Health and safety" }, { key: "reports", label: "Show reports" }] },
-  { label: "Work", sections: [{ key: "tasks", label: "Tasks" }, { key: "notes", label: "Notes" }, { key: "meetings", label: "Meetings" }] },
-];
 
 const ICONS: Record<string, LucideIcon> = { Home, CheckSquare, Star, Clapperboard, CalendarDays, BriefcaseBusiness, Megaphone, PoundSterling, Wrench, Share2, LifeBuoy, PartyPopper, Settings, Hammer };
 type Counts = { tasks: number | null; productions: number | null; deals: number | null; finance: number | null };
@@ -48,7 +38,7 @@ export default function NewShell({ spaces, children }: { spaces: ShellSpace[]; c
   const [more, setMore] = useState(false);
   const prodId = pathname.match(/^\/productions\/(\d+)/)?.[1] ?? null;
   const inProduction = !!prodId;
-  const section = new URLSearchParams(query).get("section") ?? "schedule";
+  const section = new URLSearchParams(query).get("section") ?? "overview";
   // The production's menu: tour stops only for tours; sections hidden for this person's role left out
   const [prod, setProd] = useState<{ id: string; name: string; isTour: boolean; color: string | null } | null>(null);
   useEffect(() => {

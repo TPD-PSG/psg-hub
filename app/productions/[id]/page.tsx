@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { loadProductionForViewer } from "@/lib/productionData";
 import ProductionView from "./ProductionView";
 import type { Production } from "./shared";
+import { auth } from "@/auth";
+import { newLookFor } from "@/lib/newLook";
 
 export default async function ProductionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,5 +20,7 @@ export default async function ProductionPage({ params }: { params: Promise<{ id:
   }
   // Same JSON shape the API returns (dates as strings), so the client code is unchanged
   const initialProd = JSON.parse(JSON.stringify(result.data)) as Production;
-  return <ProductionView key={id} id={id} initialProd={initialProd} />;
+  const session = await auth();
+  const newLook = await newLookFor(Number((session?.user as { id?: string } | undefined)?.id)).catch(() => false);
+  return <ProductionView key={id} id={id} initialProd={initialProd} newLook={newLook} />;
 }

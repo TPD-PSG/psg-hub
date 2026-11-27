@@ -18,6 +18,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
   const f = stageFields(await req.json().catch(() => ({})));
   if ("error" in f) return NextResponse.json({ error: f.error }, { status: 400 });
   if (f.data.disciplineId && !(await prisma.workshopDiscipline.count({ where: { id: f.data.disciplineId as number, entityId: r.m.space.id } }))) return NextResponse.json({ error: "Pick a discipline" }, { status: 400 });
+  // Done, moved or resized: a running-late flag no longer applies
+  if (f.data.status === "done" || "startDate" in f.data || "days" in f.data) f.data.lateUntil = null;
   const stage = await prisma.partStage.update({ where: { id: r.stage.id }, data: f.data, select: STAGE_SELECT });
   return NextResponse.json(stage);
 }

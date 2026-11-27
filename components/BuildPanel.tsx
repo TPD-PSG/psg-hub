@@ -18,7 +18,7 @@ export type BuildInfo = {
 const inp = "w-full rounded px-2 py-1.5 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
 const ymd = (s: string | null) => (s ? s.slice(0, 10) : "");
-const KIND: Record<string, string> = { vectorworks: "VectorWorks", drawing: "Drawing", other: "File" };
+const KIND: Record<string, string> = { vectorworks: "VectorWorks", drawing: "Drawing", scenic: "Scenic reference", other: "File" };
 
 export default function BuildPanel({ job, productions, onChange }: { job: BuildInfo; productions: Option[]; onChange: () => void }) {
   const [form, setForm] = useState({
@@ -120,7 +120,7 @@ export default function BuildPanel({ job, productions, onChange }: { job: BuildI
             <input id="l-url" required type="url" className={inp} style={inpStyle} value={link.url} onChange={e => setLink({ ...link, url: e.target.value })} placeholder="https://…sharepoint.com/…" /></div>
           <div><label htmlFor="l-kind" className="block text-xs mb-1" style={{ color: "var(--psg-muted)" }}>Type</label>
             <select id="l-kind" className={inp} style={inpStyle} value={link.kind} onChange={e => setLink({ ...link, kind: e.target.value })}>
-              <option value="vectorworks">VectorWorks</option><option value="drawing">Drawing</option><option value="other">Other</option>
+              <option value="vectorworks">VectorWorks</option><option value="drawing">Drawing</option><option value="scenic">Scenic reference</option><option value="other">Other</option>
             </select></div>
           <button type="submit" disabled={busy} className="border px-3 py-1.5 rounded text-sm disabled:opacity-50" style={{ borderColor: "var(--psg-card-border)", color: "var(--psg-text)" }}>Add link</button>
         </form>

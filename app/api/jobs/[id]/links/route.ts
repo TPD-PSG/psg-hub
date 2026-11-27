@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let parsed: URL;
   try { parsed = new URL(url); } catch { return NextResponse.json({ error: "Paste the file's full link (https://…)" }, { status: 400 }); }
   if (parsed.protocol !== "https:") return NextResponse.json({ error: "Links must start with https://" }, { status: 400 });
-  const kind = ["vectorworks", "drawing", "other"].includes(body.kind) ? body.kind : "vectorworks";
+  const kind = ["vectorworks", "drawing", "scenic", "other"].includes(body.kind) ? body.kind : "vectorworks";
   const link = await prisma.jobLink.create({ data: { jobId, label: label.slice(0, 120), url: parsed.toString().slice(0, 2000), kind } });
   return NextResponse.json(link, { status: 201 });
 }

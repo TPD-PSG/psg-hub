@@ -8,25 +8,28 @@ datasource db {
 }
 
 model User {
-  partStages    PartStage[]  @relation("PartStageUser")
-  id            Int          @id @default(autoincrement())
-  name          String
-  email         String       @unique
-  passwordHash  String
-  role          String       @default("member") // admin | member | client | freelancer
-  preferences   String? // JSON: { widgets: string[] }
-  permissions   String? // JSON: { modules: string[], allProductions: boolean }
-  avatarUrl     String?
-  color         String? // hex colour for schedule grid badge
-  costDayRate   Float? // internal cost per day, for job costing (admins set it)
-  homeEntityId  Int? // the company this person works for; its space (if any) is their home page
-  homeEntity    Entity?      @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
-  clockEntries  ClockEntry[] @relation("ClockEntryUser")
-  deactivatedAt DateTime? // can't sign in any more; their history (days logged, inductions…) is kept
-  clientId      Int? // client accounts: the client company whose builds they see and sign off
-  client        Client?      @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  workshopManager Boolean        @default(false) // approves reschedule requests on its workshop's calendar
+  stageRequests   StageRequest[] @relation("StageRequestBy")
+  stageDecisions  StageRequest[] @relation("StageRequestDecidedBy")
+  partStages      PartStage[]    @relation("PartStageUser")
+  id              Int            @id @default(autoincrement())
+  name            String
+  email           String         @unique
+  passwordHash    String
+  role            String         @default("member") // admin | member | client | freelancer
+  preferences     String? // JSON: { widgets: string[] }
+  permissions     String? // JSON: { modules: string[], allProductions: boolean }
+  avatarUrl       String?
+  color           String? // hex colour for schedule grid badge
+  costDayRate     Float? // internal cost per day, for job costing (admins set it)
+  homeEntityId    Int? // the company this person works for; its space (if any) is their home page
+  homeEntity      Entity?        @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
+  clockEntries    ClockEntry[]   @relation("ClockEntryUser")
+  deactivatedAt   DateTime? // can't sign in any more; their history (days logged, inductions…) is kept
+  clientId        Int? // client accounts: the client company whose builds they see and sign off
+  client          Client?        @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   tasksAssigned       Task[]               @relation("TaskAssignee")
   tasksSignoff        Task[]               @relation("TaskSignoff")
@@ -2217,10 +2220,36 @@ model PartStage {
   user         User?              @relation("PartStageUser", fields: [userId], references: [id], onDelete: SetNull)
   status       String             @default("todo") // todo | on | done
   fromQuote    Boolean            @default(false) // made from a labour line on the quote item
+  lateUntil    DateTime? // running late: the new expected last day (cleared when it's done or rescheduled)
+  requests     StageRequest[]
   sortOrder    Int                @default(0)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
   @@index([partId])
   @@index([disciplineId, startDate])
+}
+
+// Running late / asking to reschedule a stage (workshop calendar part 2, 28 Nov 2026). "late" is
+// noted straight away (the stage shows late); "reschedule" waits for a workshop manager.
+model StageRequest {
+  id           Int       @id @default(autoincrement())
+  stageId      Int
+  stage        PartStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  kind         String // late | reschedule
+  reason       String
+  newStart     DateTime? // reschedule: proposed first day
+  newDays      Int? // reschedule: proposed length
+  newEnd       DateTime? // late: expected last day
+  status       String    @default("open") // open | approved | declined | noted
+  byId         Int?
+  by           User?     @relation("StageRequestBy", fields: [byId], references: [id], onDelete: SetNull)
+  decidedById  Int?
+  decidedBy    User?     @relation("StageRequestDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime  @default(now())
+
+  @@index([stageId])
+  @@index([status])
 }

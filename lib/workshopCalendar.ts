@@ -27,7 +27,9 @@ export async function calendarStaff(slug: string): Promise<SpaceMember | { error
 export const STAGE_STATUSES = ["todo", "on", "done"] as const;
 export const STAGE_SELECT = {
   id: true, partId: true, disciplineId: true, startDate: true, days: true, hours: true, userId: true, status: true, fromQuote: true, sortOrder: true,
-  user: { select: { id: true, name: true } },
+  user: { select: { id: true, name: true } }, lateUntil: true,
+  // Waiting reschedule requests, and the latest late report (for the bar's flag and the editor)
+  requests: { where: { status: { in: ["open", "noted"] as string[] } }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, kind: true, reason: true, newStart: true, newDays: true, newEnd: true, status: true, createdAt: true, by: { select: { id: true, name: true } } } },
 } as const;
 
 /** Stage fields from a request body (only keys sent are changed). */
@@ -46,3 +48,29 @@ export function stageFields(body: Record<string, unknown>): { data: Record<strin
   if (has("disciplineId")) { const n = Number(body.disciplineId); if (!Number.isInteger(n) || n < 1) return { error: "Pick a discipline" }; data.disciplineId = n; }
   return { data };
 }
+
+// ── Running late and reschedule requests (part 2) ────────────────────────────
+
+/** Who handles a workshop's requests: people ticked as its workshop managers (its own team, or
+ *  admins), else every admin. */
+export async function workshopManagers(entityId: number): Promise<number[]> {
+  const ticked = await prisma.user.findMany({ where: { workshopManager: true, deactivatedAt: null, OR: [{ homeEntityId: entityId }, { role: "admin" }] }, select: { id: true } });
+  if (ticked.length) return ticked.map(u => u.id);
+  return (await prisma.user.findMany({ where: { role: "admin", deactivatedAt: null }, select: { id: true } })).map(u => u.id);
+}
+export async function isWorkshopManager(userId: number, role: string, entityId: number) {
+  if (role === "admin") return true;
+  return (await workshopManagers(entityId)).includes(userId);
+}
+
+export const REQUEST_SELECT = {
+  id: true, stageId: true, kind: true, reason: true, newStart: true, newDays: true, newEnd: true, status: true, createdAt: true, decidedAt: true, decisionNote: true,
+  by: { select: { id: true, name: true } }, decidedBy: { select: { name: true } },
+} as const;
+
+/** "CNC · Palace flats 1–4 (J-2026-080)" for messages */
+export async function stageName(stageId: number) {
+  const s = await prisma.partStage.findUnique({ where: { id: stageId }, select: { discipline: { select: { name: true } }, part: { select: { label: true, job: { select: { number: true, title: true } } } } } });
+  return s ? `${s.discipline.name} · ${s.part.label} (${s.part.job.number} ${s.part.job.title})` : "a stage";
+}
+export const dayText = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });

@@ -8,8 +8,11 @@ import { shrinkPhoto } from "@/lib/shrinkPhoto";
 import type { SpaceTheme } from "@/lib/spaces";
 import { btnLine, btnSolid, caps, card, input, muted, pageHeader } from "@/lib/twsUi";
 
+type StageReq = { id: number; kind: string; reason: string; newStart: string | null; newDays: number | null; newEnd: string | null; status: string };
+type PStage = { id: number; startDate: string | null; days: number; status: string; lateUntil: string | null; userId: number | null; discipline: { name: string; color: string | null }; user: { name: string } | null; requests: StageReq[] };
 type Part = {
-  id: number; jobId: number; label: string; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled: boolean;
+  id: number; jobId: number; label: string; userId: number | null; startDate: string | null; days: number; hours: number | null; done: boolean; pencilled: boolean;
+  stages: PStage[];
   labourType: { name: string } | null;
   materials: { id: number; description: string; quantity: number; unit: string | null }[];
   machines: { id: number; name: string }[];
@@ -24,7 +27,7 @@ type Job = {
   checks: Snag[];
   photos: Photo[];
 };
-export type MyWorkPageData = { space: SpaceTheme; parts: Part[]; jobs: Job[] };
+export type MyWorkPageData = { space: SpaceTheme; me: number; parts: Part[]; jobs: Job[] };
 
 const DAY = 86_400_000;
 const STAGES: Record<string, string> = { quote: "Quote", confirmation: "Confirmation", technical_design: "Technical design", build: "Build", finish: "Finish", delivery: "Delivery" };
@@ -33,15 +36,18 @@ const todayUtc = () => { const n = new Date(); return Date.UTC(n.getFullYear(), 
 
 /** When a part is, in words: "Today", "Mon 2 Dec", "Mon 2 – Wed 4 Dec", "Not dated yet". */
 function when(p: Part) {
-  if (!p.startDate) return "Not dated yet";
+  if (!p.startDate) { const first = startOf(p); return first ? `Stages from ${day(first)}` : "Not dated yet"; }
   const start = new Date(p.startDate).getTime(), end = start + (p.days - 1) * DAY, t = todayUtc();
   if (start <= t && t <= end) return p.days > 1 ? `Today (until ${day(new Date(end).toISOString())})` : "Today";
   return p.days > 1 ? `${day(p.startDate)} – ${day(new Date(end).toISOString())}` : day(p.startDate);
 }
+/** When a piece starts for this person: the part's own date, else their earliest dated stage on it. */
+const startOf = (p: Part) => p.startDate ?? p.stages.filter(s => s.startDate).map(s => s.startDate!).sort()[0] ?? null;
 function bucket(p: Part): "now" | "next" | "later" | "done" {
   if (p.done) return "done";
-  if (!p.startDate) return "later";
-  const start = new Date(p.startDate).getTime(), t = todayUtc();
+  const first = startOf(p);
+  if (!first) return "later";
+  const start = new Date(first).getTime(), t = todayUtc();
   if (start <= t) return "now"; // today, or started and not ticked off yet
   return start - t <= 7 * DAY ? "next" : "later";
 }
@@ -61,6 +67,7 @@ export default function MyWork({ initial }: { initial: MyWorkPageData }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
   const [snagText, setSnagText] = useState<Record<number, string>>({});
+  const [ask, setAsk] = useState<null | { stageId: number; kind: "late" | "reschedule"; newEnd: string; newStart: string; newDays: string; reason: string }>(null);
   const photoRef = useRef<Record<number, HTMLInputElement | null>>({});
 
   const jobOf = (id: number) => jobs.find(j => j.id === id);
@@ -73,6 +80,18 @@ export default function MyWork({ initial }: { initial: MyWorkPageData }) {
     const d = await res?.json().catch(() => ({}));
     if (!res?.ok) { say(d?.error ?? "That didn't work. Try again.", true); return null; }
     return d;
+  }
+
+  // Running late / ask to reschedule one of their stages (the workshop managers hear about it)
+  async function sendAsk(e: React.FormEvent, partId: number) {
+    e.preventDefault();
+    if (!ask) return;
+    const d = await send(`/api/spaces/${space.slug}/stages/${ask.stageId}/requests`, "POST",
+      ask.kind === "late" ? { kind: "late", newEnd: ask.newEnd, reason: ask.reason } : { kind: "reschedule", newStart: ask.newStart, newDays: Number(ask.newDays), reason: ask.reason });
+    if (!d) return;
+    setParts(ps => ps.map(p => (p.id === partId ? { ...p, stages: p.stages.map(st => (st.id === ask.stageId ? { ...st, requests: [d, ...st.requests], lateUntil: ask.kind === "late" ? `${ask.newEnd}T00:00:00.000Z` : st.lateUntil } : st)) } : p)));
+    say(ask.kind === "late" ? "Reported: the workshop managers have been told" : "Sent: a workshop manager will approve or decline it");
+    setAsk(null);
   }
 
   async function tickPart(p: Part) {
@@ -151,6 +170,46 @@ export default function MyWork({ initial }: { initial: MyWorkPageData }) {
                       </div>
                       {j.notes && <p className="m-0 text-sm whitespace-pre-wrap" style={muted}>{j.notes}</p>}
 
+                      {p.stages.length > 0 && (
+                        <div>
+                          <h3 className="m-0 mb-2 text-sm font-bold">Stages</h3>
+                          <ul className="m-0 p-0 list-none flex flex-col gap-2">
+                            {p.stages.map(st => {
+                              const mine = st.userId === initial.me || (st.userId == null && p.userId === initial.me);
+                              const end = st.startDate ? new Date(new Date(st.startDate).getTime() + (st.days - 1) * DAY).toISOString() : null;
+                              const waiting = st.requests.find(r => r.status === "open");
+                              return (
+                                <li key={st.id} className="text-sm">
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span className="inline-block w-2.5 h-2.5" style={{ background: st.discipline.color ?? "#8a8f96" }} />
+                                    <strong>{st.discipline.name}</strong>
+                                    <span style={muted}>{st.startDate ? (st.days > 1 ? `${day(st.startDate)} – ${day(end!)}` : day(st.startDate)) : "not dated yet"}{st.user ? ` · ${st.user.name}` : ""}{st.status === "done" ? " · done" : st.status === "on" ? " · on it" : ""}</span>
+                                    {st.lateUntil && st.status !== "done" && <span className="font-bold" style={{ color: "var(--tws-bad-ink)" }}>running late, now {day(st.lateUntil)}</span>}
+                                    {waiting && <span className="font-bold" style={{ color: "var(--tws-warn-ink)" }}>reschedule asked ({day(waiting.newStart!)}, {waiting.newDays} day{waiting.newDays === 1 ? "" : "s"})</span>}
+                                    {mine && st.status !== "done" && ask?.stageId !== st.id && <>
+                                      <button type="button" onClick={() => setAsk({ stageId: st.id, kind: "late", newEnd: (end ?? new Date().toISOString()).slice(0, 10), newStart: "", newDays: "", reason: "" })} className="text-xs underline" style={{ color: "var(--tws-accent-ink)" }}>Running late</button>
+                                      {!waiting && <button type="button" onClick={() => setAsk({ stageId: st.id, kind: "reschedule", newEnd: "", newStart: (st.startDate ?? new Date().toISOString()).slice(0, 10), newDays: String(st.days), reason: "" })} className="text-xs underline" style={{ color: "var(--tws-accent-ink)" }}>Ask to reschedule</button>}
+                                    </>}
+                                  </div>
+                                  {ask?.stageId === st.id && (
+                                    <form onSubmit={e => sendAsk(e, p.id)} className="mt-2 grid gap-2 grid-cols-2 sm:grid-cols-[auto_auto_1fr_auto] items-end">
+                                      {ask.kind === "late" ? (
+                                        <div><label className="block text-xs mb-1" htmlFor={`a-end-${st.id}`} style={muted}>Now finishing</label><input id={`a-end-${st.id}`} type="date" required style={input} value={ask.newEnd} onChange={e => setAsk({ ...ask, newEnd: e.target.value })} /></div>
+                                      ) : <>
+                                        <div><label className="block text-xs mb-1" htmlFor={`a-start-${st.id}`} style={muted}>New start</label><input id={`a-start-${st.id}`} type="date" required style={input} value={ask.newStart} onChange={e => setAsk({ ...ask, newStart: e.target.value })} /></div>
+                                        <div><label className="block text-xs mb-1" htmlFor={`a-days-${st.id}`} style={muted}>Days</label><input id={`a-days-${st.id}`} type="number" min={1} required style={{ ...input, width: 80 }} value={ask.newDays} onChange={e => setAsk({ ...ask, newDays: e.target.value })} /></div>
+                                      </>}
+                                      <div className={ask.kind === "late" ? "sm:col-span-2" : ""}><label className="block text-xs mb-1" htmlFor={`a-why-${st.id}`} style={muted}>Why</label><input id={`a-why-${st.id}`} required style={input} maxLength={500} value={ask.reason} onChange={e => setAsk({ ...ask, reason: e.target.value })} /></div>
+                                      <div className="flex gap-2"><button type="submit" disabled={busy || !ask.reason.trim()} style={{ ...btnSolid, padding: "8px 14px" }}>{ask.kind === "late" ? "Report it" : "Send"}</button><button type="button" onClick={() => setAsk(null)} className="text-sm" style={muted}>Cancel</button></div>
+                                    </form>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+
                       <div className="grid gap-5 sm:grid-cols-2">
                         <div className="min-w-0">
                           <h3 className="m-0 mb-2 text-sm font-bold">Materials for this part</h3>
@@ -218,9 +277,9 @@ export default function MyWork({ initial }: { initial: MyWorkPageData }) {
                         ) : <p className="m-0 text-sm" style={muted}>No photos yet.</p>}
                       </div>
 
-                      <div>
+                      {p.userId === initial.me && <div>
                         <button type="button" disabled={busy} onClick={() => tickPart(p)} style={p.done ? btnLine : btnSolid}>{p.done ? "Not done after all" : `Mark ${p.label} done`}</button>
-                      </div>
+                      </div>}
                     </div>
                   )}
                 </article>

@@ -18,7 +18,7 @@ export async function myWorkViewer(slug: string): Promise<SpaceMember | { error:
 
 /** Builds in this space that the person has a part on (any part, done or not); cancelled builds don't count. */
 export async function myJobIds(userId: number, entityId: number) {
-  const rows = await prisma.buildPart.findMany({ where: { userId, job: { entityId, status: { not: "cancelled" } } }, select: { jobId: true }, distinct: ["jobId"] });
+  const rows = await prisma.buildPart.findMany({ where: { OR: [{ userId }, { stages: { some: { userId } } }], job: { entityId, status: { not: "cancelled" } } }, select: { jobId: true }, distinct: ["jobId"] });
   return rows.map(r => r.jobId);
 }
 
@@ -32,12 +32,18 @@ export async function myJob(v: SpaceMember, rawJobId: string | number) {
 export async function myWork(v: SpaceMember) {
   const since = new Date(Date.now() - DONE_DAYS * DAY);
   const parts = await prisma.buildPart.findMany({
-    where: { userId: v.userId, job: { entityId: v.space.id, status: { not: "cancelled" } }, OR: [{ done: false }, { updatedAt: { gte: since } }] },
+    // Parts planned for them, or with a discipline stage of theirs (workshop calendar)
+    where: { AND: [{ OR: [{ userId: v.userId }, { stages: { some: { userId: v.userId } } }] }, { OR: [{ done: false }, { updatedAt: { gte: since } }] }], job: { entityId: v.space.id, status: { not: "cancelled" } } },
     select: {
-      id: true, jobId: true, label: true, startDate: true, days: true, hours: true, done: true, pencilled: true,
+      id: true, jobId: true, label: true, userId: true, startDate: true, days: true, hours: true, done: true, pencilled: true,
       labourType: { select: { name: true } },
       materials: { select: { id: true, description: true, quantity: true, unit: true }, orderBy: { id: "asc" } },
       machines: { select: { machine: { select: { id: true, name: true } } } },
+      stages: {
+        select: { id: true, startDate: true, days: true, status: true, lateUntil: true, userId: true, discipline: { select: { name: true, color: true } }, user: { select: { name: true } },
+          requests: { where: { status: { in: ["open", "noted"] } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, kind: true, reason: true, newStart: true, newDays: true, newEnd: true, status: true } } },
+        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+      },
     },
     orderBy: [{ done: "asc" }, { startDate: "asc" }, { id: "asc" }],
   });

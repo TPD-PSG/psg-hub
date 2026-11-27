@@ -12,11 +12,21 @@ import type { SpaceTheme } from "@/lib/spaces";
 import { buildStageLabel } from "@/lib/buildStages";
 import { btnLine, btnSolid, caps, card, input, label as lbl, muted, pageHeader } from "@/lib/twsUi";
 
-type Stage = { id: number; partId: number; disciplineId: number; startDate: string | null; days: number; hours: number | null; userId: number | null; status: string; fromQuote: boolean; sortOrder: number; user: { id: number; name: string } | null };
+type Req = { id: number; kind: string; reason: string; newStart: string | null; newDays: number | null; newEnd: string | null; status: string; createdAt: string; by: { id: number; name: string } | null };
+type Stage = { id: number; partId: number; disciplineId: number; startDate: string | null; days: number; hours: number | null; userId: number | null; status: string; fromQuote: boolean; sortOrder: number; user: { id: number; name: string } | null; lateUntil: string | null; requests: Req[] };
 type Part = { id: number; label: string; pencilled: boolean; done: boolean; stages: Stage[] };
-type Job = { id: number; number: string; title: string; stage: string | null; endDate: string | null; deliveryMethod: string | null; client: { name: string } | null; parts: Part[] };
+type Job = {
+  id: number; number: string; title: string; stage: string | null; endDate: string | null; deliveryMethod: string | null; client: { name: string } | null; parts: Part[];
+  drawings: { id: number; number: string | null; title: string; rev: string; status: string; url: string }[];
+  files: { id: number; kind: string; name: string; caption: string | null; url: string }[];
+  links: { id: number; label: string; url: string; kind: string }[];
+};
 type Discipline = { id: number; name: string; color: string | null; sortOrder: number; archived: boolean };
-export type CalendarData = { space: SpaceTheme; from: string; days: number; disciplines: Discipline[]; jobs: Job[]; people: { id: number; name: string; team: boolean }[] };
+export type CalendarData = {
+  space: SpaceTheme; from: string; days: number; disciplines: Discipline[]; jobs: Job[]; people: { id: number; name: string; team: boolean; manager: boolean }[];
+  canDecide: boolean; isAdmin: boolean; managersSet: boolean;
+};
+const LINK_KIND: Record<string, string> = { vectorworks: "VectorWorks", drawing: "Drawing", scenic: "Scenic reference", other: "Link" };
 
 const DAY = 86400e3, COL = 30, LABEL = 280;
 const t = (s: string) => new Date(`${s.slice(0, 10)}T00:00:00Z`).getTime();
@@ -31,7 +41,7 @@ const inkOn = (hex: string) => {
 
 export default function WorkshopCalendar({ initial }: { initial: CalendarData }) {
   const router = useRouter();
-  const { space, people } = initial;
+  const { space, canDecide } = initial;
   const base = `/spaces/${space.slug}`;
   const api = `/api/spaces/${space.slug}`;
   const [jobs, setJobs] = useState(initial.jobs);
@@ -42,6 +52,9 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
   const [adding, setAdding] = useState<number | null>(null); // part getting a new stage
   const [busy, setBusy] = useState(false);
   const [showDisciplines, setShowDisciplines] = useState(false);
+  const [refsOpen, setRefsOpen] = useState<Set<number>>(new Set()); // builds showing their references
+  const [ask, setAsk] = useState<null | { kind: "late" | "reschedule"; newEnd: string; newStart: string; newDays: string; reason: string }>(null);
+  const [people, setPeople] = useState(initial.people);
   const from = t(initial.from), N = initial.days;
   const days = Array.from({ length: N }, (_, i) => from + i * DAY);
   const todayMs = t(new Date().toISOString());
@@ -93,6 +106,34 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
     setJobs(js => js.map(j => ({ ...j, parts: j.parts.map(p => ({ ...p, stages: p.stages.filter(x => x.id !== s.id) })) })));
     setEditing(null);
   }
+
+  // ── Running late / reschedule ─────────────────────────────────────────────
+  async function sendRequest(s: Stage) {
+    if (!ask) return;
+    setBusy(true);
+    const res = await fetch(`${api}/stages/${s.id}/requests`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ask.kind === "late" ? { kind: "late", newEnd: ask.newEnd, reason: ask.reason } : { kind: "reschedule", newStart: ask.newStart, newDays: Number(ask.newDays), reason: ask.reason }) }).catch(() => null);
+    setBusy(false);
+    const d = await res?.json().catch(() => ({}));
+    if (!res?.ok) return alertDialog(d?.error ?? "Couldn't send that");
+    putStage({ ...s, requests: [d, ...s.requests], lateUntil: ask.kind === "late" ? `${ask.newEnd}T00:00:00.000Z` : s.lateUntil });
+    setAsk(null);
+  }
+  async function decide(s: Stage, r: Req, decision: "approved" | "declined") {
+    if (decision === "approved" && !await confirmDialog(`Move ${disc(s.disciplineId)?.name} to ${shortDay(t(r.newStart!))} for ${r.newDays} day${r.newDays === 1 ? "" : "s"}?`)) return;
+    setBusy(true);
+    const res = await fetch(`${api}/stage-requests/${r.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision }) }).catch(() => null);
+    setBusy(false);
+    const d = await res?.json().catch(() => ({}));
+    if (!res?.ok) return alertDialog(d?.error ?? "Couldn't do that");
+    putStage({ ...s, requests: s.requests.filter(x => x.id !== r.id), ...(decision === "approved" ? { startDate: r.newStart, days: r.newDays ?? s.days, lateUntil: null } : {}) });
+  }
+  async function setManager(userId: number, manager: boolean) {
+    const res = await fetch(`${api}/managers`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, manager }) });
+    if (!res.ok) return alertDialog((await res.json().catch(() => ({}))).error ?? "Couldn't change that");
+    setPeople(ps => ps.map(p => (p.id === userId ? { ...p, manager } : p)));
+  }
+  const waiting = allStages.flatMap(s => s.requests.filter(r => r.status === "open").map(r => ({ s, r })));
+  const lateNow = allStages.filter(s => s.lateUntil && s.status !== "done");
 
   // ── Dragging a bar (move) or its right edge (length) ──────────────────────
   const dragRef = useRef<{ id: number; mode: "move" | "size"; x0: number; start: number; days: number; moved: boolean } | null>(null);
@@ -168,6 +209,31 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
           </div>
         </div>
 
+        {/* Requests waiting for a workshop manager, and what's running late */}
+        {(waiting.length > 0 || lateNow.length > 0) && (
+          <section style={{ ...card, padding: 16, borderLeft: "6px solid var(--tws-warn-line)" }} aria-label="Requests and late running">
+            {waiting.length > 0 && <>
+              <h2 className="m-0 text-sm font-extrabold">{canDecide ? "Waiting for you" : "Waiting for a workshop manager"}: {waiting.length} reschedule request{waiting.length === 1 ? "" : "s"}</h2>
+              <ul className="m-0 mt-1 p-0 list-none flex flex-col gap-1 text-sm">
+                {waiting.map(({ s, r }) => {
+                  const j = jobs.find(x => x.parts.some(p => p.id === s.partId))!, p = j.parts.find(x => x.id === s.partId)!;
+                  return <li key={r.id}><button type="button" onClick={() => setEditing(s.id)} className="text-left" style={{ color: "var(--tws-accent-ink)", fontWeight: 700 }}>{disc(s.disciplineId)?.name} · {p.label}</button> <span style={muted}>({j.number}) · {r.by?.name ?? "Someone"} asks for {shortDay(t(r.newStart!))}, {r.newDays} day{r.newDays === 1 ? "" : "s"}: {r.reason}</span></li>;
+                })}
+              </ul>
+            </>}
+            {lateNow.length > 0 && <>
+              <h2 className="m-0 mt-2 text-sm font-extrabold" style={{ color: "var(--tws-bad-ink)" }}>Running late: {lateNow.length}</h2>
+              <ul className="m-0 mt-1 p-0 list-none flex flex-col gap-1 text-sm">
+                {lateNow.map(s => {
+                  const j = jobs.find(x => x.parts.some(p => p.id === s.partId))!, p = j.parts.find(x => x.id === s.partId)!;
+                  const why = s.requests.find(r => r.kind === "late");
+                  return <li key={s.id}><button type="button" onClick={() => setEditing(s.id)} className="text-left" style={{ color: "var(--tws-bad-ink)", fontWeight: 700 }}>{disc(s.disciplineId)?.name} · {p.label}</button> <span style={muted}>({j.number}) · now finishing {shortDay(t(s.lateUntil!))}{why ? `: ${why.reason}` : ""}</span></li>;
+                })}
+              </ul>
+            </>}
+          </section>
+        )}
+
         {/* The timeline */}
         <div style={{ ...card, padding: 0 }} className="overflow-x-auto">
           <div style={{ width: LABEL + N * COL }}>
@@ -202,6 +268,10 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
                       <button type="button" aria-expanded={open} aria-label={`${open ? "Fold" : "Open"} ${j.title}`} onClick={() => setClosed(c => { const n = new Set(c); if (n.has(j.id)) n.delete(j.id); else n.add(j.id); return n; })} className="w-5 shrink-0">{open ? "▾" : "▸"}</button>
                       <Link href={`${base}/jobs/${j.id}`} className="truncate text-sm font-extrabold" style={{ color: "var(--tws-ink)" }} title={`${j.number} ${j.title}${j.client ? ` · ${j.client.name}` : ""}`}>{j.title}</Link>
                       <span className="text-[10px] shrink-0" style={muted}>{j.number}{j.stage ? ` · ${buildStageLabel(j.stage)}` : ""}</span>
+                      {(j.drawings.length + j.files.length + j.links.length) > 0 && (
+                        <button type="button" aria-expanded={refsOpen.has(j.id)} onClick={() => setRefsOpen(c => { const n = new Set(c); if (n.has(j.id)) n.delete(j.id); else n.add(j.id); return n; })}
+                          className="text-[10px] shrink-0 ml-auto font-bold" style={{ color: "var(--tws-accent-ink)" }} title="Drawings, design files and references">Refs {j.drawings.length + j.files.length + j.links.length}</button>
+                      )}
                     </div>
                     <TrackRow grid={grid} h={28}>
                       {jobSpan && (() => { const b = barBox(jobSpan.start, jobSpan.days); return b && <div className="absolute" style={{ left: b.left, width: b.width, top: 11, height: 6, background: "var(--tws-char)", opacity: 0.35 }} />; })()}
@@ -209,6 +279,14 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
                     </TrackRow>
                   </div>
 
+                  {refsOpen.has(j.id) && (
+                    <div className="px-7 py-2 text-xs flex flex-wrap gap-x-5 gap-y-1" style={{ background: "var(--tws-card)", borderTop: "1px solid var(--tws-line)", width: LABEL + N * COL }}>
+                      {j.drawings.map(d => <a key={`d${d.id}`} href={d.url} target="_blank" rel="noopener" style={{ color: "var(--tws-accent-ink)", fontWeight: 600 }}>Drawing {d.number ? `${d.number} ` : ""}{d.title} rev {d.rev}{d.status === "approved" ? " ✓" : d.status === "changes" ? " (changes asked)" : " (not signed off)"}</a>)}
+                      {j.files.map(f => <a key={`f${f.id}`} href={f.url} target="_blank" rel="noopener" style={{ color: "var(--tws-accent-ink)", fontWeight: 600 }}>{f.kind === "modelbox" ? "Model box" : "Design"}: {f.caption || f.name}</a>)}
+                      {j.links.map(l => <a key={`l${l.id}`} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--tws-accent-ink)", fontWeight: 600 }}>{LINK_KIND[l.kind] ?? "Link"}: {l.label} ↗</a>)}
+                      <Link href={`${base}/jobs/${j.id}`} style={muted}>Add references on the build →</Link>
+                    </div>
+                  )}
                   {open && j.parts.map(p => {
                     const pSpan = span(p.stages);
                     return (
@@ -247,9 +325,22 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
                                 <span className="inline-block w-2.5 h-2.5 shrink-0" style={{ background: c }} />
                                 <button type="button" onClick={() => setEditing(editing === s.id ? null : s.id)} className="truncate text-left" style={{ fontWeight: editing === s.id ? 800 : 600 }}>{d?.name ?? "Stage"}</button>
                                 <span className="truncate" style={muted}>{s.user?.name ?? ""}</span>
+                                {s.lateUntil && s.status !== "done" && <span className="shrink-0 font-bold" style={{ color: "var(--tws-bad-ink)" }} title={`Running late: now finishing ${shortDay(t(s.lateUntil))}`}>late</span>}
+                                {s.requests.some(r => r.status === "open") && <span className="shrink-0 font-bold" style={{ color: "var(--tws-warn-ink)" }} title="Reschedule asked">⇄</span>}
                                 {!s.startDate && <span className="ml-auto shrink-0 italic" style={muted}>click a day</span>}
                               </div>
                               <TrackRow grid={grid} h={26} onDayClick={!s.startDate ? ms => save(s.id, { startDate: iso(ms) }) : undefined}>
+                                {/* Running late: hatched red from the planned end to the new expected finish */}
+                                {s.lateUntil && s.status !== "done" && startMs != null && (() => {
+                                  const end = startMs + len * DAY, late = t(s.lateUntil) + DAY;
+                                  const lb = late > end ? barBox(end, Math.round((late - end) / DAY)) : null;
+                                  return lb && <div className="absolute" title={`Running late: now finishing ${shortDay(t(s.lateUntil))}`} style={{ left: lb.left, width: lb.width, top: 6, height: 14, background: "repeating-linear-gradient(135deg, var(--tws-bad-ink) 0 3px, transparent 3px 7px)", border: "1px solid var(--tws-bad-ink)" }} />;
+                                })()}
+                                {/* A reschedule waiting: the proposed dates as a dashed outline */}
+                                {s.requests.filter(r => r.status === "open" && r.newStart).map(r => {
+                                  const pb = barBox(t(r.newStart!), r.newDays ?? s.days);
+                                  return pb && <div key={r.id} className="absolute pointer-events-none" title="Proposed new dates" style={{ left: pb.left, width: pb.width, top: 2, height: 22, border: "2px dashed var(--tws-warn-line)" }} />;
+                                })}
                                 {b && startMs != null && (
                                   <div role="button" tabIndex={0} aria-label={`${d?.name}: ${shortDay(startMs)}, ${len} day${len === 1 ? "" : "s"}${s.user ? `, ${s.user.name}` : ""}, ${STATUS[s.status]}`}
                                     onPointerDown={e => onBarDown(e, s, "move")} onPointerMove={onBarMove} onPointerUp={() => onBarUp(s)}
@@ -260,7 +351,7 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
                                       left: b.left, width: b.width, top: 3, height: 20, cursor: "grab",
                                       background: done ? `repeating-linear-gradient(135deg, ${c} 0 4px, ${c}99 4px 8px)` : c,
                                       color: inkOn(c), opacity: done ? 0.55 : s.status === "todo" ? 0.85 : 1,
-                                      outline: s.status === "on" ? "2px solid var(--tws-char)" : editing === s.id ? "2px solid var(--tws-accent)" : undefined,
+                                      outline: s.lateUntil && s.status !== "done" ? "2px solid var(--tws-bad-ink)" : s.status === "on" ? "2px solid var(--tws-char)" : editing === s.id ? "2px solid var(--tws-accent)" : undefined,
                                       borderRadius: 2, paddingLeft: 5,
                                     }}>
                                     <span className="truncate">{done ? "✓ " : ""}{b.width > 60 ? (s.user?.name ?? d?.name) : ""}</span>
@@ -302,7 +393,7 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
             <section style={{ ...card, position: "sticky", bottom: 12, zIndex: 20, boxShadow: "0 6px 24px rgba(0,0,0,0.18)" }} aria-label="Change this stage">
               <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
                 <h2 className="m-0 text-base font-extrabold">{disc(s.disciplineId)?.name} · {part.label} <span className="font-normal text-sm" style={muted}>· {job.number} {job.title}</span></h2>
-                <button type="button" onClick={() => setEditing(null)} className="text-sm" style={muted}>Close</button>
+                <button type="button" onClick={() => { setEditing(null); setAsk(null); }} className="text-sm" style={muted}>Close</button>
               </div>
               <div className="grid gap-3 grid-cols-2 md:grid-cols-6 items-end">
                 <div><label htmlFor="st-disc" style={lbl}>Discipline</label>
@@ -317,6 +408,38 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
                   <select id="st-who" style={input} value={s.userId ?? ""} onChange={e => save(s.id, { userId: e.target.value || null })}><option value="">No one yet</option>{people.map(p => <option key={p.id} value={p.id}>{p.name}{p.team ? "" : " (PSG)"}</option>)}</select></div>
                 <div><label htmlFor="st-status" style={lbl}>Status</label>
                   <select id="st-status" style={input} value={s.status} onChange={e => save(s.id, { status: e.target.value })}>{Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+              </div>
+              {/* Running late / reschedule */}
+              <div className="mt-4 pt-3 flex flex-col gap-2" style={{ borderTop: "1px solid var(--tws-line)" }}>
+                {s.requests.map(r => (
+                  <div key={r.id} className="text-sm flex flex-wrap items-center gap-2">
+                    <span className="font-bold" style={{ color: r.kind === "late" ? "var(--tws-bad-ink)" : "var(--tws-warn-ink)" }}>{r.kind === "late" ? "Running late" : "Reschedule asked"}</span>
+                    <span style={muted}>{r.by?.name ?? "Someone"}, {shortDay(t(r.createdAt))}: {r.kind === "late" ? `now finishing ${shortDay(t(r.newEnd!))}` : `${shortDay(t(r.newStart!))} for ${r.newDays} day${r.newDays === 1 ? "" : "s"}`}. {r.reason}</span>
+                    {r.status === "open" && canDecide && <>
+                      <button type="button" disabled={busy} onClick={() => decide(s, r, "approved")} style={{ ...btnSolid, padding: "4px 10px", fontSize: 12 }}>Approve and move it</button>
+                      <button type="button" disabled={busy} onClick={() => decide(s, r, "declined")} style={{ ...btnLine, padding: "4px 10px", fontSize: 12 }}>Decline</button>
+                    </>}
+                    {r.status === "open" && !canDecide && <span className="text-xs italic" style={muted}>waiting for a workshop manager</span>}
+                  </div>
+                ))}
+                {!ask ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setAsk({ kind: "late", newEnd: iso((s.startDate ? t(s.startDate) : todayMs) + s.days * DAY), newStart: "", newDays: "", reason: "" })} style={{ ...btnLine, padding: "6px 12px", fontSize: 13 }}>Running late</button>
+                    {!s.requests.some(r => r.status === "open") && <button type="button" onClick={() => setAsk({ kind: "reschedule", newEnd: "", newStart: s.startDate?.slice(0, 10) ?? iso(todayMs), newDays: String(s.days), reason: "" })} style={{ ...btnLine, padding: "6px 12px", fontSize: 13 }}>Ask to reschedule</button>}
+                  </div>
+                ) : (
+                  <form className="grid gap-2 grid-cols-2 md:grid-cols-[auto_auto_1fr_auto_auto] items-end" onSubmit={e => { e.preventDefault(); void sendRequest(s); }}>
+                    {ask.kind === "late" ? (
+                      <div><label htmlFor="rq-end" style={lbl}>Now finishing</label><input id="rq-end" type="date" required style={input} value={ask.newEnd} onChange={e => setAsk({ ...ask, newEnd: e.target.value })} /></div>
+                    ) : <>
+                      <div><label htmlFor="rq-start" style={lbl}>New start</label><input id="rq-start" type="date" required style={input} value={ask.newStart} onChange={e => setAsk({ ...ask, newStart: e.target.value })} /></div>
+                      <div><label htmlFor="rq-days" style={lbl}>Days</label><input id="rq-days" type="number" min={1} required style={{ ...input, width: 80 }} value={ask.newDays} onChange={e => setAsk({ ...ask, newDays: e.target.value })} /></div>
+                    </>}
+                    <div className={ask.kind === "late" ? "md:col-span-2" : ""}><label htmlFor="rq-why" style={lbl}>Why</label><input id="rq-why" required style={input} value={ask.reason} maxLength={500} onChange={e => setAsk({ ...ask, reason: e.target.value })} placeholder={ask.kind === "late" ? "e.g. Waiting on steel delivery" : "e.g. CNC down until Thursday"} /></div>
+                    <button type="submit" disabled={busy || !ask.reason.trim()} style={{ ...btnSolid, padding: "8px 14px" }}>{ask.kind === "late" ? "Report it" : "Send request"}</button>
+                    <button type="button" onClick={() => setAsk(null)} className="text-sm" style={muted}>Cancel</button>
+                  </form>
+                )}
               </div>
               <div className="flex flex-wrap gap-3 mt-3 items-center text-sm">
                 {s.startDate && <span style={muted}>{shortDay(t(s.startDate))} → {shortDay(t(s.startDate) + (s.days - 1) * DAY)}</span>}
@@ -335,6 +458,24 @@ export default function WorkshopCalendar({ initial }: { initial: CalendarData })
           </div>
           <p className="m-0 mt-1 text-sm" style={muted}>The stages a piece can go through. A quote&apos;s labour line named after one (e.g. &ldquo;Carpentry&rdquo; or &ldquo;CNC cutting&rdquo;) becomes that stage on the item&apos;s piece.</p>
           {showDisciplines && <DisciplineEditor api={api} list={disciplines} onChange={setDisciplines} />}
+        </section>
+
+        {/* Workshop managers: who decides reschedule requests and hears about late running */}
+        <section style={card}>
+          <h2 className="m-0 text-base font-extrabold">Workshop managers</h2>
+          <p className="m-0 mt-1 text-sm" style={muted}>
+            They hear when something&apos;s running late and decide reschedule requests.{" "}
+            {people.some(p => p.manager) ? "" : "None chosen yet, so every admin does."}{initial.isAdmin ? "" : " Admins choose them."}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            {(initial.isAdmin ? people.filter(p => p.team || p.manager) : people.filter(p => p.manager)).map(p => (
+              <label key={p.id} className="flex items-center gap-1.5">
+                {initial.isAdmin && <input type="checkbox" checked={p.manager} onChange={e => setManager(p.id, e.target.checked)} />}
+                {p.name}
+              </label>
+            ))}
+            {initial.isAdmin && !people.some(p => p.team) && <span style={muted}>No one has this workshop as their company yet (Admin → Users).</span>}
+          </div>
         </section>
       </div>
     </>

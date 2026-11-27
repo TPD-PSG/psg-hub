@@ -7,5 +7,5 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const v = await myWorkViewer((await params).slug);
   if ("error" in v) return v.error;
-  return NextResponse.json({ space: v.space, ...(await myWork(v)) });
+  return NextResponse.json({ space: v.space, me: v.userId, ...(await myWork(v)) });
 }

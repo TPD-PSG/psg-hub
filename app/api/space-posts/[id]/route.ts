@@ -13,7 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const m = await memberOfEntity(post.entityId);
   if ("error" in m) return m.error;
   if (!m.staff) return NextResponse.json({ error: "Only PSG staff can pin posts" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   return NextResponse.json(await prisma.spacePost.update({ where: { id: post.id }, data: { pinned: !!body.pinned }, select: { id: true, pinned: true } }));
 }
 

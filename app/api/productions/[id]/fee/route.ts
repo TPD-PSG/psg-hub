@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
 import { parseStages } from "@/lib/feeStages";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 const staffOnly = (role: string) => (role === "admin" || role === "member" ? null : NextResponse.json({ error: "PSG staff only" }, { status: 403 }));
 
@@ -36,13 +37,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const denied = staffOnly(access.role);
   if (denied) return denied;
   const productionId = Number(id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const pmFee = body.pmFee === "" || body.pmFee == null ? null : Number(body.pmFee);
   if (pmFee != null && (!Number.isFinite(pmFee) || pmFee < 0)) return NextResponse.json({ error: "PM fee must be an amount" }, { status: 400 });
   const parsed = parseStages(body.stages ?? []);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
   if (!(await prisma.production.count({ where: { id: productionId } }))) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const day = (v: string | null) => (v ? new Date(v) : null);
+  const day = (v: string | null) => ((toDate(v) ?? null));
   await prisma.$transaction([
     prisma.production.update({ where: { id: productionId }, data: { pmFee } }),
     prisma.feeStage.deleteMany({ where: { productionId } }),

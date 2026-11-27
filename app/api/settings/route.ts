@@ -19,7 +19,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const { key, value } = body;
   if (!key) return NextResponse.json({ error: "key required" }, { status: 400 });
   const setting = await prisma.setting.upsert({
@@ -33,7 +33,7 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const { key } = await req.json();
+  const { key } = await req.json().catch(() => ({}));
   await prisma.setting.deleteMany({ where: { key } });
   return NextResponse.json({ ok: true });
 }

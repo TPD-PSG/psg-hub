@@ -254,7 +254,7 @@ function SidebarInner() {
 
   function toggleCalProd(id: number) {
     const next = new Set(hiddenProdIds);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) next.delete(id); else next.add(id);
     const params = new URLSearchParams(searchParams.toString());
     if (next.size) params.set("hideProds", [...next].join(","));
     else params.delete("hideProds");
@@ -263,7 +263,7 @@ function SidebarInner() {
 
   function toggleCalType(key: string) {
     const next = new Set(hiddenTypeKeys);
-    next.has(key) ? next.delete(key) : next.add(key);
+    if (next.has(key)) next.delete(key); else next.add(key);
     const params = new URLSearchParams(searchParams.toString());
     if (next.size) params.set("hideTypes", [...next].join(","));
     else params.delete("hideTypes");

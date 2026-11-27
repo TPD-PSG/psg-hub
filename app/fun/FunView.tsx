@@ -165,7 +165,7 @@ export default function FunView({ initial }: { initial: FunInitial }) {
   }
 
   function toggleRoundup(id: number) {
-    setOpenRoundups(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setOpenRoundups(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }
 
   const inp = "w-full rounded-lg px-3 py-2.5 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";

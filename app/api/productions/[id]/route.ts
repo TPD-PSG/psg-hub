@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { requireProductionAccess } from "@/lib/access";
 import { removeFile } from "@/lib/storage";
 import { loadProductionForViewer } from "@/lib/productionData";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,7 +18,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const role = (session?.user as any)?.role ?? "member";
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const production = await prisma.production.update({
     where: { id: Number(id) },
     data: {
@@ -26,8 +27,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       venue: body.venue || null,
       venueId: body.venueId ? Number(body.venueId) : null,
       isTour: body.isTour ?? false,
-      startDate: body.startDate ? new Date(body.startDate) : null,
-      endDate: body.endDate ? new Date(body.endDate) : null,
+      startDate: (toDate(body.startDate) ?? null),
+      endDate: (toDate(body.endDate) ?? null),
       status: body.status,
       announcementStatus: body.announcementStatus || "not_announced",
       internalStatus: body.internalStatus || "pencil",
@@ -50,7 +51,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const role = (session?.user as any)?.role ?? "member";
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const data: Record<string, unknown> = {};
   if (typeof body.archived === "boolean") {
     data.archived = body.archived;

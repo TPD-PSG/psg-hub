@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const access = await requireProductionAccess(id, "notes");
   if ("error" in access) return access.error;
-  const { ids } = await req.json(); // ordered array of note ids
+  const { ids } = await req.json().catch(() => ({})); // ordered array of note ids
   await Promise.all((ids as number[]).map((noteId: number, index: number) =>
     prisma.productionNote.updateMany({ where: { id: noteId, productionId: Number(id) }, data: { order: index } })
   ));
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in access) return access.error;
   if (access.role !== "admin" && access.role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const userId = access.userId;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const note = await prisma.productionNote.create({
     data: {
       productionId: Number(id),

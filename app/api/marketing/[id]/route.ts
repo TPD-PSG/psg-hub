@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   const post = await prisma.marketingPost.update({
     where: { id: Number(id) },
@@ -17,8 +18,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       caption: body.caption !== undefined ? (body.caption || null) : undefined,
       platforms: body.platforms !== undefined ? JSON.stringify(body.platforms) : undefined,
       status: body.status ?? undefined,
-      scheduledAt: body.scheduledAt !== undefined ? (body.scheduledAt ? new Date(body.scheduledAt) : null) : undefined,
-      publishedAt: body.publishedAt !== undefined ? (body.publishedAt ? new Date(body.publishedAt) : null) : undefined,
+      scheduledAt: body.scheduledAt !== undefined ? ((toDate(body.scheduledAt) ?? null)) : undefined,
+      publishedAt: body.publishedAt !== undefined ? ((toDate(body.publishedAt) ?? null)) : undefined,
       productionId: body.productionId !== undefined ? (body.productionId ? Number(body.productionId) : null) : undefined,
       imageUrl: body.imageUrl !== undefined ? (body.imageUrl || null) : undefined,
       link: body.link !== undefined ? (body.link || null) : undefined,

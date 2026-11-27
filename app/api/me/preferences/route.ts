@@ -14,7 +14,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const data = await req.json();
+  const data = await req.json().catch(() => ({}));
   await prisma.user.update({
     where: { email: session.user.email },
     data: { preferences: JSON.stringify(data) },

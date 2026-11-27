@@ -7,6 +7,7 @@ import { digestLine, mondayOf } from "@/lib/showDigestCore";
 import { allLeads, incidentPath, localStaff } from "@/lib/incidents";
 import { checkState, KIND_LABEL as CHECK_LABEL } from "@/lib/equipmentCore";
 import { REMIND_DAYS } from "@/lib/complianceCore";
+import { ukDay, daysUntilUk } from "@/lib/dateRules";
 import { incidentRef } from "@/lib/incidentsCore";
 
 export const dynamic = "force-dynamic";
@@ -52,9 +53,8 @@ async function runDaily(req: NextRequest): Promise<Response> {
     try { await fn(); } catch (e) { failed.push(name); console.error(`[notify-daily] section ${name} failed:`, e instanceof Error ? e.message : e); }
   };
   // Shared by several sections
-  const ukDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(d); // YYYY-MM-DD
   const todayUk = ukDay(now);
-  const daysUntil = (d: Date) => Math.round((Date.parse(ukDay(d)) - Date.parse(todayUk)) / 86400e3);
+  const daysUntil = (d: Date) => daysUntilUk(d, now); // UK calendar days, the shared rule (lib/dateRules)
   const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
   const isMondayUk = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Europe/London" }).format(now) === "Monday";
   // Stage reminders (audit round 2): rather than firing only on an exact day (so a missed run lost

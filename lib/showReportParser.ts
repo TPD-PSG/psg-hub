@@ -76,6 +76,7 @@ export async function parseShowReportPdf(base64: string, hint: { subject?: strin
     hint.filename ? `${hint.oneOfSeveral ? "This PDF is one of several attached to that email; its" : "The"} filename is: "${hint.filename}".` : "",
   ].filter(Boolean).join(" ");
   const { reports } = await extractJson<{ reports: ParsedReport[] }>({
+      feature: "show-report",
     model: "claude-sonnet-5-5",
     content: [pdfBlock(base64), { type: "text", text: PROMPT(source) + `\n\nToday is ${ref.toISOString().slice(0, 10)} (${ref.toLocaleDateString("en-GB", { weekday: "long" })}). Reports often give a date without a year: use the weekday to choose the year, and never a date more than a week after today.` }],
     schema: REPORT_SCHEMA,

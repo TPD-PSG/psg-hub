@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { money } from "@/lib/parse";
+import { money, toDate } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const todo = await prisma.invoiceTodo.update({
     where: { id: Number(id) },
     data: {
@@ -17,7 +17,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       description: body.description ?? undefined,
       productionId: body.productionId !== undefined ? (body.productionId ? Number(body.productionId) : null) : undefined,
       amount: body.amount !== undefined ? money(body.amount) : undefined,
-      dueDate: body.dueDate !== undefined ? (body.dueDate ? new Date(body.dueDate) : null) : undefined,
+      dueDate: body.dueDate !== undefined ? ((toDate(body.dueDate) ?? null)) : undefined,
       notes: body.notes !== undefined ? (body.notes || null) : undefined,
       done: body.done !== undefined ? Boolean(body.done) : undefined,
     },

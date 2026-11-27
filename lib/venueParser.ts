@@ -106,6 +106,7 @@ export async function fileToContent(buffer: ArrayBuffer, filename: string, mime:
 /** Venue details, contacts and tech spec from a venue pack / tech spec document. */
 export async function parseVenueDocument(doc: Anthropic.Beta.BetaContentBlockParam): Promise<ParsedVenue> {
   const raw = await extractJson<Omit<ParsedVenue, "techSpecs"> & { techSpecs: SpecEntry[] }>({
+      feature: "venue-pack",
     model: "claude-sonnet-5-5",
     content: [doc, {
       type: "text",
@@ -119,6 +120,7 @@ export async function parseVenueDocument(doc: Anthropic.Beta.BetaContentBlockPar
 /** Just the technical specification. */
 export async function parseTechSpec(doc: Anthropic.Beta.BetaContentBlockParam): Promise<TechSpecs> {
   const raw = await extractJson<{ techSpecs: SpecEntry[] }>({
+      feature: "venue-spec",
     model: "claude-sonnet-5-5",
     content: [doc, { type: "text", text: `This is a venue technical specification. Extract its details. ${SPEC_INSTRUCTIONS}` }],
     schema: TECH_SPECS_SCHEMA,

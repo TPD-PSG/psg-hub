@@ -6,7 +6,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const item = await prisma.propertyContact.update({
     where: { id: Number(id) },
     data: { name: body.name, role: body.role, phone: body.phone || null, email: body.email || null, notes: body.notes || null },

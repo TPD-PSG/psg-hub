@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { money } from "@/lib/parse";
+import { money, toDate } from "@/lib/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const expense = await prisma.productionExpense.update({
     where: { id: Number(id) },
     data: {
@@ -31,7 +31,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       supplier: body.supplier ?? undefined,
       netAmount: body.netAmount !== undefined ? (money(body.netAmount) ?? 0) : undefined,
       vatAmount: body.vatAmount !== undefined ? (money(body.vatAmount) ?? 0) : undefined,
-      date: body.date ? new Date(body.date) : body.date === "" ? null : undefined,
+      date: body.date ? toDate(body.date) : body.date === "" ? null : undefined,
       paymentMethod: body.paymentMethod ?? undefined,
       status: body.status ?? undefined,
       reference: body.reference ?? undefined,

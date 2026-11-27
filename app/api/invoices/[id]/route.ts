@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { money } from "@/lib/parse";
+import { money, toDate } from "@/lib/parse";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if ((session.user as any).role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const invoice = await prisma.companyInvoice.update({
     where: { id: Number(id) },
     data: {
@@ -19,8 +19,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       production: body.production ?? undefined,
       netAmount: body.netAmount !== undefined ? (money(body.netAmount) ?? 0) : undefined,
       vatAmount: body.vatAmount !== undefined ? (money(body.vatAmount) ?? 0) : undefined,
-      issueDate: body.issueDate ? new Date(body.issueDate) : body.issueDate === "" ? null : undefined,
-      dueDate: body.dueDate ? new Date(body.dueDate) : body.dueDate === "" ? null : undefined,
+      issueDate: body.issueDate ? toDate(body.issueDate) : body.issueDate === "" ? null : undefined,
+      dueDate: body.dueDate ? toDate(body.dueDate) : body.dueDate === "" ? null : undefined,
       status: body.status ?? undefined,
       notes: body.notes ?? undefined,
     },

@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in access) return access.error;
   if (access.role !== "admin" && access.role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const userId = access.userId;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const badDate = missingDates(body, ["meetingDate"]);
   if (badDate) return badDate;
   const meeting = await prisma.meeting.create({

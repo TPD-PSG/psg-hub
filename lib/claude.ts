@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { prisma } from "@/lib/prisma";
 
 // One client for the whole app (reads ANTHROPIC_API_KEY from the environment)
 export const claude = new Anthropic();
@@ -27,7 +28,21 @@ type BaseOptions = {
   maxTokens?: number;
   // Extraction jobs work well at low effort and stay inside Railway's 60s request limit
   effort?: Effort;
+  // Which feature this is for, for the usage record (Hub Settings → System Status)
+  feature?: string;
 };
+
+/** Record a call's tokens by feature (audit round 2). Never throws: a usage row mustn't break the job. */
+function recordUsage(feature: string, model: string, usage: Anthropic.Beta.BetaUsage | undefined, ok: boolean) {
+  if (!usage) return;
+  prisma.aiUsage.create({
+    data: {
+      feature, model, ok,
+      inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0,
+      cacheReadTokens: usage.cache_read_input_tokens ?? 0, cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+    },
+  }).catch(() => {});
+}
 
 // Sends the request as a stream (no HTTP timeouts on long replies) and checks why it stopped.
 async function run(opts: BaseOptions & { format?: Anthropic.Beta.BetaJSONOutputFormat }) {
@@ -45,6 +60,7 @@ async function run(opts: BaseOptions & { format?: Anthropic.Beta.BetaJSONOutputF
     ...(usesFallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
   });
   const message = await stream.finalMessage();
+  recordUsage(opts.feature ?? "other", message.model ?? opts.model, message.usage, message.stop_reason !== "refusal" && message.stop_reason !== "max_tokens");
 
   if (message.stop_reason === "refusal") {
     throw new ClaudeOutputError("Claude declined to process this document.", "refusal");

@@ -32,7 +32,7 @@ export default function Tablet({ initial }: { initial: TabletData }) {
 
   // Refresh who's on every minute; back to the names after 90s idle
   useEffect(() => {
-    const t = setInterval(async () => { const d = await fetch(`/api/spaces/${space.slug}/tablet`).then(r => (r.ok ? r.json() : null)).catch(() => null); if (d?.team) setData(d); }, 60e3);
+    const t = setInterval(async () => { if (document.hidden) return; const d = await fetch(`/api/spaces/${space.slug}/tablet`).then(r => (r.ok ? r.json() : null)).catch(() => null); if (d?.team) setData(d); }, 60e3);
     return () => clearInterval(t);
   }, [space.slug]);
   useEffect(() => { if (who == null) return; const t = setTimeout(() => done(null), 90e3); return () => clearTimeout(t); }, [who, mode]);

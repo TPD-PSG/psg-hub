@@ -7,6 +7,7 @@ import { requireJobViewer, loadJob } from "@/lib/jobData";
 import { isBuildStage } from "@/lib/buildStages";
 import { gateBlockers, GATED_STAGES } from "@/lib/drawings";
 import { confirmPencils } from "@/lib/buildParts";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const outOfScope = await denyOutOfScope("job", (await params).id); // companies they can see
@@ -16,7 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const id = parseInt((await params).id);
   const job = await prisma.job.findUnique({ where: { id }, select: { stage: true } });
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
   const data: Record<string, unknown> = {};
   if (has("stage")) {
@@ -38,7 +39,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     if (body.stage !== job.stage) { data.stage = body.stage; data.stageChangedAt = new Date(); }
   }
-  const date = (v: unknown) => (typeof v === "string" && v ? new Date(v) : null);
+  const date = (v: unknown) => (typeof v === "string" && (toDate(v) ?? null));
   if (has("dueOut")) data.endDate = date(body.dueOut);
   if (has("startDate")) data.startDate = date(body.startDate);
   if (has("deliveryMethod")) {

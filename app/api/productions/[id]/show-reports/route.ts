@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const access = await requireProductionAccess(id, "reports");
   if ("error" in access) return access.error;
   const userId = access.userId;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const badDate = missingDates(body, ["reportDate"]);
   if (badDate) return badDate;
   const report = await prisma.showReport.create({

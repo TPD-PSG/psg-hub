@@ -7,7 +7,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const access = await requireProductionAccess(id, "haulage");
   if ("error" in access) return access.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const badDate = missingDates(body, ["departureAt"]);
   if (badDate) return badDate;
   const movement = await prisma.haulageMovement.create({
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       fromLocation:   body.fromLocation,
       toLocation:     body.toLocation,
       departureAt:    toDate(body.departureAt)!,
-      arrivalAt:      body.arrivalAt ? new Date(body.arrivalAt) : null,
+      arrivalAt:      (toDate(body.arrivalAt) ?? null),
       cargo:          body.cargo || null,
       notes:          body.notes || null,
       estimatedCost:  money(body.estimatedCost),

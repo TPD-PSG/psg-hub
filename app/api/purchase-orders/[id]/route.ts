@@ -16,7 +16,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const po = await load(id);
   if (!po) return bad("Not found", 404);
   if (!(await canSeeCompanyRecord({ id: u.userId, role: u.role }, po.entityId))) return bad("This space isn't yours", 403);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const action = body.action as string;
   const now = new Date();
 

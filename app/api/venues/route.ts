@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const venue = await prisma.venue.create({
     data: {
       name: body.name,

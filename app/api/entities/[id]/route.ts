@@ -8,7 +8,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = parseInt((await params).id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const data: { name?: string; archived?: boolean; sortOrder?: number; hasSpace?: boolean; slug?: string | null; shortName?: string | null; color?: string | null } = {};
   if (typeof body.name === "string") {
     const name = body.name.trim();

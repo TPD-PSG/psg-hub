@@ -166,7 +166,7 @@ export default function ContactsTab({ prod, setProd }: TabProps) {
             <div>
               <div className="font-semibold text-white text-sm">Review imported contacts</div>
               <div className="text-xs mt-0.5" style={{ color: "var(--psg-muted)" }}>
-                {importedContacts.filter(c => c._selected).length} of {importedContacts.length} selected — deselect any you don't want to import
+                {importedContacts.filter(c => c._selected).length} of {importedContacts.length} selected — deselect any you don&apos;t want to import
               </div>
             </div>
             <div className="flex gap-2">
@@ -182,7 +182,7 @@ export default function ContactsTab({ prod, setProd }: TabProps) {
           </div>
           {importedContacts.some(c => contacts.some(ex => ex.name.toLowerCase() === c.name.toLowerCase())) && (
             <div className="text-xs rounded-lg px-3 py-2 flex items-center gap-2" style={{ backgroundColor: "rgba(234,179,8,0.1)", color: "#fde047" }}>
-              ⚠ Some names already exist in this production's contacts — duplicates are highlighted below. Deselect them if you don't want to add again.
+              ⚠ Some names already exist in this production&apos;s contacts — duplicates are highlighted below. Deselect them if you don&apos;t want to add again.
             </div>
           )}
           <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
@@ -314,8 +314,8 @@ export default function ContactsTab({ prod, setProd }: TabProps) {
         <Modal title="Contact sheet sections" onClose={() => { setShowSectionsModal(false); setNewSectionName(""); }}>
           <div className="space-y-5">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-white">This production's sections</p>
-              <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Show on the contact sheet even before anyone is in them. Removing one doesn't delete its contacts.</p>
+              <p className="text-sm font-medium text-white">This production&apos;s sections</p>
+              <p className="text-xs" style={{ color: "var(--psg-muted)" }}>Show on the contact sheet even before anyone is in them. Removing one doesn&apos;t delete its contacts.</p>
               {prodSections.length === 0 && <p className="text-xs italic" style={{ color: "var(--psg-muted)" }}>None yet.</p>}
               <div className="space-y-1">
                 {prodSections.map((s, i) => (

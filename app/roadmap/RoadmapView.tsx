@@ -162,7 +162,7 @@ export default function RoadmapView({ initial }: { initial: RoadmapItem[] | null
                       <div key={item.id} className="rounded-lg border group overflow-hidden" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "var(--psg-card-bg)" }}>
                         <button
                           className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
-                          onClick={() => setExpandedDone(s => { const n = new Set(s); isExpanded ? n.delete(item.id) : n.add(item.id); return n; })}
+                          onClick={() => setExpandedDone(s => { const n = new Set(s); if (isExpanded) n.delete(item.id); else n.add(item.id); return n; })}
                         >
                           <span className="text-xs" style={{ color: "var(--psg-muted)" }}>{isExpanded ? "▾" : "▸"}</span>
                           <span className="text-xs font-medium text-white flex-1 truncate">{item.title}</span>

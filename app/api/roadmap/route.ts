@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = Number((session.user as any).id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const item = await prisma.roadmapItem.create({
     data: {
       title: body.title,

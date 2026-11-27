@@ -35,17 +35,18 @@ export default function SystemStatus({ initialJobs = null, initialAttention = nu
   const [jobs, setJobs] = useState<JobStatus[] | null>(initialJobs);
   const [attention, setAttention] = useState<Attention | null>(initialAttention);
   const [error, setError] = useState<string | null>(null);
+  const [ai, setAi] = useState<{ feature: string; calls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number }[] | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/admin/status")
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(d => { setJobs(d.jobs); setAttention(d.attention ?? null); setError(null); })
+      .then(d => { setJobs(d.jobs); setAttention(d.attention ?? null); setAi(d.aiUsage ?? null); setError(null); })
       .catch(e => setError(e.message));
   }, []);
 
   useEffect(() => {
-    if (!initialJobs) load(); // otherwise it arrived with the page
-    const t = setInterval(load, 60_000);
+    load(); // jobs may have arrived with the page; this also brings the AI usage
+    const t = setInterval(() => { if (!document.hidden) load(); }, 60_000); // not while the tab is hidden
     return () => clearInterval(t);
   }, [load, initialJobs]);
 
@@ -116,6 +117,23 @@ export default function SystemStatus({ initialJobs = null, initialAttention = nu
               })}
             </ul>
           </div>
+        </details>
+      )}
+      {ai && (
+        <details className="rounded-lg border px-4 py-3" style={{ borderColor: "var(--psg-card-border)" }}>
+          <summary className="text-sm font-medium text-white cursor-pointer">AI use, last 30 days <span className="font-normal" style={{ color: "var(--psg-muted)" }}>· {ai.reduce((n, r) => n + r.calls, 0)} calls</span></summary>
+          {ai.length === 0 ? <p className="text-xs mt-2" style={{ color: "var(--psg-muted)" }}>No AI calls recorded yet.</p> : (
+            <div className="overflow-x-auto mt-2">
+              <table className="w-full text-xs" style={{ minWidth: 420 }}>
+                <thead><tr style={{ color: "var(--psg-muted)" }}><th className="text-left py-1 font-semibold">Feature</th><th className="text-right py-1 font-semibold">Calls</th><th className="text-right py-1 font-semibold">Tokens in</th><th className="text-right py-1 font-semibold">Tokens out</th><th className="text-right py-1 font-semibold">From cache</th></tr></thead>
+                <tbody>{ai.map(r => (
+                  <tr key={r.feature} className="text-white" style={{ borderTop: "1px solid var(--psg-card-border)" }}>
+                    <td className="py-1">{r.feature}</td><td className="py-1 text-right tabular-nums">{r.calls}</td><td className="py-1 text-right tabular-nums">{r.inputTokens.toLocaleString("en-GB")}</td><td className="py-1 text-right tabular-nums">{r.outputTokens.toLocaleString("en-GB")}</td><td className="py-1 text-right tabular-nums">{r.cacheReadTokens.toLocaleString("en-GB")}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
         </details>
       )}
     </div>

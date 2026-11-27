@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   const role = (session?.user as any)?.role ?? "member";
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const monthYear: string = body.monthYear; // e.g. "2026-11"
 
   // Only approved, pending submissions go into the roundup

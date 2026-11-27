@@ -132,6 +132,7 @@ Skip any row with no name. Include every named person. Use null for details that
   let extracted: Extracted[];
   try {
     ({ contacts: extracted } = await extractJson<{ contacts: Extracted[] }>({
+      feature: "contacts",
       model: "claude-sonnet-5-5",
       content: [docContent, { type: "text", text: PROMPT }],
       schema: objectSchema({

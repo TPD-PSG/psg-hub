@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { loadFile, removeFile } from "@/lib/storage";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -36,11 +37,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const rec = await requireRecordAccess("spendDocument", id);
 
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const doc = await prisma.spendDocument.update({
     where: { id: Number(id) },
     data: {
-      invoiceDate: body.invoiceDate ? new Date(body.invoiceDate) : null,
+      invoiceDate: (toDate(body.invoiceDate) ?? null),
       invoiceAmount: body.invoiceAmount != null ? Number(body.invoiceAmount) : null,
       invoiceNumber: body.invoiceNumber !== undefined ? (body.invoiceNumber || null) : undefined,
       issuedForPayment: body.issuedForPayment ?? false,

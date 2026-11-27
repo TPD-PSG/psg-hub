@@ -1,4 +1,5 @@
-// Equipment checks (26 Nov 2026): the plain rules, shared by routes, pages and tests. No imports.
+// Equipment checks (26 Nov 2026): the plain rules, shared by routes, pages and tests.
+import { addMonths } from "./dateRules.ts";
 
 export const CATEGORIES = [
   ["machine", "Machines"],
@@ -39,14 +40,7 @@ export const USUAL_CHECKS: Record<string, { kind: string; intervalMonths: number
 export const DUE_SOON_DAYS = 30;
 const DAY = 86400e3;
 
-/** `months` after `from`, end-of-month safe; null when the interval is 0. */
-export function addMonths(from: Date, months: number): Date | null {
-  if (!months || months <= 0) return null;
-  const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + months, 1));
-  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-  d.setUTCDate(Math.min(from.getUTCDate(), last));
-  return d;
-}
+export { addMonths }; // one copy, in dateRules
 
 type Rec = { doneAt: Date | string; passed: boolean; nextDue: Date | string | null };
 export type CheckStatus = "ok" | "due" | "overdue" | "failed" | "never";

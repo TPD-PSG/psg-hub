@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const who = await requireStaff();
   if ("error" in who) return who.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const fields = quoteFields(body);
 
   let lines: LineInput[] = [];

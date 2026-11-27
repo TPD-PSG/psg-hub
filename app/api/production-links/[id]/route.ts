@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest, {
   const { id } = await params;
   const rec = await requireRecordAccess("productionLink", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const link = await prisma.productionLink.update({
     where: { id: Number(id) },
     data: { title: body.title, url: body.url, description: body.description || null },

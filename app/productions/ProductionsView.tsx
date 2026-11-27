@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useSession } from "next-auth/react";
 import UserAvatar from "@/components/UserAvatar";
 import { fmtDate as fmtDateShared } from "@/lib/format";
+import { STATUS_COLORS, STATUS_LABELS, ANN_COLORS, ANN_LABELS } from "@/lib/productionStatus";
 const fmtDate = (s: string | null) => fmtDateShared(s, "");
 
 type TeamMember = { user: { id: number; name: string; email: string; avatarUrl?: string | null } };
@@ -17,24 +18,7 @@ export type Production = {
   team?: TeamMember[];
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  planning: "bg-yellow-900/60 text-yellow-300",
-  "in-production": "bg-green-900/60 text-green-300",
-  closed: "bg-white/10 text-white/40",
-};
-const STATUS_LABELS: Record<string, string> = {
-  planning: "Planning", "in-production": "In Production", closed: "Closed",
-};
-const ANN_COLORS: Record<string, string> = {
-  nda: "bg-red-900/60 text-red-300",
-  not_announced: "bg-orange-900/60 text-orange-300",
-  on_sale: "bg-blue-900/60 text-blue-300",
-  open: "bg-green-900/60 text-green-300",
-};
-const ANN_LABELS: Record<string, string> = {
-  nda: "NDA", not_announced: "Not Announced", on_sale: "On Sale", open: "Open",
-};
-
+// Colours and labels shared with each production's page
 
 function StatTile({ value, label, sub }: { value: string | number; label: string; sub?: string }) {
   return (

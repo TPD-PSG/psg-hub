@@ -10,7 +10,7 @@ export async function PUT(req: Request) {
   const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { currentPassword, newPassword } = await req.json();
+  const { currentPassword, newPassword } = await req.json().catch(() => ({}));
   if (!currentPassword || !newPassword) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }

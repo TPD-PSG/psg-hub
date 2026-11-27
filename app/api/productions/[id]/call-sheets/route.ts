@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const access = await requireProductionAccess(id, "callsheets");
   if ("error" in access) return access.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const badDate = missingDates(body, ["date"]);
   if (badDate) return badDate;
   const sheet = await prisma.callSheet.create({

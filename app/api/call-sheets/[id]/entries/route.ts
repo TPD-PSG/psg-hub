@@ -9,7 +9,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const rec = await requireRecordAccess("callSheet", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const entry = await prisma.callSheetEntry.create({
     data: {
       callSheetId: Number(id),

@@ -8,7 +8,7 @@ export async function PUT(req: NextRequest, {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const contact = await prisma.venueContact.update({
     where: { id: Number(id) },
     data: {

@@ -24,10 +24,14 @@ export default function NotificationBell() {
     } catch {}
   }
 
+  // Check every 30 seconds while the tab is visible; a hidden tab waits and checks as soon as it's
+  // shown again (audit round 2: every open tab used to poll all the time)
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => { if (!document.hidden) load(); }, 30000);
+    const onShow = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onShow);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onShow); };
   }, []);
 
   useEffect(() => {

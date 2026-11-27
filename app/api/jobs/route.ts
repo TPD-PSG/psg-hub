@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const v = await requireJobViewer();
   if ("error" in v) return v.error;
   if (!v.seeMoney) return NextResponse.json({ error: "Only directors, BD and finance can open jobs" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const fields = jobFields(body);
   if (!fields.title) return NextResponse.json({ error: "Give the job a title" }, { status: 400 });
   const ent = scopedEntityId(await myCompanyLimit(), (fields.entityId as number | null | undefined) ?? null);

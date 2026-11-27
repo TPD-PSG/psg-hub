@@ -11,7 +11,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("error" in v) return v.error;
   const jobId = parseInt((await params).id);
   if (!(await prisma.job.count({ where: { id: jobId } }))) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const label = typeof body.label === "string" ? body.label.trim() : "";
   const url = typeof body.url === "string" ? body.url.trim() : "";
   if (!label) return NextResponse.json({ error: "Name the file" }, { status: 400 });

@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, {
   const { id } = await params;
   const rec = await requireRecordAccess("productionDocument", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const doc = await prisma.productionDocument.update({
     where: { id: Number(id) },
     data: { folder: body.folder },

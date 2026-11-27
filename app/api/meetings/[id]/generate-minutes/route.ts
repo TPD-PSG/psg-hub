@@ -48,6 +48,7 @@ Write in past tense. Be concise — capture what matters, not every word. Plain 
   let minutes: string;
   try {
     minutes = await generateText({
+      feature: "minutes",
       model: "claude-opus-5-5",
       maxTokens: 16000, // room for thinking plus the minutes themselves
       effort: "medium",

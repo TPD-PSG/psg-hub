@@ -2,6 +2,7 @@ import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = Number((session.user as any).id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   const post = await prisma.marketingPost.create({
     data: {
@@ -47,8 +48,8 @@ export async function POST(req: NextRequest) {
       caption: body.caption || null,
       platforms: body.platforms ? JSON.stringify(body.platforms) : "[]",
       status: body.status || "draft",
-      scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
-      publishedAt: body.publishedAt ? new Date(body.publishedAt) : null,
+      scheduledAt: (toDate(body.scheduledAt) ?? null),
+      publishedAt: (toDate(body.publishedAt) ?? null),
       productionId: body.productionId ? Number(body.productionId) : null,
       imageUrl: body.imageUrl || null,
       link: body.link || null,

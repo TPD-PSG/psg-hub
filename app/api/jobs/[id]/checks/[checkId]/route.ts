@@ -18,7 +18,7 @@ export async function PATCH(req: Request, { params }: P) {
   if ("error" in v) return v.error;
   const c = await find(params);
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const data: Record<string, unknown> = {};
   if (typeof body.done === "boolean" && body.done !== c.done) Object.assign(data, body.done ? { done: true, doneById: v.userId, doneAt: new Date() } : { done: false, doneById: null, doneAt: null });
   if (typeof body.text === "string" && body.text.trim()) data.text = body.text.trim().slice(0, 300);

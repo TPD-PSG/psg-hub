@@ -13,7 +13,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const link = await prisma.quickLink.create({
     data: { label: body.label, url: body.url, icon: body.icon ?? "🔗", order: body.order ?? 0 },
   });
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const link = await prisma.quickLink.update({
     where: { id: body.id },
     data: { label: body.label, url: body.url, icon: body.icon, order: body.order },
@@ -34,7 +34,7 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const { id } = await req.json();
+  const { id } = await req.json().catch(() => ({}));
   await prisma.quickLink.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { ACTIVITY_KINDS } from "@/lib/bdPipeline";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const outOfScope = await denyOutOfScope("opportunity", (await params).id); // companies they can see
@@ -28,7 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const role = (session.user as any).role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const opportunityId = parseInt((await params).id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) return NextResponse.json({ error: "Say what happened" }, { status: 400 });
   const kind = ACTIVITY_KINDS.some(k => k.key === body.kind) ? body.kind : "note";
@@ -41,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }),
     // "followUpDate" in the body (even empty) replaces the deal's next follow-up
     ...("followUpDate" in body
-      ? [prisma.opportunity.update({ where: { id: opportunityId }, data: { followUpDate: body.followUpDate ? new Date(body.followUpDate) : null } })]
+      ? [prisma.opportunity.update({ where: { id: opportunityId }, data: { followUpDate: (toDate(body.followUpDate) ?? null) } })]
       : []),
   ]);
   return NextResponse.json(activity, { status: 201 });

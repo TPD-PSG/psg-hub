@@ -10,7 +10,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const item = await prisma.stockItem.findUnique({ where: { id: parseInt((await params).id) } });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!(await canSeeCompanyRecord({ id: u.userId, role: u.role }, item.entityId))) return NextResponse.json({ error: "This space isn't yours" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const kind = body.kind;
   if (!["book_out", "return", "count"].includes(kind)) return NextResponse.json({ error: "Book out, return or count" }, { status: 400 });
   const q = Number(body.quantity);

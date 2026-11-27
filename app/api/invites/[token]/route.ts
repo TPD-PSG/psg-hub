@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (invite.usedAt) return NextResponse.json({ error: "This invitation has already been used" }, { status: 410 });
   if (invite.expiresAt < new Date()) return NextResponse.json({ error: "This invitation has expired" }, { status: 410 });
 
-  const { password } = await req.json();
+  const { password } = await req.json().catch(() => ({}));
   if (!password || password.length < 8) {
     return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   }

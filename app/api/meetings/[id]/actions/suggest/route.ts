@@ -32,6 +32,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   let raw: { actions: Parameters<typeof cleanActions>[0] };
   try {
     raw = await extractJson({
+      feature: "meeting-actions",
       model: "claude-opus-5-5",
       effort: "low",
       maxTokens: 8000,

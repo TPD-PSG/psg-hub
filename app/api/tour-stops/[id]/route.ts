@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export const dynamic = "force-dynamic";
 
@@ -11,17 +12,17 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const rec = await requireRecordAccess("tourStop", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const stop = await prisma.tourStop.update({
     where: { id: Number(id) },
     data: {
       venueId: body.venueId ? Number(body.venueId) : undefined,
       stopNumber: body.stopNumber != null ? Number(body.stopNumber) : undefined,
-      loadInDate: body.loadInDate !== undefined ? (body.loadInDate ? new Date(body.loadInDate) : null) : undefined,
-      startDate: body.startDate !== undefined ? (body.startDate ? new Date(body.startDate) : null) : undefined,
-      endDate: body.endDate !== undefined ? (body.endDate ? new Date(body.endDate) : null) : undefined,
-      performanceStart: body.performanceStart !== undefined ? (body.performanceStart ? new Date(body.performanceStart) : null) : undefined,
-      performanceEnd: body.performanceEnd !== undefined ? (body.performanceEnd ? new Date(body.performanceEnd) : null) : undefined,
+      loadInDate: body.loadInDate !== undefined ? ((toDate(body.loadInDate) ?? null)) : undefined,
+      startDate: body.startDate !== undefined ? ((toDate(body.startDate) ?? null)) : undefined,
+      endDate: body.endDate !== undefined ? ((toDate(body.endDate) ?? null)) : undefined,
+      performanceStart: body.performanceStart !== undefined ? ((toDate(body.performanceStart) ?? null)) : undefined,
+      performanceEnd: body.performanceEnd !== undefined ? ((toDate(body.performanceEnd) ?? null)) : undefined,
       notes: body.notes !== undefined ? body.notes : undefined,
       advancingStatus: body.advancingStatus !== undefined ? body.advancingStatus : undefined,
       contraEstimate: body.contraEstimate !== undefined ? (body.contraEstimate === null ? null : Number(body.contraEstimate)) : undefined,

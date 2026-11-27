@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 const TASK_SELECT = {
   id: true, title: true, status: true, priority: true, dueDate: true, assigneeName: true,
@@ -28,14 +29,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const meeting = await prisma.meeting.findUnique({ where: { id: Number(id) }, select: { productionId: true } });
   if (!meeting) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   if (!Array.isArray(body.actions) || body.actions.length === 0) return NextResponse.json({ error: "Nothing to save" }, { status: 400 });
   if (body.actions.length > 100) return NextResponse.json({ error: "Too many actions at once" }, { status: 400 });
   const data = [];
   for (const [i, a] of body.actions.entries()) {
     const title = typeof a?.title === "string" ? a.title.trim() : "";
     if (!title) return NextResponse.json({ error: `Action ${i + 1} needs a title` }, { status: 400 });
-    const due = typeof a.dueDate === "string" && a.dueDate ? new Date(a.dueDate) : null;
+    const due = typeof a.dueDate === "string" ? toDate(a.dueDate) ?? null : null;
     if (due && isNaN(due.getTime())) return NextResponse.json({ error: `Action ${i + 1} has a bad date` }, { status: 400 });
     const assigneeUserId = Number.isInteger(Number(a.assigneeUserId)) && Number(a.assigneeUserId) > 0 ? Number(a.assigneeUserId) : null;
     data.push({

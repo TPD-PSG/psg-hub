@@ -12,14 +12,14 @@ export async function PUT(req: Request, {
   const { id } = await params;
   const rec = await requireRecordAccess("keyDate", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const keyDate = await prisma.productionKeyDate.update({
     where: { id: Number(id) },
     data: {
       type: body.type,
       label: body.label || null,
       startDate: toDate(body.startDate),
-      endDate: body.endDate ? new Date(body.endDate) : null,
+      endDate: (toDate(body.endDate) ?? null),
       notes: body.notes || null,
     },
   });

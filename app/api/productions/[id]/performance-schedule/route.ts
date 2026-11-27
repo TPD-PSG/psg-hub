@@ -23,7 +23,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const access = await requireProductionAccess(id);
   if ("error" in access) return access.error;
   const productionId = Number(id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   const schedule = await prisma.performanceSchedule.upsert({
     where: { productionId },
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const access = await requireProductionAccess(id);
   if ("error" in access) return access.error;
   const productionId = Number(id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   // Toggle: if override exists remove it, otherwise create it
   const existing = await prisma.performanceDateOverride.findFirst({

@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const answer = await generateText({
+      feature: "ask",
       model: "claude-sonnet-5-5",
       maxTokens: 8000,
       system: `You are a helpful assistant for Production Solutions Group. Answer questions based on the company policy documents provided. Be concise and practical. If the answer isn't in the documents, say so clearly rather than guessing.`,

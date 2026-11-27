@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const access = await requireProductionAccess(id);
   if ("error" in access) return access.error;
-  const { name } = await req.json();
+  const { name } = await req.json().catch(() => ({}));
   const count = await prisma.taskList.count({ where: { productionId: Number(id) } });
   const list = await prisma.taskList.create({
     data: { productionId: Number(id), name, position: count },

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, email, role, permissions, productionIds, homeEntityId: rawHome, clientId: rawClient } = await req.json();
+  const { name, email, role, permissions, productionIds, homeEntityId: rawHome, clientId: rawClient } = await req.json().catch(() => ({}));
   const homeEntityId = role !== "client" && rawHome ? Number(rawHome) : null;
   if (homeEntityId && !(await prisma.entity.count({ where: { id: homeEntityId } }))) return NextResponse.json({ error: "Unknown company" }, { status: 400 });
   const clientId = role === "client" && rawClient ? Number(rawClient) : null;

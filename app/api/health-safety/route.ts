@@ -24,9 +24,10 @@ export async function GET() {
   const now = new Date();
   const yearAgo = new Date(now.getTime() - 366 * DAY);
 
+  // Open reports and the last year's, newest first, capped (audit round 2: this grew without limit)
   const incidents = await prisma.incident.findMany({
     where: { AND: [await visibleWhere(userId, role), { OR: [{ status: { not: "closed" } }, { occurredAt: { gte: yearAgo } }] }] },
-    orderBy: { occurredAt: "desc" }, include: INCIDENT_INCLUDE,
+    orderBy: { occurredAt: "desc" }, include: INCIDENT_INCLUDE, take: 500,
   });
 
   // Live shows: not archived or closed, and not finished
@@ -40,7 +41,6 @@ export async function GET() {
     select: {
       id: true, name: true, status: true, startDate: true, endDate: true,
       hsDocuments: { select: { id: true, name: true, folder: true, reviewDate: true, tourStopId: true, createdAt: true }, orderBy: { name: "asc" } },
-      toolboxSignatures: { select: { signeeDate: true }, orderBy: { createdAt: "desc" } },
     },
     orderBy: [{ startDate: "asc" }, { name: "asc" }],
   });
@@ -53,12 +53,16 @@ export async function GET() {
     due: s.hsDocuments.filter(d => d.reviewDate && d.reviewDate.getTime() <= soon).map(d => ({ id: d.id, name: d.name, reviewDate: d.reviewDate, overdue: d.reviewDate!.getTime() < now.getTime() })),
     documents: s.hsDocuments.map(d => ({ id: d.id, name: d.name, reviewDate: d.reviewDate })),
   }));
-  const toolbox = shows.map(s => ({
-    id: s.id, name: s.name, status: s.status,
-    thisWeek: s.toolboxSignatures.filter(t => t.signeeDate >= monday).length,
-    total: s.toolboxSignatures.length,
-    last: s.toolboxSignatures.map(t => t.signeeDate).sort().pop() ?? null,
-  }));
+  // Toolbox talks counted in the database rather than loading every sign-off (audit round 2)
+  const ids = shows.map(s => s.id);
+  const [weekCounts, allCounts] = ids.length ? await Promise.all([
+    prisma.toolboxTalkSignature.groupBy({ by: ["productionId"], where: { productionId: { in: ids }, signeeDate: { gte: monday } }, _count: { _all: true } }),
+    prisma.toolboxTalkSignature.groupBy({ by: ["productionId"], where: { productionId: { in: ids } }, _count: { _all: true }, _max: { signeeDate: true } }),
+  ]) : [[], []];
+  const toolbox = shows.map(s => {
+    const all = allCounts.find(c => c.productionId === s.id);
+    return { id: s.id, name: s.name, status: s.status, thisWeek: weekCounts.find(c => c.productionId === s.id)?._count._all ?? 0, total: all?._count._all ?? 0, last: all?._max.signeeDate ?? null };
+  });
 
   const openActions = incidents.flatMap(i => i.actions.filter(a => !a.doneAt).map(a => ({ ...a, incident: { id: i.id, year: i.year, number: i.number, productionId: i.productionId, productionName: i.production?.name ?? i.entity?.name ?? "", path: incidentPath(i), entity: i.entity } })))
     .sort((a, b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity));

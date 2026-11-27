@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export const dynamic = "force-dynamic";
 
@@ -8,16 +9,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const task = await prisma.salesTask.update({
     where: { id: Number(id) },
     data: {
       title: body.title,
       notes: body.notes || null,
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      dueDate: (toDate(body.dueDate) ?? null),
       priority: body.priority,
       brandId: body.brandId ? Number(body.brandId) : null,
-      completedAt: body.completedAt !== undefined ? (body.completedAt ? new Date(body.completedAt) : null) : undefined,
+      completedAt: body.completedAt !== undefined ? ((toDate(body.completedAt) ?? null)) : undefined,
     },
     include: { brand: { select: { id: true, name: true } } },
   });

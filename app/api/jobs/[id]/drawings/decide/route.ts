@@ -9,7 +9,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const a = await jobAccess((await params).id);
   if ("error" in a) return a.error;
   if (a.v.role !== "admin") return NextResponse.json({ error: "Only admins can record a sign-off for the client" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const decision = body.decision === "changes" ? "changes" : body.decision === "approved" ? "approved" : null;
   if (!decision) return NextResponse.json({ error: "Approve or ask for changes" }, { status: 400 });
   const ids = Array.isArray(body.revisionIds) ? body.revisionIds.map(Number).filter(Number.isInteger) : [];

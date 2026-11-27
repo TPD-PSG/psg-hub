@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export async function PUT(req: NextRequest, {
  params }: { params: Promise<{ id: string }> }) {
@@ -10,13 +11,13 @@ export async function PUT(req: NextRequest, {
   const { id } = await params;
   const rec = await requireRecordAccess("productionCrew", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const link = await prisma.productionCrew.update({
     where: { id: Number(id) },
     data: {
       role:      body.role || null,
-      startDate: body.startDate ? new Date(body.startDate) : null,
-      endDate:   body.endDate ? new Date(body.endDate) : null,
+      startDate: (toDate(body.startDate) ?? null),
+      endDate:   (toDate(body.endDate) ?? null),
       dayRate:   body.dayRate ? Number(body.dayRate) : null,
       notes:     body.notes || null,
     },

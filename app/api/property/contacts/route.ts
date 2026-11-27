@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const item = await prisma.propertyContact.create({
     data: { propertyId: PROPERTY_ID, name: body.name, role: body.role, phone: body.phone || null, email: body.email || null, notes: body.notes || null },
   });

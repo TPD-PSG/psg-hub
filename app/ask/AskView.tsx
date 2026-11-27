@@ -128,7 +128,7 @@ export default function AskView({ initial }: { initial: Doc[] | null }) {
 
           <div className="rounded-xl border p-4 text-xs space-y-1" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>
             <p className="font-semibold text-white/60">Tips</p>
-            <p>Ask in plain English — e.g. "What is the expenses policy?" or "How much annual leave do I get?"</p>
+            <p>Ask in plain English — e.g. &ldquo;What is the expenses policy?&rdquo; or &ldquo;How much annual leave do I get?&rdquo;</p>
             <p className="mt-1">You can follow up with more questions in the same conversation.</p>
           </div>
         </div>

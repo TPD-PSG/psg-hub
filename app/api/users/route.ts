@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   if (!session || (session.user as any).role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   if (!body.name || !body.email || !body.password) {
     return NextResponse.json({ error: "Name, email and password required" }, { status: 400 });
   }

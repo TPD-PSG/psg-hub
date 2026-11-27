@@ -3,7 +3,8 @@
 // Machine inductions on a workshop's Safety page (26 Nov 2026): who's inducted on which machine, with
 // refresher dates; a machine's trainers record an induction that trainee and trainer both sign; the
 // workshop's staff look after the machine list and its trainers. Others see their own row.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/components/useDialogFocus";
 import { alertDialog } from "@/components/Dialogs";
 import SignaturePad from "@/components/SignaturePad";
 import { card, h2, muted, link, btnSolid, btnLine, input, label as lbl } from "@/lib/twsUi";
@@ -32,10 +33,11 @@ const short = (d: string | null) => {
 const blank = () => ({ machineId: "", person: "", personName: "", personCompany: "", inductedAt: today(), notes: "", trainee: null as string | null, trainer: null as string | null });
 
 function Overlay({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  const box = useRef<HTMLDivElement>(null);
+  useDialogFocus(box, onClose); // focus in, kept in, and back again on close
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(20,18,15,0.6)" }}>
-      <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-xl max-h-[92vh] overflow-y-auto flex flex-col gap-4" style={{ ...card, borderTop: "6px solid var(--tws-accent)" }}>
+      <div ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-xl max-h-[92vh] overflow-y-auto flex flex-col gap-4" style={{ ...card, borderTop: "6px solid var(--tws-accent)" }}>
         <div className="flex justify-between items-start gap-3"><h2 style={h2}>{title}</h2><button type="button" onClick={onClose} aria-label="Close" className="text-2xl leading-none" style={muted}>×</button></div>
         {children}
       </div>

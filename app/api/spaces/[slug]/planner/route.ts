@@ -34,16 +34,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const staffRole = role === "admin" || role === "member";
   const perms = parsePerms((session?.user as { permissions?: string | null } | undefined)?.permissions ?? null);
   const seeMoney = role === "admin" || (role === "member" && (canAccess(perms, "bd", role) || canAccess(perms, "finance", role)));
-  const jobs = (await prisma.job.findMany({
-    where: { entityId: space.id, status: "active" },
-    select: { id: true, number: true, title: true, jobType: true, stage: true, startDate: true, endDate: true, deliveryMethod: true, client: { select: { name: true } } },
-    orderBy: [{ endDate: "asc" }, { createdAt: "asc" }],
-  })).map(j => (staffRole ? j : { ...j, client: null }));
+  // The reads that don't depend on each other run together (audit round 2)
+  const [jobRows, team, staff, machines, inds, unavailable] = await Promise.all([
+    prisma.job.findMany({
+      where: { entityId: space.id, status: "active" },
+      select: { id: true, number: true, title: true, jobType: true, stage: true, startDate: true, endDate: true, deliveryMethod: true, client: { select: { name: true } } },
+      orderBy: [{ endDate: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.user.findMany({ where: { homeEntityId: space.id, deactivatedAt: null }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    // People who can be planned (any PSG staff, for adding someone from outside the team)
+    staffRole ? prisma.user.findMany({ where: { role: { in: ["admin", "member"] }, deactivatedAt: null }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
+    // Machine inductions: the space's machines (to pick for a part), and who's inducted on what
+    prisma.machine.findMany({ where: { entityId: space.id, archived: false }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.machineInduction.findMany({ where: { userId: { not: null }, machine: { entityId: space.id } }, select: { userId: true, machineId: true, inductedAt: true, expiresAt: true, revokedAt: true } }),
+    unavailableMachines(space.id), // machine → why it shouldn't be used (out of use, check overdue)
+  ]);
+  const jobs = jobRows.map(j => (staffRole ? j : { ...j, client: null }));
   const parts = partsForViewer(seeMoney, await prisma.buildPart.findMany({
     where: { jobId: { in: jobs.map(j => j.id) } },
     select: PART_SELECT, orderBy: [{ startDate: "asc" }, { id: "asc" }],
   }));
-  const team = await prisma.user.findMany({ where: { homeEntityId: space.id }, select: { id: true, name: true }, orderBy: { name: "asc" } });
   const extraIds = [...new Set(parts.filter(p => p.userId && !team.some(t => t.id === p.userId)).map(p => p.userId!))];
   const extra = extraIds.length ? await prisma.user.findMany({ where: { id: { in: extraIds } }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
   const crew = [...team.map(t => ({ ...t, team: true })), ...extra.map(t => ({ ...t, team: false }))];
@@ -52,22 +62,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     where: { userId: { in: crew.map(c => c.id) }, startDate: { lt: to }, endDate: { gte: from } },
     select: { userId: true, startDate: true, endDate: true, activityType: true, production: { select: { id: true, name: true } } },
   }) : [];
-  // People who can be planned (any PSG staff, for adding someone from outside the team)
-  const staff = role === "admin" || role === "member"
-    ? await prisma.user.findMany({ where: { role: { in: ["admin", "member"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } })
-    : [];
-  // Machine inductions: the space's machines (to pick for a part), and parts planned on someone who
-  // isn't inducted on a machine the part needs (a warning, not a block)
-  const machines = await prisma.machine.findMany({ where: { entityId: space.id, archived: false }, select: { id: true, name: true }, orderBy: { name: "asc" } });
-  const inds = await prisma.machineInduction.findMany({ where: { userId: { not: null }, machine: { entityId: space.id } }, select: { userId: true, machineId: true, inductedAt: true, expiresAt: true, revokedAt: true } });
   const inducted: Record<number, number[]> = {}; // person → machines they're inducted on today
-  for (const key of new Set(inds.map(i => `${i.userId}:${i.machineId}`))) {
+  const byPair = new Map<string, typeof inds>();
+  for (const i of inds) { const k = `${i.userId}:${i.machineId}`; byPair.set(k, [...(byPair.get(k) ?? []), i]); }
+  for (const [key, list] of byPair) {
     const [u, mId] = key.split(":").map(Number);
-    if (counts(inductionStatus(current(inds.filter(i => i.userId === u && i.machineId === mId))))) (inducted[u] ??= []).push(mId);
+    if (counts(inductionStatus(current(list)))) (inducted[u] ??= []).push(mId);
   }
   return NextResponse.json({
-    space, from: from.toISOString().slice(0, 10), days, jobs, parts, crew, elsewhere, staff, machines, inducted,
-    unavailable: await unavailableMachines(space.id), // machine → why it shouldn't be used (out of use, check overdue)
+    space, from: from.toISOString().slice(0, 10), days, jobs, parts, crew, elsewhere, staff, machines, inducted, unavailable,
     canEdit: role === "admin" || role === "member",
   });
 }

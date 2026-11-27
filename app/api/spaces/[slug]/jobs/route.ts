@@ -10,7 +10,7 @@ import { dayUtc } from "@/lib/buildParts";
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const s = await staffInSpace((await params).slug);
   if ("error" in s) return s.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const title = typeof body.title === "string" ? body.title.trim().slice(0, 200) : "";
   if (!title) return NextResponse.json({ error: "Give the build a name" }, { status: 400 });
   const num = (v: unknown) => (v === "" || v == null ? null : Number(v));

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { saveFile } from "@/lib/storage";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 const DOC_SELECT = { id: true, type: true, name: true, mime: true, invoiceDate: true, invoiceAmount: true, invoiceNumber: true, issuedForPayment: true, createdAt: true };
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       mime: file.type,
       file: stored.base64 ?? "",
       fileKey: stored.key,
-      invoiceDate: invoiceDateRaw ? new Date(invoiceDateRaw) : null,
+      invoiceDate: (toDate(invoiceDateRaw) ?? null),
       invoiceAmount: invoiceAmountRaw ? Number(invoiceAmountRaw) : null,
       invoiceNumber: invoiceNumberRaw || null,
       issuedForPayment,

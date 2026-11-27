@@ -11,7 +11,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const rec = await requireRecordAccess("productionContact", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const contact = await prisma.productionContact.update({
     where: { id: Number(id) },
     data: {

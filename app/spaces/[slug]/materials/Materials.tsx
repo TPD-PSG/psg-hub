@@ -334,7 +334,8 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
                       </button>
                       {isOpen && (
                         <div className="pb-3 flex flex-col gap-3">
-                          <table className="w-full text-[13px]" style={{ borderCollapse: "collapse" }}>
+                          <div className="overflow-x-auto">
+                          <table className="w-full text-[13px]" style={{ borderCollapse: "collapse", minWidth: 480 }}>
                             <tbody>
                               {p.lines.map(l => (
                                 <tr key={l.id} style={{ borderBottom: "1px solid var(--tws-line-soft)" }}>
@@ -346,6 +347,7 @@ export default function Materials({ initial, start }: { initial: MaterialsData; 
                               ))}
                             </tbody>
                           </table>
+                          </div>
                           {p.notes && <p className="text-[13px] whitespace-pre-wrap" style={muted}>{p.notes}</p>}
                           <p className="text-xs" style={muted}>
                             {[p.approvedAt && `Approved ${fmtDate(p.approvedAt)}${p.approvedBy ? ` by ${p.approvedBy.name}` : " (under the limit)"}`, p.orderedAt && `ordered ${fmtDate(p.orderedAt)}`, p.deliveredAt && `delivered ${fmtDate(p.deliveredAt)}`, p.supplier?.email, p.supplier?.phone].filter(Boolean).join(" · ")}

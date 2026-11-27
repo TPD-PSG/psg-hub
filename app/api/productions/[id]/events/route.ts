@@ -7,7 +7,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const access = await requireProductionAccess(id);
   if ("error" in access) return access.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const badDate = missingDates(body, ["startAt", "endAt"]);
   if (badDate) return badDate;
   const event = await prisma.event.create({

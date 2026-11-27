@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   const data: Record<string, unknown> = {};
   if (body.status !== undefined) {

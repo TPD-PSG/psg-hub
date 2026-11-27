@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest, {
   const { id } = await params;
   const rec = await requireRecordAccess("taskList", id);
   if ("error" in rec) return rec.error;
-  const { name } = await req.json();
+  const { name } = await req.json().catch(() => ({}));
   const list = await prisma.taskList.update({ where: { id: Number(id) }, data: { name } });
   return NextResponse.json(list);
 }

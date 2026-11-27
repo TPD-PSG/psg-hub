@@ -11,7 +11,7 @@ export async function PUT(req: NextRequest, {
   const { id } = await params;
   const rec = await requireRecordAccess("event", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const event = await prisma.event.update({
     where: { id: Number(id) },
     data: {

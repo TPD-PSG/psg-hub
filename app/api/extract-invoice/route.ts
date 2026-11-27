@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const data = await extractJson<{ dueDate: string | null; grossAmount: number | null; invoiceNumber: string | null; supplier: string | null }>({
+      feature: "invoice",
       model: "claude-haiku-5-5",
       maxTokens: 4000,
       content: [doc, {

@@ -7,7 +7,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const entityId = parseInt((await params).id);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const year = Number(body.year);
   if (!Number.isInteger(year) || year < 2000 || year > 2100) return NextResponse.json({ error: "Year required" }, { status: 400 });
   if (!(await prisma.entity.count({ where: { id: entityId } }))) return NextResponse.json({ error: "Not found" }, { status: 404 });

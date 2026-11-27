@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("error" in v) return v.error;
   const jobId = parseInt((await params).id);
   if (!(await prisma.job.count({ where: { id: jobId } }))) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const max = (await prisma.buildCheck.aggregate({ where: { jobId }, _max: { sortOrder: true } }))._max.sortOrder ?? 0;
   if (body.standard === "collect") {
     const have = new Set((await prisma.buildCheck.findMany({ where: { jobId, kind: "collect" }, select: { text: true } })).map(c => c.text.toLowerCase()));

@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const access = await requireProductionAccess(id);
   if ("error" in access) return access.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const badDate = missingDates(body, ["startDate"]);
   if (badDate) return badDate;
   const keyDate = await prisma.productionKeyDate.create({
@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       type: body.type,
       label: body.label || null,
       startDate: toDate(body.startDate)!,
-      endDate: body.endDate ? new Date(body.endDate) : null,
+      endDate: (toDate(body.endDate) ?? null),
       notes: body.notes || null,
     },
   });

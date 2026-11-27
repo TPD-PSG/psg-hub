@@ -16,7 +16,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (existing.createdByUserId !== userId && role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const item = await prisma.roadmapItem.update({
     where: { id: Number(id) },
     data: {

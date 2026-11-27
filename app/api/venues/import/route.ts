@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const rows: Record<string, string>[] = body.rows;
   if (!Array.isArray(rows) || rows.length === 0) {
     return NextResponse.json({ error: "No rows provided" }, { status: 400 });

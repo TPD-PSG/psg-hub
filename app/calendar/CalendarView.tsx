@@ -396,7 +396,7 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
     if (!kdLookup[pid]) kdLookup[pid] = {};
     const s = startStr.slice(0, 10) < monthStart ? monthStart : startStr.slice(0, 10);
     const e = (endStr ?? startStr).slice(0, 10) > monthEnd ? monthEnd : (endStr ?? startStr).slice(0, 10);
-    let cur = new Date(s + "T12:00:00");
+    const cur = new Date(s + "T12:00:00");
     const end = new Date(e + "T12:00:00");
     while (cur <= end) {
       const ds = cur.toISOString().slice(0, 10);
@@ -424,7 +424,7 @@ function ScheduleView({ year, month, assignments, productions, events, onRefresh
     if (!lookup[a.production.id]) lookup[a.production.id] = {};
     const s = a.startDate.slice(0, 10) < monthStart ? monthStart : a.startDate.slice(0, 10);
     const e = a.endDate.slice(0, 10) > monthEnd ? monthEnd : a.endDate.slice(0, 10);
-    let cur = new Date(s + "T12:00:00");
+    const cur = new Date(s + "T12:00:00");
     const end = new Date(e + "T12:00:00");
     while (cur <= end) {
       const ds = cur.toISOString().slice(0, 10);

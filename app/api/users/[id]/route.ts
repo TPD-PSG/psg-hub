@@ -12,7 +12,7 @@ async function requireAdmin() {
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!await requireAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const data: Record<string, unknown> = { name: body.name, email: body.email, role: body.role };
   if (body.password) data.passwordHash = await hash(body.password, 12);
   if (body.permissions !== undefined) data.permissions = JSON.stringify(body.permissions);

@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const rec = await requireRecordAccess("haulage", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const movement = await prisma.haulageMovement.update({
     where: { id: Number(id) },
     data: {
@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       fromLocation:   body.fromLocation,
       toLocation:     body.toLocation,
       departureAt:    toDate(body.departureAt),
-      arrivalAt:      body.arrivalAt ? new Date(body.arrivalAt) : null,
+      arrivalAt:      (toDate(body.arrivalAt) ?? null),
       cargo:          body.cargo || null,
       notes:          body.notes || null,
       estimatedCost:  money(body.estimatedCost),
@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const rec = await requireRecordAccess("haulage", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const movement = await prisma.haulageMovement.update({
     where: { id: Number(id) },
     data: {

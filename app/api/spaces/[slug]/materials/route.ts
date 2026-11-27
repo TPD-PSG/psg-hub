@@ -34,7 +34,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
   const s = await staffInSpace((await params).slug);
   if ("error" in s) return s.error;
   if (s.user.role !== "admin") return NextResponse.json({ error: "Only admins can change these" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const out: Record<string, number | null> = {};
   if ("poApprovalLimit" in body) {
     const n = Number(body.poApprovalLimit);

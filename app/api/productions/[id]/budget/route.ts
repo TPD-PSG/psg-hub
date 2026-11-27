@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const access = await requireProductionAccess(id, "budget");
   if ("error" in access) return access.error;
   if (access.role !== "admin" && access.role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const line = await prisma.budgetLine.create({
     data: {
       productionId: Number(id),

@@ -7,7 +7,7 @@ import { poLines, createPurchaseOrder } from "@/lib/purchaseOrders";
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const s = await staffInSpace((await params).slug);
   if ("error" in s) return s.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const l = await poLines(body.lines, s.space.id);
   if ("error" in l) return NextResponse.json({ error: l.error }, { status: 400 });
   const supplierId = body.supplierId ? Number(body.supplierId) : null;

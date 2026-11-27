@@ -146,7 +146,7 @@ function TodayStrip({ events }: { events: CalEvent[] }) {
     <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
       <div className="px-4 py-2.5 border-b flex items-center gap-2" style={{ borderColor: "var(--psg-card-border)" }}>
         <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
-        <span className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--psg-muted)" }}>What's going on today</span>
+        <span className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--psg-muted)" }}>What&apos;s going on today</span>
       </div>
       <div className="divide-y" style={{ borderColor: "var(--psg-card-border)" }}>
         {rows.map(ev => (

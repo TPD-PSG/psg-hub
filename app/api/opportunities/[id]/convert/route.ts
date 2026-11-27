@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { parseStages } from "@/lib/feeStages";
 import { newNumber, retryOnNumberClash } from "@/lib/quoteData";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const outOfScope = await denyOutOfScope("opportunity", (await params).id); // companies they can see
@@ -20,14 +21,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (deal.stage !== "won") return NextResponse.json({ error: "Only a won deal can become a production" }, { status: 400 });
   if (deal.productionId) return NextResponse.json({ error: "This deal already has a production", productionId: deal.productionId }, { status: 409 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return NextResponse.json({ error: "Production name required" }, { status: 400 });
   const pmFee = body.pmFee === "" || body.pmFee == null ? null : Number(body.pmFee);
   if (pmFee != null && (!Number.isFinite(pmFee) || pmFee < 0)) return NextResponse.json({ error: "PM fee must be an amount" }, { status: 400 });
   const parsed = parseStages(body.stages ?? []);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
-  const day = (v: unknown) => (typeof v === "string" && v ? new Date(v) : null);
+  const day = (v: unknown) => (typeof v === "string" ? toDate(v) ?? null : null);
 
   const team = [...new Set([userId, deal.ownerUserId].filter((x): x is number => !!x))];
   const production = await retryOnNumberClash(() => prisma.$transaction(async tx => {

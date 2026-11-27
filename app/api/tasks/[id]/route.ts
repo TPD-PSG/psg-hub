@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
+import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
 export async function GET(_req: NextRequest, {
  params }: { params: Promise<{ id: string }> }) {
@@ -28,7 +29,7 @@ export async function PUT(req: NextRequest, {
   const { id } = await params;
   const rec = await requireRecordAccess("task", id);
   if ("error" in rec) return rec.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   const existing = await prisma.task.findUnique({ where: { id: Number(id) } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -48,10 +49,10 @@ export async function PUT(req: NextRequest, {
       assigneeName: assigneeName || null,
       status,
       priority,
-      dueDate: dueDate ? new Date(dueDate) : null,
+      dueDate: (toDate(dueDate) ?? null),
       requiresSignoff: !!requiresSignoff,
       signoffUserId: signoffUserId ? Number(signoffUserId) : null,
-      signoffAt: signoffAt ? new Date(signoffAt) : null,
+      signoffAt: (toDate(signoffAt) ?? null),
     },
     include: {
       assigneeUser: { select: { id: true, name: true, email: true } },

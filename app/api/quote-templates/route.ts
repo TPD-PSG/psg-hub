@@ -13,7 +13,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const who = await requireStaff();
   if ("error" in who) return who.error;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return NextResponse.json({ error: "Name the template" }, { status: 400 });
   const q = await prisma.quote.findUnique({ where: { id: Number(body.quoteId) }, include: { lines: { orderBy: { sortOrder: "asc" } } } });

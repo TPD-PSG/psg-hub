@@ -58,11 +58,15 @@ export async function matrix(v: Viewer) {
     if (!people.has(k)) people.set(k, { key: k, userId: i.userId, name: i.personName, company: i.personCompany, team: false });
   }
   const now = new Date();
+  // Group once by person and machine, then look each square up (audit round 2: this used to
+  // re-scan every induction for every square)
+  const byPair = new Map<string, typeof all>();
+  for (const i of all) { const k = `${personKey(i)}|${i.machineId}`; byPair.set(k, [...(byPair.get(k) ?? []), i]); }
   const cells: Record<string, Record<number, { id: number; status: ReturnType<typeof inductionStatus>; inductedAt: Date; expiresAt: Date | null; trainerName: string }>> = {};
   for (const p of people.values()) {
     cells[p.key] = {};
     for (const m of machines) {
-      const c = current(all.filter(i => i.machineId === m.id && personKey(i) === p.key));
+      const c = current(byPair.get(`${p.key}|${m.id}`) ?? []);
       if (c) cells[p.key][m.id] = { id: c.id, status: inductionStatus(c, now), inductedAt: c.inductedAt, expiresAt: c.expiresAt, trainerName: c.trainerName };
     }
   }

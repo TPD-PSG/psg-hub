@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const id = Number((await params).id);
-  const { approved } = await req.json();
+  const { approved } = await req.json().catch(() => ({}));
 
   const sub = await prisma.funSubmission.update({ where: { id }, data: { approved } });
   return NextResponse.json(sub);

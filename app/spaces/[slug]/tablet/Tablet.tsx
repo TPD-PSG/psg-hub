@@ -70,7 +70,7 @@ export default function Tablet({ initial }: { initial: TabletData }) {
     e.preventDefault();
     if (!jobFor || !snag.trim() || !person) return;
     setBusy(true);
-    const res = await fetch(`/api/jobs/${jobFor}/checks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "snag", text: `${snag.trim()} (${person.name})` }) });
+    const res = await fetch(`/api/jobs/${jobFor}/checks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "snag", text: snag.trim(), raisedById: person.id }) });
     setBusy(false);
     if (!res.ok) return setToast((await res.json().catch(() => ({}))).error ?? "Couldn't add the snag");
     done(`Snag added to ${jobName(jobFor)}`);

@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const m = await spaceMember((await params).slug);
   if ("error" in m) return m.error;
+  if (!m.staff) return NextResponse.json({ error: "Staff only: freelancers see their own parts in My work" }, { status: 403 });
   const jobId = Number(new URL(req.url).searchParams.get("jobId")) || undefined;
   const [data, jobs] = await Promise.all([
     storageFor(m.space.id, jobId),

@@ -33,6 +33,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const text = typeof body.text === "string" ? body.text.trim().slice(0, 300) : "";
   if (!text) return NextResponse.json({ error: "Write the check" }, { status: 400 });
   const kind = (CHECK_KINDS as readonly string[]).includes(body.kind) ? body.kind : "snag";
-  await prisma.buildCheck.create({ data: { jobId, kind, text, sortOrder: max + 1 } });
+  // The shared workshop tablet says who tapped it (it's signed in as one staff member)
+  const raisedBy = Number(body.raisedById) && (await prisma.user.count({ where: { id: Number(body.raisedById) } })) ? Number(body.raisedById) : v.userId;
+  await prisma.buildCheck.create({ data: { jobId, kind, text, sortOrder: max + 1, createdById: raisedBy } });
   return NextResponse.json(await list(jobId), { status: 201 });
 }

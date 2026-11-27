@@ -36,7 +36,7 @@ export default async function SpaceLayout({ children, params }: { children: Reac
   if (!space || !allowed) return <>{children}</>;
   return (
     <div className={`${body.variable} ${capsFace.variable}`} style={{ ...spaceTokens(space.color), fontFamily: "var(--tws-font), system-ui, sans-serif" } as React.CSSProperties}>
-      <SpaceShell space={space}>{children}</SpaceShell>
+      <SpaceShell space={space} staff={user?.role === "admin" || user?.role === "member"}>{children}</SpaceShell>
     </div>
   );
 }

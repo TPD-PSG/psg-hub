@@ -20,7 +20,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   // People whose company has its own space (e.g. The Workshop Stoke) land there; ?all=1 shows this page
   if (!(await searchParams).all) {
     const space = await homeSpaceFor(Number(user.id));
-    if (space) redirect(`/spaces/${space.slug}`);
+    if (space) redirect(user.role === "admin" || user.role === "member" ? `/spaces/${space.slug}` : `/spaces/${space.slug}/my-work`);
     // Client logins linked to a client company land on their builds
     if (user.role === "client" && (await prisma.user.count({ where: { id: Number(user.id), clientId: { not: null } } }))) redirect("/my-builds");
   }

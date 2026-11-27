@@ -8,11 +8,13 @@ import { sizeText } from "@/lib/pieceSize";
 import type { SpaceTheme } from "@/lib/spaces";
 import PrintButton from "./PrintButton";
 import { muted, pageHeader } from "@/lib/twsUi";
+import { staffPageOrMyWork } from "@/lib/spaceStaffPage";
 
 export default async function LabelsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ job?: string; ids?: string }> }) {
   const { slug } = await params;
   const sp = await searchParams;
   if (!/^[a-z0-9-]{2,30}$/.test(slug)) notFound();
+  await staffPageOrMyWork(slug); // freelancers work from My work
   const jobId = sp.job && /^\d+$/.test(sp.job) ? sp.job : null;
   const data = await serverApi<StorageData & { space?: SpaceTheme }>(`/api/spaces/${slug}/storage${jobId ? `?jobId=${jobId}` : ""}`);
   if (!data?.space) notFound();

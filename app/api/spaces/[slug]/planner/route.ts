@@ -23,6 +23,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   if (!space) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const role = user.role ?? "member";
   if (!(await canSeeSpace({ id: Number(user.id), role }, space.id))) return NextResponse.json({ error: "This space isn't yours" }, { status: 403 });
+  if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Staff only: freelancers see their own parts in My work" }, { status: 403 });
 
   const q = new URL(req.url).searchParams;
   const from = monday(dayUtc(q.get("from")) ?? new Date());

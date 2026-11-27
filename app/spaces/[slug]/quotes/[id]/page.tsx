@@ -6,6 +6,7 @@ import { serverApi } from "@/lib/serverApi";
 import type { SpaceTheme } from "@/lib/spaces";
 import QuoteEditor, { type QuoteDetail, type Option } from "@/app/bd/quotes/[id]/QuoteEditor";
 import { muted, pageHeader } from "@/lib/twsUi";
+import { staffPageOrMyWork } from "@/lib/spaceStaffPage";
 
 // The editor is built for the Hub's dark look; inside the space it sits on a charcoal panel
 const PANEL = {
@@ -16,6 +17,7 @@ const PANEL = {
 export default async function SpaceQuotePage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
   if (!/^[a-z0-9-]{2,30}$/.test(slug) || !/^\d+$/.test(id)) notFound();
+  await staffPageOrMyWork(slug); // freelancers work from My work
   const [space, quote, entities, clients, deals] = await Promise.all([
     serverApi<{ space?: SpaceTheme }>(`/api/spaces/${slug}`),
     serverApi<QuoteDetail>(`/api/quotes/${id}`),

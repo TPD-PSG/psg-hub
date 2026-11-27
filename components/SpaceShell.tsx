@@ -12,12 +12,15 @@ import type { SpaceTheme } from "@/lib/spaces";
 
 const capsFont = "var(--tws-caps-font), var(--tws-font), sans-serif";
 
-export default function SpaceShell({ space, children }: { space: SpaceTheme; children: React.ReactNode }) {
+// staff = PSG staff (admin or member). Anyone else in the space (freelancers) gets My work and the
+// shared pages only (freelancer logins, 27 Nov 2026).
+export default function SpaceShell({ space, staff = true, children }: { space: SpaceTheme; staff?: boolean; children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   const [menu, setMenu] = useState(false);
   const base = `/spaces/${space.slug}`;
-  const own = [
+  const own = staff ? [
     { href: base, label: "Home" },
+    { href: `${base}/my-work`, label: "My work" },
     { href: `${base}/board`, label: "Build board" },
     { href: `${base}/jobs`, label: "Build jobs" },
     { href: `${base}/planner`, label: "Planner" },
@@ -30,6 +33,11 @@ export default function SpaceShell({ space, children }: { space: SpaceTheme; chi
     { href: `${base}/noticeboard`, label: "Noticeboard" },
     { href: `${base}/fun`, label: "Fun Corner" },
     { href: `${base}/roadmap`, label: "Roadmap" },
+  ] : [
+    { href: `${base}/my-work`, label: "My work" },
+    { href: `${base}/safety`, label: "Safety" },
+    { href: `${base}/noticeboard`, label: "Noticeboard" },
+    { href: `${base}/fun`, label: "Fun Corner" },
   ];
   const shared = [
     { href: "/tasks", label: "My tasks" }, { href: "/calendar", label: "Calendar" },

@@ -5,10 +5,12 @@ import { serverApi } from "@/lib/serverApi";
 import type { SpaceTheme } from "@/lib/spaces";
 import SetStorage, { type StorageData } from "@/components/SetStorage";
 import { muted, pageHeader } from "@/lib/twsUi";
+import { staffPageOrMyWork } from "@/lib/spaceStaffPage";
 
 export default async function StoragePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   if (!/^[a-z0-9-]{2,30}$/.test(slug)) notFound();
+  await staffPageOrMyWork(slug); // freelancers work from My work
   const data = await serverApi<StorageData & { space?: SpaceTheme }>(`/api/spaces/${slug}/storage`);
   if (!data?.space) notFound();
   const base = `/spaces/${slug}`;

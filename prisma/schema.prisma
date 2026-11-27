@@ -58,6 +58,7 @@ model User {
   spacePhotos         SpacePhoto[]         @relation("SpacePhotoUploader")
   buildVotes          BuildVote[]          @relation("BuildVotes")
   buildChecksDone     BuildCheck[]         @relation("BuildCheckDoneBy")
+  buildChecksRaised   BuildCheck[]         @relation("BuildCheckCreatedBy")
   jobFilesUploaded    JobFile[]            @relation("JobFileUploader")
   drawingDecisions    DrawingDecision[]    @relation("DrawingDecisionBy")
   jobLogs             JobLog[]             @relation("JobLogBy")
@@ -1582,17 +1583,19 @@ model BuildVote {
 
 // TWS build page: snags and tasks, and the ready-to-collect checklist (kind "collect")
 model BuildCheck {
-  id        Int       @id @default(autoincrement())
-  jobId     Int
-  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  kind      String    @default("snag") // snag | collect
-  text      String
-  done      Boolean   @default(false)
-  doneById  Int?
-  doneBy    User?     @relation("BuildCheckDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
-  doneAt    DateTime?
-  sortOrder Int       @default(0)
-  createdAt DateTime  @default(now())
+  id          Int       @id @default(autoincrement())
+  jobId       Int
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  kind        String    @default("snag") // snag | collect
+  text        String
+  done        Boolean   @default(false)
+  doneById    Int?
+  doneBy      User?     @relation("BuildCheckDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
+  doneAt      DateTime?
+  sortOrder   Int       @default(0)
+  createdById Int? // who raised it (freelancers raise snags from My work)
+  createdBy   User?     @relation("BuildCheckCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
 
   @@index([jobId])
 }

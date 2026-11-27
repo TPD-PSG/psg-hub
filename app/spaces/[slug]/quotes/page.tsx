@@ -7,10 +7,12 @@ import type { QuoteRow, TemplateRow } from "@/app/bd/quotes/QuotesView";
 import SpaceQuotes from "./SpaceQuotes";
 import { workshopDayRate } from "@/lib/buildQuote";
 import { auth } from "@/auth";
+import { staffPageOrMyWork } from "@/lib/spaceStaffPage";
 
 export default async function SpaceQuotesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   if (!/^[a-z0-9-]{2,30}$/.test(slug)) notFound();
+  await staffPageOrMyWork(slug); // freelancers work from My work
   const space = await serverApi<{ space?: SpaceTheme; jobs?: { id: number; number: string; title: string }[] }>(`/api/spaces/${slug}`);
   if (!space?.space) notFound();
   const [session, dayRate] = await Promise.all([auth(), workshopDayRate()]);

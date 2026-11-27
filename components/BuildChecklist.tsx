@@ -7,7 +7,7 @@ import { alertDialog } from "@/components/Dialogs";
 import { fmtDate } from "@/lib/format";
 import { input } from "@/lib/twsUi";
 
-export type Check = { id: number; kind: string; text: string; done: boolean; doneAt: string | null; doneBy: { name: string } | null };
+export type Check = { id: number; kind: string; text: string; done: boolean; doneAt: string | null; doneBy: { name: string } | null; createdBy?: { name: string } | null };
 
 export default function BuildChecklist({ jobId, kind, checks, onChange, dark = false, placeholder }: {
   jobId: number; kind: "snag" | "collect"; checks: Check[]; onChange: (all: Check[]) => void; dark?: boolean; placeholder: string;
@@ -50,7 +50,7 @@ export default function BuildChecklist({ jobId, kind, checks, onChange, dark = f
         <div key={c.id} className="flex items-start gap-2.5 text-sm group">
           <input type="checkbox" id={`chk-${c.id}`} checked={c.done} disabled={busy} onChange={() => toggle(c)} className="w-4 h-4 mt-0.5 shrink-0" />
           <label htmlFor={`chk-${c.id}`} className="flex-1 min-w-0 cursor-pointer" style={{ color: c.done ? soft : ink, textDecoration: c.done ? "line-through" : undefined }}
-            title={c.done && c.doneBy ? `Done by ${c.doneBy.name}${c.doneAt ? `, ${fmtDate(c.doneAt)}` : ""}` : undefined}>{c.text}</label>
+            title={c.done && c.doneBy ? `Done by ${c.doneBy.name}${c.doneAt ? `, ${fmtDate(c.doneAt)}` : ""}` : undefined}>{c.text}{c.kind === "snag" && c.createdBy && <span className="ml-1.5 text-xs" style={{ color: soft, textDecoration: "none" }}>({c.createdBy.name})</span>}</label>
           <button type="button" onClick={() => remove(c)} aria-label={`Remove "${c.text}"`} className="text-xs opacity-0 group-hover:opacity-100 focus:opacity-100" style={{ color: dark ? "#f4a99b" : "var(--tws-bad-ink)" }}>✕</button>
         </div>
       ))}

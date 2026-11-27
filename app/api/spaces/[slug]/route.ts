@@ -14,6 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const space = await spaceBySlug((await params).slug);
   if (!space) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!(await canSeeSpace({ id: Number(user.id), role: user.role ?? "member" }, space.id))) return NextResponse.json({ error: "This space isn't yours" }, { status: 403 });
+  if (user.role !== "admin" && user.role !== "member") return NextResponse.json({ error: "Staff only: freelancers see their own parts in My work" }, { status: 403 });
 
   const now = new Date();
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));

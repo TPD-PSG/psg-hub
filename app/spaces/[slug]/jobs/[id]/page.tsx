@@ -12,10 +12,12 @@ import type { DrawingRow, Blocker, Override } from "@/components/DrawingRegister
 import type { VariationRow } from "@/components/Variations";
 import type { StorageData } from "@/components/SetStorage";
 import type { CertRow } from "@/components/FrCertificates";
+import { staffPageOrMyWork } from "@/lib/spaceStaffPage";
 
 export default async function SpaceJobPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
   if (!/^[a-z0-9-]{2,30}$/.test(slug) || !/^\d+$/.test(id)) notFound();
+  await staffPageOrMyWork(slug); // freelancers work from My work
   const session = await auth();
   const me = session?.user as { id?: string; role?: string } | undefined;
   const [data, plan, parts, prods, materials, photos, checks, contacts, files, drawings, variations, storage, certs] = await Promise.all([

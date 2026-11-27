@@ -8,4 +8,4 @@ export const STANDARD_COLLECT_CHECKS = [
   "Labelled and wrapped for transport",
   "Haulier and loading slot confirmed",
 ];
-export const CHECK_SELECT = { id: true, kind: true, text: true, done: true, doneAt: true, sortOrder: true, doneBy: { select: { name: true } } } as const;
+export const CHECK_SELECT = { id: true, kind: true, text: true, done: true, doneAt: true, sortOrder: true, doneBy: { select: { name: true } }, createdBy: { select: { name: true } } } as const;

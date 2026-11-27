@@ -63,10 +63,9 @@ export default () => run("audit-round2-security", async ({ db, users, login, res
     const lt = await db.labourType.create({ data: { entityId: made.e1.id, name: "Audit carpenter", dayRate: 240 } });
     await db.buildPart.create({ data: { jobId: made.job.id, label: "Flats", labourTypeId: lt.id, materials: { create: [{ description: "Ply", quantity: 4, unitCost: 32 }] } } });
     await db.user.update({ where: { id: free.id }, data: { homeEntityId: made.e1.id } });
-    let pl = await (await f("/api/spaces/audit-shop/planner")).json();
-    const fp = pl.parts.find(p => p.jobId === made.job.id);
-    ok(fp && fp.materials[0].unitCost === null && fp.labourType.dayRate === null && pl.jobs.find(j => j.id === made.job.id).client === null, "a freelancer's planner has no costs, day rates or client names");
-    pl = await (await a("/api/spaces/audit-shop/planner")).json();
+    // Freelancers no longer get the planner at all (they work from My work, 27 Nov 2026)
+    ok((await f("/api/spaces/audit-shop/planner")).status === 403, "a freelancer can't open the planner (no costs, day rates or client names)");
+    let pl = await (await a("/api/spaces/audit-shop/planner")).json();
     ok(pl.parts.find(p => p.jobId === made.job.id).materials[0].unitCost === 32, "an admin still sees them");
     await db.user.update({ where: { id: member.id }, data: { permissions: JSON.stringify({ modules: ["productions"], allProductions: false }) } });
     m = await login(member.email);

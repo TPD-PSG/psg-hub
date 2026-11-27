@@ -74,7 +74,7 @@ export default () => run("noticeboard", async ({ db, users, login, results }) =>
     ok(!(await json(await c("/api/spaces"))).some(s => s.slug === "board-test"), "…only for spaces you can open");
     const nb = await (await f("/spaces/board-test/noticeboard", { headers: { accept: "text/html" } })).text();
     ok(nb.includes("Workshop noticeboard") && nb.includes("Booth booked Thursday") && nb.includes("Build of the month"), "noticeboard page renders");
-    const home = await (await f("/spaces/board-test", { headers: { accept: "text/html" } })).text();
+    const home = await (await a("/spaces/board-test", { headers: { accept: "text/html" } })).text(); // staff: freelancers go to My work
     ok(home.includes("Workshop noticeboard") && home.includes("Board test build"), "space home shows the noticeboard and build of the month");
     const fun = await (await f("/fun", { headers: { accept: "text/html" } })).text();
     ok(fun.includes("Build of the month"), "Fun Corner shows build of the month");

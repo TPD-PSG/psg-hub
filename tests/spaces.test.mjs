@@ -45,16 +45,17 @@ export default () => run("spaces", async ({ db, users, login, anon, results }) =
     // Home company: the freelancer works for the space's company
     ok((await a(`/api/users/${free.id}`, { method: "PUT", body: JSON.stringify({ name: "test-freelancer", email: free.email, role: "freelancer", homeEntityId: entity.id }) })).status === 200, "admin sets a home company");
     const home = await f("/", { headers: { accept: "text/html" } });
-    ok([302, 303, 307, 308].includes(home.status) && (home.headers.get("location") ?? "").endsWith(`/spaces/${SLUG}`), "home company with a space → lands on the space");
+    ok([302, 303, 307, 308].includes(home.status) && (home.headers.get("location") ?? "").endsWith(`/spaces/${SLUG}/my-work`), "home company with a space → a freelancer lands on My work in it");
     ok((await f("/?all=1", { headers: { accept: "text/html" } })).status === 200, "?all=1 still opens PSG Hub home");
-    const sd = await json(await f(`/api/spaces/${SLUG}`));
+    ok((await f(`/api/spaces/${SLUG}`)).status === 403, "a freelancer doesn't get the whole space's builds");
+    const sd = await json(await m(`/api/spaces/${SLUG}`));
     ok(sd.space?.name === "Workshop Space Test" && sd.jobs?.some(j => j.id === job.id) && sd.dueOut?.some(j => j.id === job.id), "space shows its live jobs and what's due out");
     ok(sd.team?.some(t => t.id === free.id), "space lists its team");
     ok(!JSON.stringify(sd).includes("price"), "no money on the space page");
     ok((await c(`/api/spaces/${SLUG}`)).status === 403, "someone from another company can't open it");
     ok((await m(`/api/spaces/${SLUG}`)).status === 200, "PSG staff can open any space");
     ok((await a("/api/spaces/other-space-test")).status === 404, "a company without its space switched on has no space");
-    const page = await (await f(`/spaces/${SLUG}`, { headers: { accept: "text/html" } })).text();
+    const page = await (await m(`/spaces/${SLUG}`, { headers: { accept: "text/html" } })).text();
     ok(page.includes("Space test build") && page.includes("SHARED WITH PSG") && page.includes("#e4572e"), "space page in the first HTML, in the space's own frame and colours");
     ok(page.includes("<title>TWS-T · PSG Hub</title>") && page.includes(`/api/spaces/${SLUG}/icon`), "inside the space the browser tab shows its name and icon");
     const icon = await f(`/api/spaces/${SLUG}/icon?s=64`);

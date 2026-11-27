@@ -24,6 +24,7 @@ export default function SpaceShell({ space, staff = true, children }: { space: S
     { href: `${base}/board`, label: "Build board" },
     { href: `${base}/jobs`, label: "Build jobs" },
     { href: `${base}/planner`, label: "Planner" },
+    { href: `${base}/calendar`, label: "Workshop calendar" },
     { href: `${base}/quotes`, label: "Quotes" },
     { href: `${base}/materials`, label: "Materials & kit" },
     { href: `${base}/storage`, label: "Storage" },

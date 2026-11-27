@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  partStages    PartStage[]  @relation("PartStageUser")
   id            Int          @id @default(autoincrement())
   name          String
   email         String       @unique
@@ -450,13 +451,13 @@ model Opportunity {
 
 // A company in the group (deals, productions and revenue targets belong to one). Admins manage them.
 model Entity {
-  id               Int               @id @default(autoincrement())
-  name             String            @unique
-  archived         Boolean           @default(false)
-  sortOrder        Int               @default(0)
+  id               Int                  @id @default(autoincrement())
+  name             String               @unique
+  archived         Boolean              @default(false)
+  sortOrder        Int                  @default(0)
   // Its own space in the Hub (e.g. The Workshop Stoke): home page, colours and logo
-  hasSpace         Boolean           @default(false)
-  slug             String?           @unique // web address of the space, e.g. "tws" → /spaces/tws
+  hasSpace         Boolean              @default(false)
+  slug             String?              @unique // web address of the space, e.g. "tws" → /spaces/tws
   shortName        String? // e.g. "TWS"
   color            String? // theme colour, #rrggbb
   logoKey          String? // logo in R2…
@@ -464,9 +465,9 @@ model Entity {
   logoMime         String?
   address          String? // letterhead on its documents (e.g. TWS sales quotes)
   phone            String?
-  members          User[]            @relation("UserHomeEntity")
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  members          User[]               @relation("UserHomeEntity")
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   opportunities    Opportunity[]
   productions      Production[]
   targets          RevenueTarget[]
@@ -484,9 +485,10 @@ model Entity {
   storedPieces     StoredPiece[]
   buildTemplates   BuildTemplate[]
   labourTypes      LabourType[]
-  incidents        Incident[]        @relation("EntityIncidents")
-  hsReportToken    String?           @unique // the space's no-login accident/incident form (/report-incident/<token>)
+  incidents        Incident[]           @relation("EntityIncidents")
+  hsReportToken    String?              @unique // the space's no-login accident/incident form (/report-incident/<token>)
   machines         Machine[]
+  disciplines      WorkshopDiscipline[]
   complianceItems  ComplianceItem[]
 }
 
@@ -1446,6 +1448,7 @@ model BuildPart {
   quoteId      Int?
   quote        Quote?              @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   quoteItem    String? // the item's name on that quote (lower case), how the part is matched on each save
+  stages       PartStage[] // its discipline stages (Pre-production, CNC, Carpentry…) on the workshop calendar
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -2183,4 +2186,41 @@ model AiUsage {
   createdAt        DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// Workshop calendar (28 Nov 2026, from the TWS workshop director): each piece (build part) goes
+// through discipline stages, each with its own dates. A workshop's disciplines are its own list.
+model WorkshopDiscipline {
+  id        Int         @id @default(autoincrement())
+  entityId  Int
+  entity    Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  name      String
+  color     String? // #rrggbb for its bars
+  sortOrder Int         @default(0)
+  archived  Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  stages    PartStage[]
+
+  @@index([entityId])
+}
+
+model PartStage {
+  id           Int                @id @default(autoincrement())
+  partId       Int
+  part         BuildPart          @relation(fields: [partId], references: [id], onDelete: Cascade)
+  disciplineId Int
+  discipline   WorkshopDiscipline @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+  startDate    DateTime? // midnight UTC of the first day; null = not dated yet
+  days         Int                @default(1)
+  hours        Float? // planned hours (from the quote's labour line)
+  userId       Int?
+  user         User?              @relation("PartStageUser", fields: [userId], references: [id], onDelete: SetNull)
+  status       String             @default("todo") // todo | on | done
+  fromQuote    Boolean            @default(false) // made from a labour line on the quote item
+  sortOrder    Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([partId])
+  @@index([disciplineId, startDate])
 }

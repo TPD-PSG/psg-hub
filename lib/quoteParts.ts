@@ -11,6 +11,7 @@
 import { prisma } from "./prisma";
 import type { Prisma } from "@prisma/client";
 import { HOURS_PER_DAY } from "./buildQuote";
+import { disciplineFor, disciplinesFor } from "./workshopCalendar";
 
 type QLine = { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; kind: string | null; leaveOut: boolean };
 const key = (s: string) => s.trim().toLowerCase();
@@ -48,6 +49,8 @@ export async function syncQuoteParts(quoteId: number, renames: Record<string, st
   }
   // Accepted: locked, and the planner owns its parts (accepting firms up the pencils elsewhere)
   if (q.status === "accepted") return;
+  // Only workshop builds have parts (a production-management job's quote is just a quote)
+  if (!q.job?.stage) return;
 
   // Items renamed in the editor: the parts follow before matching
   for (const [from, to] of Object.entries(renames)) {
@@ -64,6 +67,7 @@ export async function syncQuoteParts(quoteId: number, renames: Record<string, st
   }
   const entityId = q.job?.entityId ?? q.entityId;
   const types = entityId ? await prisma.labourType.findMany({ where: { entityId }, select: { id: true, name: true } }) : [];
+  const disciplines = entityId ? await disciplinesFor(entityId) : [];
   const parts = await prisma.buildPart.findMany({ where: { quoteId }, select: { id: true, quoteItem: true, label: true, materials: { select: { id: true, description: true, quantity: true, fromQuote: true, poId: true, stockMoveId: true } } } });
   const pencilled = true; // not accepted yet
 
@@ -79,6 +83,7 @@ export async function syncQuoteParts(quoteId: number, renames: Record<string, st
     } else {
       await prisma.buildPart.update({ where: { id: part.id }, data: { label: item.name.slice(0, 120), days, hours, ...(lt ? { labourTypeId: lt.id } : {}) } });
     }
+    await syncStages(part.id, item.lines, disciplines);
     // Materials: refresh the ones that came from the quote and haven't been ordered or booked out
     await prisma.buildPartMaterial.deleteMany({ where: { partId: part.id, fromQuote: true, poId: null, stockMoveId: null } });
     const kept = part.materials.filter(m => m.poId != null || m.stockMoveId != null || !m.fromQuote);
@@ -97,4 +102,32 @@ export async function syncQuoteParts(quoteId: number, renames: Record<string, st
 export async function dropQuoteParts(quoteId: number) {
   await prisma.buildPart.deleteMany({ where: { quoteId, ...untouched } });
   await prisma.buildPart.updateMany({ where: { quoteId }, data: { quoteId: null, quoteItem: null } });
+}
+
+/** An item's labour lines as the part's discipline stages (workshop calendar): a line naming a
+ *  discipline ("Carpentry", "CNC cutting") gives that stage its hours. Dated, staffed or started
+ *  stages keep their dates and people; ones from the quote that are no longer on it, and that
+ *  nobody has touched, go. */
+async function syncStages(partId: number, lines: QLine[], disciplines: { id: number; name: string }[]) {
+  if (!disciplines.length) return;
+  const want = new Map<number, number>(); // discipline → hours
+  for (const l of lines) {
+    if (l.kind !== "labour") continue;
+    const d = disciplineFor(l.description, disciplines);
+    if (!d) continue;
+    want.set(d.id, (want.get(d.id) ?? 0) + (labourHours([l]) ?? 0));
+  }
+  const have = await prisma.partStage.findMany({ where: { partId }, select: { id: true, disciplineId: true, startDate: true, userId: true, status: true, fromQuote: true } });
+  let order = 0;
+  for (const d of disciplines) {
+    if (!want.has(d.id)) continue;
+    const hours = Math.round(want.get(d.id)! * 100) / 100 || null;
+    const days = hours ? Math.max(1, Math.ceil(hours / HOURS_PER_DAY)) : 1;
+    const st = have.find(h => h.disciplineId === d.id);
+    if (!st) await prisma.partStage.create({ data: { partId, disciplineId: d.id, hours, days, fromQuote: true, sortOrder: order } });
+    else await prisma.partStage.update({ where: { id: st.id }, data: { hours, sortOrder: order, ...(st.startDate ? {} : { days }) } }); // a dated stage keeps its run of days
+    order++;
+  }
+  const gone = have.filter(h => h.fromQuote && !want.has(h.disciplineId) && !h.startDate && !h.userId && h.status === "todo").map(h => h.id);
+  if (gone.length) await prisma.partStage.deleteMany({ where: { id: { in: gone } } });
 }

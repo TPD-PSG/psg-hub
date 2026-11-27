@@ -8,6 +8,8 @@ datasource db {
 }
 
 model User {
+  crewJobs        CrewJob[]        @relation("CrewJobBy")
+  crewBookings    CrewOffer[]      @relation("CrewOfferBookedBy")
   rentalOuts      RentalHireUnit[] @relation("RentalUnitOut")
   rentalBacks     RentalHireUnit[] @relation("RentalUnitBack")
   rentalHires     RentalHire[]     @relation("RentalHireBy")
@@ -151,6 +153,7 @@ model Production {
   performanceOverrides PerformanceDateOverride[]
   productionNotes      ProductionNote[]
   meetings             Meeting[]
+  crewJobs             CrewJob[]
 }
 
 model PerformanceSchedule {
@@ -366,6 +369,7 @@ model Crew {
   productions   ProductionCrew[]
   hotelBookings HotelBooking[]
   callSheetRows CallSheetEntry[]
+  offers        CrewOffer[]
 }
 
 model ProductionCrew {
@@ -381,6 +385,7 @@ model ProductionCrew {
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  crewOffer    CrewOffer? // booked through a crew offer
 }
 
 model Client {
@@ -2374,6 +2379,7 @@ model RentalHire {
   invoice      CompanyInvoice?    @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   charges      RentalHireCharge[]
   units        RentalHireUnit[] // scanned out and back (stage 3)
+  crewJobs     CrewJob[]
   subHires     RentalSubHire[]
   createdById  Int?
   createdBy    User?              @relation("RentalHireBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -2412,6 +2418,8 @@ model RentalHireCharge {
   quantity    Float      @default(1)
   unitPrice   Float      @default(0) // ex VAT
   sortOrder   Int        @default(0)
+  crewJobId   Int?       @unique // kept in step with the crew booked on that job (stage 4)
+  crewJob     CrewJob?   @relation(fields: [crewJobId], references: [id], onDelete: Cascade)
 
   @@index([hireId])
 }
@@ -2456,4 +2464,59 @@ model RentalSubHire {
   updatedAt    DateTime       @updatedAt
 
   @@index([hireId])
+}
+
+// ── Crew offers (stage 4, 27 Nov 2026) ───────────────────────────────────────────────────────
+// A crew job on a rental hire or a production: a role on a day, for some number of people. It's
+// offered to people from the crew directory; they say whether they're available (by a private
+// link, no login needed), and the team books who they want.
+model CrewJob {
+  id           Int               @id @default(autoincrement())
+  hireId       Int?
+  hire         RentalHire?       @relation(fields: [hireId], references: [id], onDelete: Cascade)
+  productionId Int?
+  production   Production?       @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  role         String // e.g. Lighting technician, Stagehand
+  date         DateTime // the day (midnight UTC)
+  callTime     String? // "08:00"
+  endTime      String?
+  places       Int               @default(1) // how many people
+  payRate      Float? // what each person is paid, ex VAT
+  payUnit      String            @default("day") // day | hour | job
+  hours        Float? // for hourly pay
+  chargeRate   Float? // what the client is charged for each person (hires)
+  location     String?
+  notes        String? // shown to the crew
+  createdById  Int?
+  createdBy    User?             @relation("CrewJobBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  offers       CrewOffer[]
+  charge       RentalHireCharge?
+
+  @@index([hireId])
+  @@index([productionId])
+  @@index([date])
+}
+
+model CrewOffer {
+  id               Int             @id @default(autoincrement())
+  jobId            Int
+  job              CrewJob         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  crewId           Int
+  crew             Crew            @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  token            String          @unique // the private link: /crew-offer/<token>
+  status           String          @default("offered") // offered | available | unavailable | booked | released
+  reply            String? // their note
+  emailedTo        String?
+  sentAt           DateTime        @default(now())
+  respondedAt      DateTime?
+  bookedAt         DateTime?
+  bookedById       Int?
+  bookedBy         User?           @relation("CrewOfferBookedBy", fields: [bookedById], references: [id], onDelete: SetNull)
+  productionCrewId Int?            @unique // their place on the production's crew, once booked
+  productionCrew   ProductionCrew? @relation(fields: [productionCrewId], references: [id], onDelete: SetNull)
+
+  @@unique([jobId, crewId])
+  @@index([crewId])
 }

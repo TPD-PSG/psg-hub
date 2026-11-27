@@ -1,6 +1,6 @@
 ---
 title: Crew
-summary: Booking crew onto a production, and the crew directory with contact and insurance details
+summary: Booking crew onto a production, asking crew if they're free by a private link, and the crew directory
 section: Productions
 order: 6
 paths: /productions/*?section=crew, /crew
@@ -41,6 +41,23 @@ The table shows each person's role, dates, day rate, contact details and insuran
 ### Where bookings are used
 
 The dates you set here decide who is filled in on a [call sheet](/help/call-sheets) for each day, and who shows in **Crew on this week** on the [Overview](/help/production-overview). Crew can also be assigned to [hotel bookings](/help/accommodation-and-hotels).
+
+## Asking crew if they're free (crew offers)
+
+A **crew job** is a role on a day for some number of people, for example 2 lighting technicians on Saturday, 08:00 to 18:00. Add one with **+ Add a crew job**: the job, the day, the call and finish times, how many people, where, their **pay** (by the day, the hour or the job) and notes for the crew (what to wear, parking, who to ask for).
+
+Then click **Ask people** and tick who to ask from the crew directory (search by name or discipline).
+
+- Each person gets **their own private link**. It shows the job, the times, where and their pay, with **I'm available** and **Can't do it** buttons. **No login is needed.**
+- The link is emailed to anyone with an email address in the directory. Use **Copy link** to send it by text or WhatsApp.
+- Crew who also have a Hub login with the same email see the offer in their notifications and under **My crew offers** in the account menu.
+- Saying they're available **doesn't book them**. Their answers show on the job (Asked, Available, Can't do it), with any note they added.
+
+To book someone, click **Book**. They're told they're booked. If they answered by phone, use **Said yes** or **Said no** to note it. **Release** un-books someone and tells them they're no longer needed. **Ask again** resends the link, and **Withdraw** cancels an offer nobody's booked on.
+
+Once every place is booked, everyone else's link says the job's been filled.
+
+On a production, booking someone adds them to the production's crew list below (with the role, the day and their day rate), and releasing them takes them off again.
 
 ## Exporting
 

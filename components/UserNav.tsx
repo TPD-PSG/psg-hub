@@ -58,6 +58,9 @@ export default function UserNav() {
           <Link href="/profile" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
             My Profile
           </Link>
+          <Link href="/my-offers" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
+            My crew offers
+          </Link>
           {newLook !== null && (
             <button type="button" role="switch" aria-checked={newLook} onClick={toggleNewLook}
               className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">

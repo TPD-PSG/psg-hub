@@ -86,7 +86,7 @@ export const proxy = auth((req) => {
   if (selfGuarded) return NextResponse.next();
 
   // Allow auth routes and public assets
-  if (pathname.startsWith("/api/auth") || pathname === "/api/users/public" || pathname.startsWith("/_next") || pathname === "/login" || pathname.startsWith("/toolbox-talk") || pathname.startsWith("/report-incident/") || pathname.startsWith("/api/report-incident/") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-signatures") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-info") || pathname === "/api/show-reports/ingest") {
+  if (pathname.startsWith("/api/auth") || pathname === "/api/users/public" || pathname.startsWith("/_next") || pathname === "/login" || pathname.startsWith("/toolbox-talk") || pathname.startsWith("/report-incident/") || pathname.startsWith("/api/report-incident/") || pathname.startsWith("/crew-offer/") || pathname.startsWith("/api/crew-offer/") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-signatures") || pathname.startsWith("/api/productions/") && pathname.endsWith("/toolbox-info") || pathname === "/api/show-reports/ingest") {
     return NextResponse.next();
   }
 

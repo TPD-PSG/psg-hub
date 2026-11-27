@@ -26,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (b.quoteSent === true) f.data.quoteSentAt = new Date(); // marked as sent to the client
   if (b.quoteSent === false) f.data.quoteSentAt = null;
   if (f.charges) {
-    await prisma.rentalHireCharge.deleteMany({ where: { hireId: h.id } });
+    await prisma.rentalHireCharge.deleteMany({ where: { hireId: h.id, crewJobId: null } }); // crew charges follow their bookings
     f.data.charges = { create: f.charges };
   }
   const status = (f.data.status as string | undefined) ?? h.status;

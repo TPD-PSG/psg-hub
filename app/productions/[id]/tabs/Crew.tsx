@@ -5,6 +5,7 @@ import { useState } from "react";
 import ExportMenu from "@/components/ExportMenu";
 import { exportCrewPDF, exportCrewXLSX } from "@/lib/exports";
 import { confirmDialog } from "@/components/Dialogs";
+import CrewJobs from "@/components/CrewJobs";
 import { F, Modal, Btns, inp, inpStyle, fmt, fmtShortDate, sendJson, useList, type CrewMember, type TabProps } from "../shared";
 
 export default function CrewTab({ prod, reload }: TabProps) {
@@ -33,6 +34,10 @@ export default function CrewTab({ prod, reload }: TabProps) {
   return (
     <>
       <div className="space-y-4">
+        {/* Crew offers: ask people if they're free for a day's work, then book them (they join the list below) */}
+        <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
+          <CrewJobs productionId={prod.id} look="hub" charges={false} onChange={reload} />
+        </div>
         <div className="flex justify-end gap-2">
           <ExportMenu actions={[
             { label: "Export PDF", onClick: () => exportCrewPDF(prod.name, prod.crew.map((pc) => pc.crew), prod.logoUrl) },

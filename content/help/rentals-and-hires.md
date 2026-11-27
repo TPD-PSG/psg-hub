@@ -102,6 +102,12 @@ On a confirmed, out or returned hire, click **Raise invoice**. This puts a **dra
 
 If the hire changes while the invoice is still a draft, click **Update the draft invoice** to bring it into line. Once the invoice has been sent or paid, the hire leaves it alone; change it in Finance if you need to. A hire with an invoice can't be deleted.
 
+## Crew on a hire
+
+Saved hires have a **Crew** panel: add a crew job (for example 2 technicians going out with the kit), ask people from the crew directory if they're free, and book who you want. It works the same as on a production; see [Crew](/help/crew).
+
+On a hire, a crew job also has **Charge the client £ (each)**. When people are booked, a crew line is added to the hire's other charges (the charge × how many are booked), and it's kept up to date as people are booked or released. These crew lines show on the hire, its PDF and its invoice, and aren't edited by hand.
+
 ## Warehouse: prepping and scanning out
 
 **Warehouse** lists the hires **to prep** (confirmed, going out in the next two weeks) and the hires **out now**. Click one to open it.

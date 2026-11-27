@@ -12,11 +12,12 @@ import { card, h2, muted, btnSolid, btnLine, input, label as lbl } from "@/lib/t
 import { RentalsHeader, Chip, api } from "@/components/rentals/shared";
 import { gbp, day, todayIso, addDays, HIRE_TONE, HIRE_LABEL, type RentalsData, type HireRow } from "@/components/rentals/format";
 import LineEditor, { type EditLine } from "@/components/rentals/LineEditor";
+import CrewJobs from "@/components/CrewJobs";
 
 type Short = { productId: number; name: string; wanted: number; free: number; short: number };
-type Full = HireRow & Omit<HireForPdf, "lines"> & { lines: (HireForPdf["lines"][number] & { productId: number })[]; shortages: Short[]; totals?: { net: number; gross: number };
+type Full = HireRow & Omit<HireForPdf, "lines" | "charges"> & { lines: (HireForPdf["lines"][number] & { productId: number })[]; shortages: Short[]; totals?: { net: number; gross: number };
   invoice: { id: number; status: string; reference: string | null; netAmount: number; vatAmount: number; dueDate: string | null } | null;
-  subHires: SubHire[] };
+  subHires: SubHire[]; charges: { description: string; quantity: number; unitPrice: number; crewJobId?: number | null }[] };
 type SubHire = { id: number; description: string; quantity: number; status: string; supplierName: string | null; cost: number | null; product: { id: number; name: string } | null };
 const SUB_STATUS: Record<string, string> = { needed: "Needed", ordered: "Ordered", received: "Received", returned: "Sent back" };
 type Charge = { description: string; quantity: string; unitPrice: string };
@@ -51,7 +52,7 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
     setForm({ id: h.id, status: h.status, title: h.title, clientName: h.clientName ?? "", clientEmail: h.clientEmail ?? "", productionId: h.productionId ? String(h.productionId) : "", outDate: h.outDate.slice(0, 10), returnDate: h.returnDate.slice(0, 10), notes: h.notes ?? "",
       lines: h.lines.map(l => ({ productId: l.productId, quantity: l.quantity, dayRate: l.dayRate, weekRate: l.weekRate ?? null, unitPrice: l.unitPrice ?? null, discountPct: l.discountPct ?? null, note: l.note })),
       chargeDays: str(h.chargeDays), discountPct: str(h.discountPct), vatRate: str(h.vatRate), paymentTerms: h.paymentTerms ?? "", customerPo: h.customerPo ?? "", delivery: h.delivery ?? "", deliveryTo: h.deliveryTo ?? "",
-      validUntil: h.validUntil?.slice(0, 10) ?? "", terms: h.terms ?? "", charges: h.charges.map(c => ({ description: c.description, quantity: String(c.quantity), unitPrice: String(c.unitPrice) })) });
+      validUntil: h.validUntil?.slice(0, 10) ?? "", terms: h.terms ?? "", charges: h.charges.filter(c => !c.crewJobId).map(c => ({ description: c.description, quantity: String(c.quantity), unitPrice: String(c.unitPrice) })) });
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- opens the hire named in the link, once
   useEffect(() => { if (openId) open(openId); }, [openId]);
@@ -73,12 +74,14 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
     filter === "all" ? true : filter === "live" ? ["confirmed", "out"].includes(h.status) : filter === "done" ? h.status === "returned" : h.status === filter), [data.hires, filter]);
 
   const days = form && form.outDate && form.returnDate && form.returnDate >= form.outDate ? hireDays(form.outDate, form.returnDate) : 0;
+  // Crew charges come from bookings on the hire's crew jobs (read-only here)
+  const crewCharges = form?.id && full?.id === form.id ? full.charges.filter(c => c.crewJobId) : [];
   // The money as the form stands (the same rules the server and PDF use)
   const charged = form && form.chargeDays.trim() !== "" ? Math.max(0, Number(form.chargeDays) || 0) : days;
   const totals = form ? hireTotals({
     chargeDays: charged, outDate: form.outDate || todayIso(), returnDate: form.returnDate || todayIso(), discountPct: Number(form.discountPct) || null, vatRate: Number(form.vatRate) || 0,
     lines: form.lines.map(l => ({ quantity: l.quantity, unitPrice: l.unitPrice, discountPct: l.discountPct, dayRate: l.dayRate !== undefined ? l.dayRate : products.find(p => p.id === l.productId)?.dayRate ?? null, weekRate: l.weekRate !== undefined ? l.weekRate : products.find(p => p.id === l.productId)?.weekRate ?? null })),
-    charges: form.charges.map(c => ({ quantity: Number(c.quantity) || 0, unitPrice: Number(c.unitPrice) || 0 })),
+    charges: [...form.charges.map(c => ({ quantity: Number(c.quantity) || 0, unitPrice: Number(c.unitPrice) || 0 })), ...crewCharges],
   }) : null;
   const body = (f: Form) => ({ title: f.title, clientName: f.clientName, clientEmail: f.clientEmail, productionId: f.productionId || null, outDate: f.outDate, returnDate: f.returnDate, notes: f.notes,
     ...(["returned", "cancelled"].includes(f.status) ? {} : { lines: f.lines.filter(l => l.quantity > 0) }), chargeDays: f.chargeDays, discountPct: f.discountPct, vatRate: f.vatRate === "" ? 20 : f.vatRate, paymentTerms: f.paymentTerms, customerPo: f.customerPo,
@@ -261,8 +264,15 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
                   <button type="button" onClick={() => setForm({ ...form, charges: form.charges.filter((_, j) => j !== i) })} className="text-xs font-semibold px-1" style={{ color: "var(--tws-bad-ink)" }}>Remove</button>
                 </div>
               ))}
+              {crewCharges.map((c, i) => (
+                <div key={`crew${i}`} className="flex gap-2 items-center flex-wrap text-sm">
+                  <span className="flex-1 min-w-[160px]">{c.description} <span style={muted}>· from the crew booked below</span></span>
+                  <span>{c.quantity} × {gbp(c.unitPrice)}</span><span className="font-bold w-20 text-right">{gbp(c.quantity * c.unitPrice)}</span>
+                </div>
+              ))}
               <button type="button" className="self-start text-sm font-semibold" style={{ color: "var(--tws-accent-ink)" }} onClick={() => setForm({ ...form, charges: [...form.charges, { description: "", quantity: "1", unitPrice: "" }] })}>+ Add a charge (transport, labour, damage…)</button>
             </div>
+            {form.id && <CrewJobs key={form.id} hireId={form.id} defaultDate={form.outDate} />}
 
             {totals && (
               <dl className="self-end w-full max-w-xs text-sm flex flex-col gap-1" aria-label="Totals">

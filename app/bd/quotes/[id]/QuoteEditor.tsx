@@ -71,6 +71,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
   // The "Add a line" bar: fill it in, press Add (or Enter), it joins the quote and the boxes clear
   const [entry, setEntry] = useState<Row>({ ...BLANK_ROW, section: initial.lines[initial.lines.length - 1]?.section ?? "" });
   const [insertAt, setInsertAt] = useState<number | null>(null); // add the next line below this row instead of at the end
+  const [newItem, setNewItem] = useState<string | null>(null); // "+ New item": the name being typed
   const [markup, setMarkup] = useState("30");
   const [found, setFound] = useState<Lookup | null>(null);
   const [inStock, setInStock] = useState<{ quantity: number; unit: string } | null>(null);
@@ -298,6 +299,31 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
 
       {/* Lines */}
       <div className="rounded-lg border overflow-x-auto" style={card}>
+        {/* New item: name it, then the Add a line bar below is set to it for its first line */}
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b text-sm" style={{ borderColor: "var(--psg-card-border)" }}>
+          {newItem == null ? (
+            <button type="button" onClick={() => setNewItem("")} className="text-white px-3 py-1 rounded text-xs font-medium" style={{ backgroundColor: "var(--psg-blue)" }}>+ New item</button>
+          ) : (
+            <>
+              <label htmlFor="q-new-item" className="text-xs" style={{ color: "var(--psg-muted)" }}>New item</label>
+              <input id="q-new-item" autoFocus className={inp} style={{ ...inpStyle, width: 240 }} value={newItem} maxLength={80} placeholder="e.g. Coffin lid"
+                onChange={e => setNewItem(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Escape") setNewItem(null);
+                  if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLButtonElement | null)?.click(); }
+                }} />
+              <button type="button" disabled={!newItem.trim()} onClick={() => {
+                const name = newItem.trim();
+                if (items.some(g => sameSection(g.name, name))) { void alertDialog(`There's already an item called "${name}". Use + line on it to add to it.`); return; }
+                setEntry(en => ({ ...BLANK_ROW, quantity: en.quantity || "1", section: name }));
+                setInsertAt(null); setNewItem(null);
+                setTimeout(() => descRef.current?.focus(), 0);
+              }} className="text-white px-3 py-1 rounded text-xs font-medium disabled:opacity-40" style={{ backgroundColor: "var(--psg-blue)" }}>Start item</button>
+              <button type="button" onClick={() => setNewItem(null)} className="text-xs" style={{ color: "var(--psg-muted)" }}>Cancel</button>
+            </>
+          )}
+          <span className="text-xs ml-auto" style={{ color: "var(--psg-muted)" }}>An item groups its lines with a subtotal. Drag lines between items with ⋮⋮.</span>
+        </div>
         <table className="w-full text-sm" style={{ minWidth: 1200 }}>
           <thead>
             <tr className="text-xs" style={{ color: "var(--psg-muted)" }}>
@@ -397,7 +423,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
         {/* Add a line */}
         <form onSubmit={addEntry} className="border-t p-3 space-y-2" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(91,141,239,0.06)" }} aria-label="Add a line">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-xs font-semibold text-white">{insertAt == null ? "Add a line" : `Add a line below line ${insertAt + 1}`}{insertAt != null && <button type="button" onClick={() => setInsertAt(null)} className="ml-2 font-normal text-blue-400">add at the end instead</button>}</span>
+            <span className="text-xs font-semibold text-white">{insertAt == null ? (entry.section.trim() && !items.some(g => sameSection(g.name, entry.section)) ? `Add the first line of the new item "${entry.section.trim()}"` : entry.section.trim() ? `Add a line to ${entry.section.trim()}` : "Add a line") : `Add a line below line ${insertAt + 1}`}{insertAt != null && <button type="button" onClick={() => setInsertAt(null)} className="ml-2 font-normal text-blue-400">add at the end instead</button>}</span>
             <label className="text-xs flex items-center gap-1.5" style={{ color: "var(--psg-muted)" }}>Markup on cost
               <input aria-label="Markup percent" type="number" step="any" className={inp} style={{ ...inpStyle, width: 64 }} value={markup} onChange={e => setMarkup(e.target.value)} />%</label>
           </div>

@@ -1,0 +1,26 @@
+/* New look (beta), build brief stage 1, 28 Nov 2026: the dark-theme tokens, from the mock-ups.
+   Defined only when the switch is on (<html data-new-look>). Nothing uses them yet, so switching on
+   changes nothing visible; the shared components (stage 2) and the shell (stage 3) build on them.
+   Square corners throughout (PSG brand); only avatars are round. */
+:root[data-new-look] {
+  --nl-bg: #070b33;            /* page background */
+  --nl-nav: #000c3b;           /* sidebar, icon rail, top bars */
+  --nl-panel: #0e1550;         /* cards and panels */
+  --nl-panel-raised: #131d5e;  /* rows inside panels, chips */
+  --nl-panel-active: #1a2466;  /* active nav item */
+  --nl-border: #22307a;        /* panel borders, row dividers */
+  --nl-text: #ffffff;
+  --nl-text-muted: #aeb7e0;    /* secondary text, labels */
+  --nl-accent: #c9d2f0;        /* primary buttons, links, active marker */
+  --nl-accent-ink: #000c3b;    /* text on an accent button */
+  --nl-warn: #f2c46b;          /* "Needs you" strip and badges */
+  --nl-warn-bg: #2a2410;
+  --nl-warn-border: #c99a3a;
+  --nl-good: #7fe0a8;
+  --nl-bad: #ffb4a8;
+  --nl-radius: 0;
+  --nl-icon: 18px;             /* line icons: 18 px, 2 px stroke */
+  --nl-icon-stroke: 2;
+  --nl-font: "Montserrat", system-ui, sans-serif;
+  --nl-caps-font: "Josefin Sans", "Montserrat", sans-serif; /* small-caps labels */
+}

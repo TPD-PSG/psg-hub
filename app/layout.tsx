@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import "./globals.css";
+import "./new-look.css";
 import AuthProvider from "@/components/AuthProvider";
 import { auth } from "@/auth";
 import { DialogHost } from "@/components/Dialogs";
@@ -13,6 +14,7 @@ import MobileMenuButton from "@/components/MobileMenuButton";
 import SeasonalOverlay from "@/components/SeasonalOverlay";
 import { homeSpaceFor, spacesFor, textOn } from "@/lib/spaces";
 import { SpaceTopBarLinks } from "@/components/SpaceLinks";
+import { newLookFor } from "@/lib/newLook";
 
 export const metadata: Metadata = {
   title: "PSG Hub",
@@ -38,8 +40,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const spaces = userId ? await spacesFor({ id: userId, role }).catch(() => []) : [];
   const barColor = space?.color ?? "var(--psg-navy)";
   const barInk = space?.color ? textOn(space.color) : "#ffffff";
+  // New look (beta): a per-person switch; for now it only switches the new tokens on
+  const newLook = userId ? await newLookFor(userId).catch(() => false) : false;
   return (
-    <html lang="en">
+    <html lang="en" {...(newLook ? { "data-new-look": "" } : {})}>
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

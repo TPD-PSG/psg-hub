@@ -8,6 +8,15 @@ import { useState, useRef, useEffect } from "react";
 export default function UserNav() {
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
+  // New look (beta): per person, off by default; switching reloads so the whole page follows
+  const [newLook, setNewLook] = useState<boolean | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- read once from the page after it shows (the server sets the attribute)
+  useEffect(() => { setNewLook(document.documentElement.hasAttribute("data-new-look")); }, []);
+  async function toggleNewLook() {
+    const on = !newLook;
+    const res = await fetch("/api/me/new-look", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }) });
+    if (res.ok) window.location.reload();
+  }
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,6 +58,15 @@ export default function UserNav() {
           <Link href="/profile" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
             My Profile
           </Link>
+          {newLook !== null && (
+            <button type="button" role="switch" aria-checked={newLook} onClick={toggleNewLook}
+              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
+              <span>New look (beta)</span>
+              <span aria-hidden="true" className="w-8 h-4 rounded-full relative shrink-0" style={{ backgroundColor: newLook ? "#5b8def" : "rgba(255,255,255,0.2)" }}>
+                <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" style={{ left: newLook ? 18 : 2 }} />
+              </span>
+            </button>
+          )}
           {(session.user as { avatarUrl?: string | null; role?: string }).role === "admin" && (
             <Link href="/admin/users" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
               Manage Users

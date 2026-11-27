@@ -44,6 +44,7 @@ export type User = {
   id: number; name: string; email: string; role: string; avatarUrl?: string | null;
   color?: string | null; permissions: string | null; createdAt: string; costDayRate?: number | null; homeEntityId?: number | null; clientId?: number | null;
   deactivatedAt?: string | null;
+  newLook?: boolean; // New look (beta) switched on for them
 };
 export type Production = { id: number; name: string; status: string };
 export type Invite = { id: number; email: string; name: string; role: string; expiresAt: string; createdAt: string; expired: boolean };
@@ -260,6 +261,10 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
     if (!res.ok) { alertDialog(d.error ?? "Couldn't delete them"); return; }
     await reload();
   }
+  async function setNewLook(id: number, on: boolean) {
+    const res = await fetch(`/api/users/${id}/new-look`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }) });
+    if (res.ok) setUsers(us => us.map(x => (x.id === id ? { ...x, newLook: on } : x)));
+  }
   async function setDeactivated(id: number, deactivated: boolean) {
     const res = await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deactivated }) });
     if (!res.ok) { alertDialog((await res.json().catch(() => ({}))).error ?? "That didn't work"); return; }
@@ -349,6 +354,8 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                   <td className="px-4 py-3">
                     <div className="flex gap-2 justify-end">
                       <button onClick={() => openEdit(u)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
+                      <button onClick={() => setNewLook(u.id, !u.newLook)} aria-pressed={!!u.newLook} title="Turn the New look (beta) on or off for this person"
+                        className="text-xs px-2 py-1 rounded whitespace-nowrap" style={u.newLook ? { color: "#000c3b", backgroundColor: "#c9d2f0" } : { color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>New look {u.newLook ? "on" : "off"}</button>
                       <button onClick={() => setHandover(u)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>{u.deactivatedAt ? "Hand over" : "Leaving…"}</button>
                       {u.deactivatedAt
                         ? <button onClick={() => setDeactivated(u.id, false)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Reactivate</button>

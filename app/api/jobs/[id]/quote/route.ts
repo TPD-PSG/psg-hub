@@ -35,6 +35,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         },
         select: { id: true, number: true },
       });
+      // Drafted by part: each part is now that quote's item (so saving the quote doesn't double them)
+      if (group === "part") {
+        const parts = await prisma.buildPart.findMany({ where: { jobId: id, quoteId: null }, select: { id: true, label: true } });
+        for (const p of parts) await prisma.buildPart.update({ where: { id: p.id }, data: { quoteId: q.id, quoteItem: p.label.trim().toLowerCase() } });
+      }
       return NextResponse.json({ ...q, lines: lines.length, notes }, { status: 201 });
     } catch (e) {
       if (!(e instanceof Error) || !/Unique constraint/i.test(e.message) || attempt === 2) throw e;

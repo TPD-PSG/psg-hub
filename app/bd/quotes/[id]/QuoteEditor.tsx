@@ -113,7 +113,13 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
   rows.forEach((r, i) => { const g = items.find(x => sameSection(x.name, r.section)); if (g) g.idx.push(i); else items.push({ name: r.section, idx: [i] }); });
   const subtotal = (g: { idx: number[] }) => g.idx.map(i => rows[i]).filter(r => r.description.trim())
     .reduce((a, r) => ({ cost: a.cost + num(r.quantity) * num(r.unitCost), price: a.price + num(r.quantity) * num(r.unitPrice) }), { cost: 0, price: 0 });
-  const renameItem = (g: { idx: number[] }, name: string) => { setRowsRaw(rs => rs.map((r, j) => (g.idx.includes(j) ? { ...r, section: name } : r))); setDirty(true); };
+  // Renames since the last save (first name → current), so the build's part follows its item
+  const renamed = useRef<Record<string, string>>({});
+  const renameItem = (g: { name: string; idx: number[] }, name: string) => {
+    const from = Object.keys(renamed.current).find(k => renamed.current[k] === g.name) ?? g.name;
+    if (from.trim()) renamed.current[from] = name;
+    setRowsRaw(rs => rs.map((r, j) => (g.idx.includes(j) ? { ...r, section: name } : r))); setDirty(true);
+  };
   const setItem = (g: { idx: number[] }, patch: Partial<Row>) => { setRows(rs => rs.map((r, j) => (g.idx.includes(j) ? { ...r, ...patch } : r))); setDirty(true); };
   // Set an item's price: a hidden "Item price adjustment" line in the item makes up the difference,
   // so the item totals exactly what's typed and the lines keep their own prices (28 Nov 2026)
@@ -207,13 +213,23 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     setSaving(true);
     const res = await fetch(`/api/quotes/${q.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...head, lines: rows.filter(r => r.description.trim()), ...extra }),
+      body: JSON.stringify({ ...head, lines: rows.filter(r => r.description.trim()), renamedItems: renamed.current, ...extra }),
     });
+    if (res.ok) renamed.current = {};
     setSaving(false);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) { await alertDialog(body.error ?? "Couldn't save the quote"); return null; }
     setQ(body); setDirty(false);
     return body as QuoteDetail;
+  }
+
+  // A quote that isn't a build yet: open one (at the Quote stage) and link it, so its items become parts
+  async function startBuild() {
+    if (!await confirmDialog(`Start a build job for "${head.title}"? Each item on this quote becomes one of its parts on the planner (pencilled until the quote is accepted).`)) return;
+    const res = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: head.title, jobType: "workshop", entityId: head.entityId || null, clientId: head.clientId || null }) });
+    const job = await res.json().catch(() => ({}));
+    if (!res.ok) { await alertDialog(job.error ?? "Couldn't start the build"); return; }
+    await put({ jobId: job.id });
   }
 
   async function setStatus(status: string) {
@@ -334,7 +350,14 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
               <button type="button" onClick={() => setNewItem(null)} className="text-xs" style={{ color: "var(--psg-muted)" }}>Cancel</button>
             </>
           )}
-          <span className="text-xs ml-auto" style={{ color: "var(--psg-muted)" }}>An item groups its lines with a subtotal. Drag lines between items with ⋮⋮.</span>
+          <span className="text-xs ml-auto" style={{ color: "var(--psg-muted)" }}>
+            {q.job
+              ? <>Each item is a part of build <Link href={`${jobsBase}/${q.job.id}`} className="text-blue-400">{q.job.number}</Link> on the planner{q.status === "accepted" ? "" : " (pencilled until this quote is accepted)"}. Labour lines set its time; material lines, its materials.</>
+              : <>An item groups its lines with a subtotal. Once this quote has a build, each item becomes one of its parts on the planner.</>}
+          </span>
+          {!q.job && head.jobType === "workshop" && (
+            <button type="button" disabled={saving} onClick={startBuild} className="text-xs text-blue-400 disabled:opacity-40">Start a build from this quote</button>
+          )}
           {items.filter(g => g.name.trim()).length > 1 && (
             <span className="flex gap-2 text-xs">
               <button type="button" onClick={() => saveCollapsed(new Set(items.filter(g => g.name.trim()).map(g => g.name.trim().toLowerCase())))} className="text-blue-400">Collapse all</button>

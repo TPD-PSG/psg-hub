@@ -1286,6 +1286,7 @@ model Quote {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   lines          QuoteLine[]
+  parts          BuildPart[] // its items as build parts on the build
 
   @@index([opportunityId])
   @@index([jobId])
@@ -1441,11 +1442,16 @@ model BuildPart {
   labourType   LabourType?         @relation(fields: [labourTypeId], references: [id], onDelete: SetNull)
   materials    BuildPartMaterial[]
   machines     BuildPartMachine[]
+  // A quote's items are the build's parts (28 Nov 2026): the part made for this quote item
+  quoteId      Int?
+  quote        Quote?              @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  quoteItem    String? // the item's name on that quote (lower case), how the part is matched on each save
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
   @@index([jobId])
   @@index([userId, startDate])
+  @@index([quoteId])
 }
 
 // TWS materials & kit: what the workshop holds, per company (space)
@@ -1888,6 +1894,7 @@ model BuildPartMaterial {
   po          PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
   stockMoveId Int?           @unique // booked out of stock to the build instead of ordered
   stockMove   StockMove?     @relation(fields: [stockMoveId], references: [id], onDelete: SetNull)
+  fromQuote   Boolean        @default(false) // came from the quote item's material lines (refreshed when the quote changes)
   sortOrder   Int            @default(0)
   createdAt   DateTime       @default(now())
 

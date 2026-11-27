@@ -3,6 +3,7 @@
 // (admins can delete any).
 import { myCompanyLimit, entityChangeError } from "@/lib/companyScope";
 import { denyOutOfScope } from "@/lib/companyScope";
+import { syncQuoteParts, dropQuoteParts } from "@/lib/quoteParts";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseQuoteLines, quoteTotals } from "@/lib/quotes";
@@ -63,7 +64,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // One accepted quote per job: accepting this one sets any other accepted quote on the job aside
   if (fields.status === "accepted" && existing.status !== "accepted") {
     const jq = await prisma.quote.findUnique({ where: { id }, select: { jobId: true } });
-    if (jq?.jobId) await prisma.quote.updateMany({ where: { jobId: jq.jobId, status: "accepted", id: { not: id } }, data: { status: "declined", decidedAt: new Date() } });
+    if (jq?.jobId) {
+      const others = await prisma.quote.findMany({ where: { jobId: jq.jobId, status: "accepted", id: { not: id } }, select: { id: true } });
+      await prisma.quote.updateMany({ where: { id: { in: others.map(o => o.id) } }, data: { status: "declined", decidedAt: new Date() } });
+      for (const o of others) await syncQuoteParts(o.id); // a set-aside quote's untouched parts go
+    }
   }
   // A build still at the Quote stage moves on to Confirmation once its quote is accepted
   if (fields.status === "accepted") {
@@ -71,8 +76,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (jq?.jobId) {
       const moved = await prisma.job.updateMany({ where: { id: jq.jobId, stage: "quote" }, data: { stage: "confirmation", stageChangedAt: new Date() } });
       if (moved.count) await confirmPencils(jq.jobId); // pencilled dates become bookings
+      await prisma.buildPart.updateMany({ where: { quoteId: id, pencilled: true }, data: { pencilled: false } }); // its own parts are firm now
     }
   }
+  // Its items are the build's parts: keep them in step (renamed items carry their part with them)
+  const renames = body.renamedItems && typeof body.renamedItems === "object" ? Object.fromEntries(Object.entries(body.renamedItems as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as Record<string, string> : {};
+  await syncQuoteParts(id, renames);
   return NextResponse.json(await load(id));
 }
 
@@ -85,6 +94,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const q = await prisma.quote.findUnique({ where: { id }, select: { status: true } });
   if (!q) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (q.status !== "draft" && who.role !== "admin") return NextResponse.json({ error: "Only drafts can be deleted; mark it declined instead" }, { status: 409 });
+  await dropQuoteParts(id); // its parts nobody has started on go with it
   await prisma.quote.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

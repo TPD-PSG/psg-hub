@@ -1,6 +1,7 @@
 // Quotes list and create (PSG staff). ?opportunityId= lists one deal's quotes. A new quote can
 // start from a template (templateId) or from a deal (opportunityId: takes its client, entity, type).
 import { myCompanyLimit, entityWhere, scopedEntityId } from "@/lib/companyScope";
+import { syncQuoteParts } from "@/lib/quoteParts";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseQuoteLines, quoteTotals, type LineInput, type LineDisplay } from "@/lib/quotes";
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
         },
         include: QUOTE_INCLUDE,
       });
+      if (q.jobId) await syncQuoteParts(q.id); // its items become the build's parts
       return NextResponse.json({ ...q, totals: quoteTotals(q.lines, q.vatRate) }, { status: 201 });
     } catch (err) {
       if (!(err instanceof Error && /Unique constraint/i.test(err.message)) || attempt === 2) throw err;

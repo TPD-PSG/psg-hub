@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import UserAvatar from "@/components/UserAvatar";
 import { confirmDialog, alertDialog } from "@/components/Dialogs";
+import HandoverDialog from "./HandoverDialog";
 
 const PROD_SECTIONS = [
   { key: "schedule", label: "Schedule" },
@@ -117,6 +118,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
   const [users, setUsers] = useState<User[]>(initial?.users ?? []);
   const [invites, setInvites] = useState<Invite[]>(initial?.invites ?? []);
   const [inviteBusy, setInviteBusy] = useState<number | null>(null);
+  const [handover, setHandover] = useState<User | null>(null); // the leaver whose work is being handed over
   async function reloadInvites() {
     const d = await fetch("/api/user-invites").then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (Array.isArray(d)) setInvites(d);
@@ -250,7 +252,9 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
     const d = await res.json().catch(() => ({}));
     // People with time logged on jobs are kept: offer to deactivate them instead
     if (res.status === 409 && d.canDeactivate) {
-      if (await confirmDialog(`${d.error}`, { confirmLabel: "Deactivate" })) await setDeactivated(id, true);
+      // Offer the handover first, so nothing they had open is left with someone who can't sign in
+      const u = users.find(x => x.id === id);
+      if (u) setHandover(u);
       return;
     }
     if (!res.ok) { alertDialog(d.error ?? "Couldn't delete them"); return; }
@@ -345,6 +349,7 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
                   <td className="px-4 py-3">
                     <div className="flex gap-2 justify-end">
                       <button onClick={() => openEdit(u)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-blue)", backgroundColor: "rgba(59,130,246,0.1)" }}>Edit</button>
+                      <button onClick={() => setHandover(u)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>{u.deactivatedAt ? "Hand over" : "Leaving…"}</button>
                       {u.deactivatedAt
                         ? <button onClick={() => setDeactivated(u.id, false)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Reactivate</button>
                         : <button onClick={() => deleteUser(u.id)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.05)" }}>Delete</button>}
@@ -398,6 +403,11 @@ export default function UsersView({ initial }: { initial: UsersInitial }) {
             </table>
           </div>
         </div>
+      )}
+
+      {handover && (
+        <HandoverDialog user={handover} users={users} onClose={() => setHandover(null)}
+          onDone={async msg => { setHandover(null); await reload(); alertDialog(msg); }} />
       )}
 
       {/* Modal */}

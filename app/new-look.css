@@ -73,3 +73,12 @@ a.nl-row:hover { background: var(--nl-panel-raised); }
 
 .nl-pin { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 14px; background: var(--nl-panel); border: 1px solid var(--nl-border); color: var(--nl-text); text-decoration: none; font-weight: 600; font-size: 14px; }
 .nl-pin:hover { border-color: var(--nl-accent); }
+
+/* ── Shell (stage 3): sidebar on desktop, bottom bar under 900 px ── */
+.nl-phone-only { display: none !important; }
+@media (max-width: 899px) {
+  .nl-desktop-nav, .nl-desktop-only { display: none !important; }
+  .nl-phone-only { display: flex !important; }
+  .nl-main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important; }
+  .nl-page a, .nl-page button { min-height: 44px; } /* tap targets at least 44 px */
+}

@@ -15,6 +15,7 @@ import SeasonalOverlay from "@/components/SeasonalOverlay";
 import { homeSpaceFor, spacesFor, textOn } from "@/lib/spaces";
 import { SpaceTopBarLinks } from "@/components/SpaceLinks";
 import { newLookFor } from "@/lib/newLook";
+import { nlFontVars } from "@/lib/nlFonts";
 
 export const metadata: Metadata = {
   title: "PSG Hub",
@@ -43,7 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // New look (beta): a per-person switch; for now it only switches the new tokens on
   const newLook = userId ? await newLookFor(userId).catch(() => false) : false;
   return (
-    <html lang="en" {...(newLook ? { "data-new-look": "" } : {})}>
+    <html lang="en" {...(newLook ? { "data-new-look": "", className: nlFontVars } : {})}>
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -53,7 +54,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <AuthProvider session={session}>
           <MobileSidebarProvider>
             {/* Top bar, sidebar and page (a company space draws its own) */}
-            <AppChrome header={
+            <AppChrome newLook={newLook} spaces={spaces.map(x => ({ slug: x.slug, name: x.name }))} header={
               <header style={{ backgroundColor: barColor }} className="h-14 flex items-center px-4 gap-3 shadow-lg shrink-0 sticky top-0 z-40">
                 <MobileMenuButton />
                 <Link href="/" className="flex items-center shrink-0 gap-2">

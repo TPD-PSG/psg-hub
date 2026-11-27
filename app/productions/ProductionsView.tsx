@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -34,7 +35,8 @@ function StatTile({ value, label, sub }: { value: string | number; label: string
 export default function ProductionsView({ initialProductions }: { initialProductions: Production[] }) {
   const { data: session } = useSession();
   const [productions] = useState<Production[]>(initialProductions);
-  const [tab, setTab] = useState<"all" | "mine">("all");
+  // ?mine=1 (the new look's "My productions") opens on the productions I'm on
+  const [tab, setTab] = useState<"all" | "mine">(useSearchParams()?.get("mine") === "1" ? "mine" : "all");
 
   const userId = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.id ? Number((session!.user as { id?: string }).id) : null;
 

@@ -7,6 +7,6 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const access = await requireProductionAccess(id);
   if ("error" in access) return access.error;
-  const p = await prisma.production.findUnique({ where: { id: Number(id) }, select: { name: true, isTour: true } });
+  const p = await prisma.production.findUnique({ where: { id: Number(id) }, select: { name: true, isTour: true, color: true } }); // color: the new look marks the active section in it
   return p ? NextResponse.json(p) : NextResponse.json({ error: "Not found" }, { status: 404 });
 }

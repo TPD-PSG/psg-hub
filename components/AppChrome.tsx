@@ -4,12 +4,15 @@
 // own chrome in its brand (app/spaces/[slug]/layout.tsx).
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import NewShell, { type ShellSpace } from "@/components/NewShell";
 
-export default function AppChrome({ header, children }: { header: React.ReactNode; children: React.ReactNode }) {
+export default function AppChrome({ header, children, newLook = false, spaces = [] }: { header: React.ReactNode; children: React.ReactNode; newLook?: boolean; spaces?: ShellSpace[] }) {
   const pathname = usePathname() ?? "";
   // Company spaces and the client builds page draw their own chrome in the builder's brand; the
   // no-login incident form (QR on site) is a page of its own
   if (pathname.startsWith("/spaces/") || pathname === "/my-builds" || pathname.startsWith("/report-incident/")) return <>{children}</>;
+  // New look (beta): its own sidebar shell (same routes and pages)
+  if (newLook && pathname !== "/login") return <NewShell spaces={spaces}>{children}</NewShell>;
   return (
     <>
       {header}

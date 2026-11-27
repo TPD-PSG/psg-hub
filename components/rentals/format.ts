@@ -24,8 +24,8 @@ export const addDays = (iso: string, n: number) => isoDay(new Date(new Date(`${i
 export const HIRE_TONE: Record<string, React.CSSProperties> = {
   quote: { background: "transparent", color: "var(--tws-ink)", border: "1px dashed var(--tws-muted)" },
   confirmed: { background: "var(--tws-accent)", color: "var(--tws-ink)" },
-  out: { background: "var(--tws-char)", color: "#fff" },
-  returned: { background: "var(--tws-tint)", color: "#4e545b" },
+  out: { background: "var(--tws-char)", color: "var(--tws-on-char, #fff)" },
+  returned: { background: "var(--tws-tint)", color: "var(--tws-soft-ink, #4e545b)" },
   cancelled: { background: "transparent", color: "var(--tws-muted)", textDecoration: "line-through", border: "1px solid var(--tws-line)" },
 };
 export const HIRE_LABEL: Record<string, string> = { quote: "Quote (pencilled)", confirmed: "Confirmed", out: "Out", returned: "Returned", cancelled: "Cancelled" };

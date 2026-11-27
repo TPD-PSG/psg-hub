@@ -1,9 +1,8 @@
-// The hire rate card as a PDF (PSG Rentals & Crew): the company's letterhead, then the kit by
+// The hire rate card as a PDF (PSG Rentals & Crew): PSG's letterhead (logo, navy, PSG blue), then the kit by
 // category with day and week rates, ex VAT. No stock levels or costs.
 import jsPDF from "jspdf";
 import { autoTable, fetchLogoAsset, pdfSafe } from "@/lib/exports";
 import { groupByCategory } from "@/lib/rentals";
-import { spaceTokens } from "@/lib/spaceTheme";
 
 export type RateCard = {
   company: { name: string; address: string | null; phone: string | null; brand: { color: string | null; logoUrl: string | null } | null };
@@ -11,18 +10,17 @@ export type RateCard = {
 };
 
 type Rgb = [number, number, number];
-const rgb = (hex: string): Rgb => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as Rgb;
 const money = (n: number | null) => (n == null ? "" : `£${new Intl.NumberFormat("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`);
 
 export function buildRateCardPDF(card: RateCard, logo?: { dataUrl: string; w: number; h: number } | null) {
   const doc = pdfSafe(new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }));
   const W = 210, M = 12, ink: Rgb = [25, 25, 28], soft: Rgb = [95, 98, 105];
-  const t = spaceTokens(card.company.brand?.color ?? null);
-  const rule = rgb(t["--tws-accent"]), tint = rgb(t["--tws-tint"]), accentInk = rgb(t["--tws-accent-ink"]);
+  // PSG's own colours: PSG blue rule, navy headings, a pale PSG tint
+  const rule: Rgb = [61, 68, 212], tint: Rgb = [233, 236, 247], accentInk: Rgb = [13, 18, 102];
   let x = M;
   if (logo) {
     const h = 20, w = Math.min(44, (logo.w / logo.h) * h), lh = w / (logo.w / logo.h);
-    doc.setFillColor(245, 242, 236); doc.rect(M - 1.5, 10 - 1.5, w + 3, lh + 3, "F");
+    doc.setFillColor(255, 255, 255); doc.rect(M - 1.5, 10 - 1.5, w + 3, lh + 3, "F");
     doc.addImage(logo.dataUrl, "PNG", M, 10, w, lh, undefined, "FAST");
     x = M + w + 6;
   }
@@ -61,6 +59,6 @@ export function buildRateCardPDF(card: RateCard, logo?: { dataUrl: string; w: nu
 }
 
 export async function downloadRateCardPDF(card: RateCard) {
-  const logo = card.company.brand?.logoUrl ? await fetchLogoAsset(card.company.brand.logoUrl) : null;
+  const logo = await fetchLogoAsset("/psg-logo.png"); // PSG's letterhead
   buildRateCardPDF(card, logo).save(`${card.company.name} rate card.pdf`.replace(/[\\/:*?"<>|]/g, "-"));
 }

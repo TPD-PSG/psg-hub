@@ -9,8 +9,10 @@ import { spaceTokens } from "@/lib/spaceTheme";
 
 type Rgb = [number, number, number];
 const rgb = (hex: string): Rgb => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as Rgb;
-export type Brand = { header: Rgb; rule: Rgb | null; tint: Rgb; accentInk: Rgb; logoUrl: string | null };
+export type Brand = { header: Rgb; rule: Rgb | null; tint: Rgb; accentInk: Rgb; logoUrl: string | null; logoGround?: Rgb };
 const PSG_BRAND: Brand = { header: [10, 25, 65], rule: null, tint: [236, 239, 247], accentInk: [10, 25, 65], logoUrl: null };
+/** PSG's own letterhead in the sales-quote layout (PSG Rentals & Crew): PSG logo, navy and PSG blue. */
+export const PSG_SALES_BRAND: Brand = { header: [0, 12, 59], rule: [61, 68, 212], tint: [233, 236, 247], accentInk: [13, 18, 102], logoUrl: "/psg-logo.png", logoGround: [255, 255, 255] };
 
 /** The look for a quote's company: its space colours and logo, else PSG's. */
 export function brandFor(entity: QuoteForPdf["entity"]): Brand {
@@ -231,7 +233,7 @@ export function buildSalesQuotePDF(q0: QuoteForPdf, logo: LogoAsset | undefined,
   if (logo) {
     const h = 22, w = Math.min(46, (logo.w / logo.h) * h), lh = w / (logo.w / logo.h);
     // On the company's paper ground (TWS's logo has a white T that would vanish on white)
-    doc.setFillColor(245, 242, 236); doc.rect(M - 1.5, 10 - 1.5, w + 3, lh + 3, "F");
+    doc.setFillColor(...(brand.logoGround ?? [245, 242, 236])); doc.rect(M - 1.5, 10 - 1.5, w + 3, lh + 3, "F");
     doc.addImage(logo.dataUrl, "PNG", M, 10, w, lh, undefined, "FAST");
     x = M + w + 6;
   }

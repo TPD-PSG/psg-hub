@@ -7,7 +7,7 @@ paths: /spaces/*/kit, /spaces/*/hires, /spaces/*/availability, /spaces/*/package
 ---
 ## What this space is for
 
-The **Rentals & Crew** space is where PSG's rental kit and hires live, as the Hub takes over from Flex. It is for PSG staff. Freelancers don't see the kit, hires or prices.
+The **Rentals & Crew** space is where PSG's rental kit and hires live, as the Hub takes over from Flex. It's part of PSG, so it wears PSG's own look: the PSG logo and the Hub's navy, on screen, on its PDFs and on clients' Hires pages. It is for PSG staff. Freelancers don't see the kit, hires or prices.
 
 The space's menu has:
 
@@ -95,7 +95,7 @@ Once a hire is saved:
 
 - **Preview PDF** shows it on screen. **Download quote PDF** saves it. Each one saves the hire first.
 - While it's a quote, the PDF is a **Hire Quote** with its **Valid until** date. Once confirmed it's a **Hire Confirmation**.
-- It's in the company's letterhead, like the workshop's sales quotes. The kit is grouped by category with a total for each, then transport and other charges. The dates out and back and the days charged are under the totals.
+- It's in PSG's letterhead (the PSG logo, navy and PSG blue), laid out like the workshop's sales quotes, with the rentals company's address and phone. The kit is grouped by category with a total for each, then transport and other charges. The dates out and back and the days charged are under the totals.
 - **Mark quote as sent** records when it went to the client.
 
 ## Invoicing
@@ -146,7 +146,7 @@ When every unit is back (or marked missing), the hire is marked **Returned** aut
 
 ## The rate card
 
-**Rate card** lists every product that has a day or week rate and at least one unit in service, by category, ex VAT. Cases, unpriced kit and retired kit are left off, and it never shows stock levels or what kit costs us. **Download PDF** makes a rate card in the company's letterhead to send to anyone. Client logins see the same rate card.
+**Rate card** lists every product that has a day or week rate and at least one unit in service, by category, ex VAT. Cases, unpriced kit and retired kit are left off, and it never shows stock levels or what kit costs us. **Download PDF** makes a rate card in PSG's letterhead to send to anyone. Client logins see the same rate card.
 
 ## Client logins
 

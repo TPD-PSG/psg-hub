@@ -20,7 +20,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const statusOf = (h: Hire) => h.status === "quote" ? (h.acceptedAt ? "Accepted: we'll confirm" : h.priced ? "Quote" : "Requested: we're pricing it")
   : h.status === "confirmed" ? "Confirmed" : h.status === "out" ? "With you" : "Returned";
 const tone = (h: Hire): React.CSSProperties => h.status === "quote" ? (h.acceptedAt ? { background: "var(--tws-accent-light)" } : { border: "1px dashed var(--tws-muted)" })
-  : h.status === "returned" ? { background: "var(--tws-tint)", color: "#4e545b" } : { background: "var(--tws-char)", color: "#fff" };
+  : h.status === "returned" ? { background: "var(--tws-tint)", color: "var(--tws-soft-ink, #4e545b)" } : { background: "var(--tws-char)", color: "var(--tws-on-char, #fff)" };
 
 export default function MyHires({ initial, tab: tab0 }: { initial: MyHiresData; tab: "hires" | "rates" | "request" }) {
   const [data, setData] = useState(initial);
@@ -65,7 +65,7 @@ export default function MyHires({ initial, tab: tab0 }: { initial: MyHiresData; 
   const live = data.hires.filter(h => h.status !== "returned"), past = data.hires.filter(h => h.status === "returned");
   const tabBtn = (t: typeof tab, label: string) => (
     <button key={t} type="button" aria-pressed={tab === t} onClick={() => go(t)} className="px-3 py-2 text-sm font-bold"
-      style={tab === t ? { background: "var(--tws-char)", color: "#fff" } : { border: "1px solid var(--tws-line)", color: "var(--tws-ink)" }}>{label}</button>
+      style={tab === t ? { background: "var(--tws-char)", color: "var(--tws-on-char, #fff)" } : { border: "1px solid var(--tws-line)", color: "var(--tws-ink)" }}>{label}</button>
   );
   const row = (h: Hire) => (
     <li key={h.id} style={{ borderBottom: "1px solid var(--tws-line)" }}>

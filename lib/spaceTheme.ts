@@ -36,3 +36,26 @@ export function spaceTokens(color: string | null): Record<string, string> {
     "--tws-bad-bg": "#fbe9e5", "--tws-bad-line": "#d99a8c", "--tws-bad-ink": "#a3361f",
   };
 }
+
+/**
+ * PSG's own look for a space that's part of PSG itself (PSG Rentals & Crew): the Hub's navy, the
+ * pale PSG blue for buttons and links, and PSG blue as the accent, on the same tokens the space
+ * pages use. Text on a solid button, form fields and the top bar's name have their own tokens
+ * (the workshop look falls back to its originals).
+ */
+export function psgSpaceTokens(): Record<string, string> {
+  return {
+    "--tws-ground": "#070b33", "--tws-card": "#0e1550", "--tws-tint": "#131d5e", "--tws-tint-2": "#1a2466",
+    "--tws-line": "#22307a", "--tws-line-soft": "#1a2466",
+    "--tws-ink": "#ffffff", "--tws-muted": "#aeb7e0",
+    "--tws-night": "#000c3b", "--tws-char": "#c9d2f0", "--tws-char-hi": "#1a2466", "--tws-nav-ink": "#c9d2f0", "--tws-night-muted": "#aeb7e0",
+    "--tws-on-char": "#000c3b", "--tws-field": "#070b33", "--tws-soft-ink": "#aeb7e0", "--tws-bar-ink": "#ffffff",
+    "--tws-accent": "#3d44d4", "--tws-accent-ink": "#c9d2f0", "--tws-accent-light": "#243088",
+    "--tws-warn-bg": "#2a2410", "--tws-warn-line": "#c99a3a", "--tws-warn-ink": "#f2c46b",
+    "--tws-bad-bg": "#3a1620", "--tws-bad-line": "#ffb4a8", "--tws-bad-ink": "#ffb4a8",
+    colorScheme: "dark",
+  };
+}
+
+/** The tokens for a space: PSG's own look for a rentals space, else the company's colour. */
+export const tokensForSpace = (space: { kind?: string; color: string | null }) => (space.kind === "rentals" ? psgSpaceTokens() : spaceTokens(space.color));

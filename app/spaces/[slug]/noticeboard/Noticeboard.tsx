@@ -65,7 +65,7 @@ export default function Noticeboard({ initial }: { initial: BoardData }) {
             <div className="flex gap-1.5 flex-wrap" role="group" aria-label="What are you posting?">
               {KINDS.map(([k, l]) => (
                 <button key={k} type="button" aria-pressed={form.kind === k} onClick={() => setForm({ ...form, kind: k })} className="text-[13px] font-bold px-3 py-2"
-                  style={form.kind === k ? { background: "var(--tws-char)", color: "#fff" } : { background: "var(--tws-ground)", color: "var(--tws-ink)", border: "1px solid var(--tws-line)" }}>{l}</button>
+                  style={form.kind === k ? { background: "var(--tws-char)", color: "var(--tws-on-char, #fff)" } : { background: "var(--tws-ground)", color: "var(--tws-ink)", border: "1px solid var(--tws-line)" }}>{l}</button>
               ))}
             </div>
             <div><label htmlFor="nb-title" style={lbl}>{form.kind === "showcase" ? "Where is it? (e.g. On stage at the Lyceum)" : "Title"}</label>

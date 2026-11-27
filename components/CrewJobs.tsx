@@ -20,8 +20,8 @@ const dayShort = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { we
 
 /** The look: "space" for a company space (TWS-style tokens), "hub" for the main Hub's production pages. */
 const LOOKS = {
-  space: { card: "var(--tws-card)", line: "var(--tws-line)", muted: "var(--tws-muted)", ink: "var(--tws-ink)", link: "var(--tws-accent-ink)", tint: "var(--tws-tint)", bad: "var(--tws-bad-ink)", good: "var(--tws-accent-light)", input: "#fff", btn: "var(--tws-char)" },
-  hub: { card: "var(--psg-card-bg)", line: "var(--psg-card-border)", muted: "var(--psg-muted)", ink: "var(--psg-text, #fff)", link: "#60a5fa", tint: "rgba(255,255,255,0.04)", bad: "#f87171", good: "rgba(34,197,94,0.15)", input: "var(--psg-dark-bg)", btn: "var(--psg-blue)" },
+  space: { card: "var(--tws-card)", line: "var(--tws-line)", muted: "var(--tws-muted)", ink: "var(--tws-ink)", link: "var(--tws-accent-ink)", tint: "var(--tws-tint)", bad: "var(--tws-bad-ink)", good: "var(--tws-accent-light)", input: "var(--tws-field, #fff)", btn: "var(--tws-char)", onBtn: "var(--tws-on-char, #fff)" },
+  hub: { card: "var(--psg-card-bg)", line: "var(--psg-card-border)", muted: "var(--psg-muted)", ink: "var(--psg-text, #fff)", link: "#60a5fa", tint: "rgba(255,255,255,0.04)", bad: "#f87171", good: "rgba(34,197,94,0.15)", input: "var(--psg-dark-bg)", btn: "var(--psg-blue)", onBtn: "#fff" },
 };
 
 export default function CrewJobs({ hireId, productionId, look = "space", defaultDate, charges = !!hireId, onChange }: { hireId?: number; productionId?: number; look?: keyof typeof LOOKS; defaultDate?: string; charges?: boolean; onChange?: () => void }) {
@@ -38,7 +38,7 @@ export default function CrewJobs({ hireId, productionId, look = "space", default
 
   const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: L.input, color: L.ink, border: `1px solid ${L.line}`, padding: "7px 9px", fontSize: 14, borderRadius: look === "hub" ? 6 : 0 };
   const lbl: React.CSSProperties = { display: "block", fontSize: 12, fontWeight: 600, color: L.muted, marginBottom: 3 };
-  const btn: React.CSSProperties = { background: L.btn, color: "#fff", padding: "8px 14px", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer", borderRadius: look === "hub" ? 6 : 0 };
+  const btn: React.CSSProperties = { background: L.btn, color: L.onBtn, padding: "8px 14px", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer", borderRadius: look === "hub" ? 6 : 0 };
   const linkBtn = (c = L.link): React.CSSProperties => ({ color: c, fontWeight: 600, fontSize: 13, background: "none", border: "none", cursor: "pointer", padding: 0 });
 
   const call = async <T,>(url: string, method = "GET", body?: unknown): Promise<T | null> => {
@@ -137,7 +137,7 @@ export default function CrewJobs({ hireId, productionId, look = "space", default
                 <li key={o.id} className="py-1.5 flex gap-2 items-center flex-wrap text-sm" style={{ borderTop: `1px solid ${L.line}` }}>
                   <span className="font-semibold">{o.crew.name}</span>
                   <span className="text-xs" style={{ color: L.muted }}>{o.crew.discipline}</span>
-                  <span className="text-[11px] font-bold px-2 py-0.5" style={o.status === "booked" ? { background: L.btn, color: "#fff" } : o.status === "available" ? { background: L.good } : o.status === "unavailable" || o.status === "released" ? { color: L.muted, textDecoration: o.status === "released" ? "line-through" : undefined } : { border: `1px dashed ${L.muted}` }}>{STATUS[o.status] ?? o.status}</span>
+                  <span className="text-[11px] font-bold px-2 py-0.5" style={o.status === "booked" ? { background: L.btn, color: L.onBtn } : o.status === "available" ? { background: L.good } : o.status === "unavailable" || o.status === "released" ? { color: L.muted, textDecoration: o.status === "released" ? "line-through" : undefined } : { border: `1px dashed ${L.muted}` }}>{STATUS[o.status] ?? o.status}</span>
                   {o.reply && <span className="text-xs italic" style={{ color: L.muted }}>“{o.reply}”</span>}
                   <span className="ml-auto flex gap-3 flex-wrap">
                     {o.status === "booked" ? <button type="button" style={linkBtn(L.bad)} onClick={() => act(o, { action: "release" }, `Release ${o.crew.name}? They'll be told they're no longer needed.`)}>Release</button>

@@ -126,7 +126,7 @@ export default function MachineInductions({ slug }: { slug: string }) {
                   {d.trainersPick.map(u => {
                     const on = m.trainers.some(t => t.user.id === u.id);
                     return <button key={u.id} type="button" aria-pressed={on} disabled={busy} onClick={() => call(`/api/machines/${m.id}`, "PATCH", { trainerIds: on ? m.trainers.filter(t => t.user.id !== u.id).map(t => t.user.id) : [...m.trainers.map(t => t.user.id), u.id] })}
-                      className="px-2 py-0.5" style={on ? { background: "var(--tws-char)", color: "#fff", border: "1px solid var(--tws-char)" } : { border: "1px solid var(--tws-line)", color: "var(--tws-muted)" }}>{on ? "✓ " : ""}{u.name}</button>;
+                      className="px-2 py-0.5" style={on ? { background: "var(--tws-char)", color: "var(--tws-on-char, #fff)", border: "1px solid var(--tws-char)" } : { border: "1px solid var(--tws-line)", color: "var(--tws-muted)" }}>{on ? "✓ " : ""}{u.name}</button>;
                   })}
                   {m.trainers.length === 0 && <span style={{ color: "var(--tws-warn-ink)" }}>none yet: only admins can induct</span>}
                 </div>

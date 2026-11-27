@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { Montserrat, Josefin_Sans } from "next/font/google";
 import { auth } from "@/auth";
 import { spaceBySlug, canSeeSpace } from "@/lib/spaces";
-import { spaceTokens } from "@/lib/spaceTheme";
+import { tokensForSpace } from "@/lib/spaceTheme";
 import SpaceShell from "@/components/SpaceShell";
 
 const body = Montserrat({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--tws-font", display: "swap" });
@@ -16,6 +16,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const space = /^[a-z0-9-]{2,30}$/.test(slug) ? await spaceBySlug(slug).catch(() => null) : null;
   if (!space) return {};
   const name = (space.shortName ?? space.name).toUpperCase();
+  // A space that's part of PSG itself keeps the Hub's own icon
+  if (space.kind === "rentals") return { title: `${space.name} · PSG Hub` };
   return {
     title: `${name} · PSG Hub`,
     // Square icon made from the logo (or a lettermark); ?v= changes when the logo does
@@ -35,7 +37,7 @@ export default async function SpaceLayout({ children, params }: { children: Reac
   const allowed = space && user?.id ? await canSeeSpace({ id: Number(user.id), role: user.role ?? "member" }, space.id) : false;
   if (!space || !allowed) return <>{children}</>;
   return (
-    <div className={`${body.variable} ${capsFace.variable}`} style={{ ...spaceTokens(space.color), fontFamily: "var(--tws-font), system-ui, sans-serif" } as React.CSSProperties}>
+    <div className={`${body.variable} ${capsFace.variable}`} style={{ ...tokensForSpace(space), fontFamily: "var(--tws-font), system-ui, sans-serif" } as React.CSSProperties}>
       <SpaceShell space={space} staff={user?.role === "admin" || user?.role === "member"}>{children}</SpaceShell>
     </div>
   );

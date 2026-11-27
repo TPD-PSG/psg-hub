@@ -70,7 +70,7 @@ export default function SpaceShell({ space, staff = true, children }: { space: S
           return (
             <Link key={i.href} href={i.href} onClick={() => setMenu(false)} aria-current={on ? "page" : undefined}
               className="px-6 py-2.5 text-sm no-underline" style={on
-                ? { color: "#fff", fontWeight: 700, background: "var(--tws-char-hi)", borderLeft: "4px solid var(--tws-accent)", paddingLeft: 20 }
+                ? { color: "var(--tws-bar-ink, #fff)", fontWeight: 700, background: "var(--tws-char-hi)", borderLeft: "4px solid var(--tws-accent)", paddingLeft: 20 }
                 : { color: "var(--tws-nav-ink)" }}>{i.label}</Link>
           );
         })}
@@ -97,7 +97,10 @@ export default function SpaceShell({ space, staff = true, children }: { space: S
             {[0, 1, 2].map(i => <span key={i} className="w-5 h-0.5" style={{ background: "var(--tws-nav-ink)" }} />)}
           </button>
           <Link href={base} className="flex items-center gap-3.5 min-w-0 no-underline">
-            {space.logoUrl ? (
+            {space.kind === "rentals" ? (
+              // Part of PSG itself: the PSG logo, as on the rest of the Hub
+              <span className="bg-white px-2 py-1 flex shrink-0"><Image src="/psg-logo.png" alt="Production Solutions Group" width={56} height={36} className="object-contain" /></span>
+            ) : space.logoUrl ? (
               <span className="flex px-2 py-1 shrink-0" style={{ background: "var(--tws-ground)" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- served by our own API with a cache-busting version */}
                 <img src={space.logoUrl} alt={space.name} className="h-9 w-auto max-w-[110px] object-contain" />
@@ -105,7 +108,7 @@ export default function SpaceShell({ space, staff = true, children }: { space: S
             ) : (
               <span className="px-2 py-1 font-extrabold text-sm shrink-0" style={{ background: "var(--tws-accent)", color: "var(--tws-ink)" }}>{space.shortName ?? space.name}</span>
             )}
-            <span className="hidden sm:block truncate" style={{ fontFamily: capsFont, fontSize: 12, letterSpacing: "0.3em", color: "var(--tws-accent-light)" }}>{name}</span>
+            <span className="hidden sm:block truncate" style={{ fontFamily: capsFont, fontSize: 12, letterSpacing: "0.3em", color: "var(--tws-bar-ink, var(--tws-accent-light))" }}>{name}</span>
           </Link>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">

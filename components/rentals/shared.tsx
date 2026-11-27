@@ -30,7 +30,7 @@ export function RentalsHeader({ space, title, line, children }: { space: SpaceTh
 
 export function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button type="button" aria-pressed={on} onClick={onClick} className="text-xs font-bold px-2.5 py-1.5"
-    style={on ? { background: "var(--tws-char)", color: "#fff", border: "1px solid var(--tws-char)" } : { background: "transparent", color: "var(--tws-ink)", border: "1px solid var(--tws-line)" }}>{children}</button>;
+    style={on ? { background: "var(--tws-char)", color: "var(--tws-on-char, #fff)", border: "1px solid var(--tws-char)" } : { background: "transparent", color: "var(--tws-ink)", border: "1px solid var(--tws-line)" }}>{children}</button>;
 }
 
 export const th: React.CSSProperties = { textAlign: "left", fontSize: 12, fontWeight: 700, color: "var(--tws-muted)", padding: "8px 10px", borderBottom: "2px solid var(--tws-line)", whiteSpace: "nowrap" };

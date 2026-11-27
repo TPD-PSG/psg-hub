@@ -1,8 +1,8 @@
 // A hire as a PDF for the client (PSG Rentals & Crew): a Hire Quote while it's a quote, a Hire
-// Confirmation once confirmed. Same sales-quote layout and letterhead as the company's other
-// quotes. Kit grouped by category, then other charges; discounts shown as their own lines.
+// Confirmation once confirmed. The sales-quote layout in PSG's own letterhead (PSG logo, navy,
+// PSG blue). Kit grouped by category, then other charges; discounts shown as their own lines.
 // Never shows internal notes.
-import { buildQuotePDF, brandFor, type QuoteForPdf } from "@/lib/quotePdf";
+import { buildQuotePDF, PSG_SALES_BRAND, type QuoteForPdf } from "@/lib/quotePdf";
 import { fetchLogoAsset } from "@/lib/exports";
 import { hireTotals, type PricedLine } from "@/lib/rentals";
 import { fmtDate } from "@/lib/format";
@@ -50,12 +50,12 @@ export function hireToQuote(h: HireForPdf): QuoteForPdf {
 }
 
 export async function hirePdfUrl(h: HireForPdf) {
-  const q = hireToQuote(h), brand = brandFor(q.entity);
+  const q = hireToQuote(h), brand = PSG_SALES_BRAND; // PSG Rentals & Crew is part of PSG: PSG's letterhead
   const logo = await fetchLogoAsset(brand.logoUrl ?? undefined);
   return URL.createObjectURL(buildQuotePDF(q, logo, brand).output("blob"));
 }
 export async function downloadHirePDF(h: HireForPdf) {
-  const q = hireToQuote(h), brand = brandFor(q.entity);
+  const q = hireToQuote(h), brand = PSG_SALES_BRAND; // PSG Rentals & Crew is part of PSG: PSG's letterhead
   const logo = await fetchLogoAsset(brand.logoUrl ?? undefined);
   buildQuotePDF(q, logo, brand).save(`${h.number} ${h.title}.pdf`.replace(/[\\/:*?"<>|]/g, "-"));
 }

@@ -79,7 +79,7 @@ export default function Equipment({ slug, myName }: { slug: string; myName: stri
           </span>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          {live.length > 0 && (["all", "attention"] as const).map(f => <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className="text-xs px-2.5 py-1" style={filter === f ? { background: "var(--tws-char)", color: "#fff" } : { border: "1px solid var(--tws-line)", color: "var(--tws-muted)" }}>{f === "all" ? "All" : "Needs attention"}</button>)}
+          {live.length > 0 && (["all", "attention"] as const).map(f => <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className="text-xs px-2.5 py-1" style={filter === f ? { background: "var(--tws-char)", color: "var(--tws-on-char, #fff)" } : { border: "1px solid var(--tws-line)", color: "var(--tws-muted)" }}>{f === "all" ? "All" : "Needs attention"}</button>)}
           {d.staff && !adding && <button type="button" onClick={() => startAdd()} style={{ ...btnSolid, padding: "8px 14px" }}>+ Add equipment</button>}
         </div>
       </div>

@@ -24,7 +24,7 @@ export default function ClientShell({ brand, company, children, home = "/my-buil
           ) : (
             <span className="bg-white px-2 py-1 flex shrink-0"><Image src="/psg-logo.png" alt="Production Solutions Group" width={56} height={36} className="object-contain" /></span>
           )}
-          <span className="hidden sm:block truncate" style={{ ...caps, color: "var(--tws-accent-light)" }}>{brand ? brand.name : "PSG Hub"}</span>
+          <span className="hidden sm:block truncate" style={{ ...caps, color: "var(--tws-bar-ink, var(--tws-accent-light))" }}>{brand ? brand.name : "PSG Hub"}</span>
         </Link>
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           {nav && nav.length > 1 && (

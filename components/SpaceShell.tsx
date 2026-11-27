@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import NotificationBell from "@/components/NotificationBell";
+import HelpLink from "@/components/HelpLink";
 import UserNav from "@/components/UserNav";
 import type { SpaceTheme } from "@/lib/spaces";
 
@@ -42,7 +43,7 @@ export default function SpaceShell({ space, staff = true, children }: { space: S
   ];
   const shared = [
     { href: "/tasks", label: "My tasks" }, { href: "/calendar", label: "Calendar" },
-    { href: "/helpdesk", label: "Help desk" },
+    { href: "/help", label: "Guides" }, { href: "/helpdesk", label: "Help desk" },
   ];
   const active = (href: string) => (href === base ? pathname === base : pathname.startsWith(href));
   const name = space.name.toUpperCase();
@@ -98,6 +99,7 @@ export default function SpaceShell({ space, staff = true, children }: { space: S
           <Link href="/?all=1" className="hidden sm:flex items-center gap-2 text-[13px]" style={{ color: "var(--tws-nav-ink)" }}>
             <span className="bg-white px-1 py-0.5 flex"><Image src="/psg-logo.png" alt="" width={30} height={20} className="object-contain" /></span>PSG Hub
           </Link>
+          <HelpLink color="var(--tws-nav-ink)" />
           <NotificationBell />
           <UserNav />
         </div>

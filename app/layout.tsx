@@ -8,6 +8,7 @@ import { auth } from "@/auth";
 import { DialogHost } from "@/components/Dialogs";
 import UserNav from "@/components/UserNav";
 import NotificationBell from "@/components/NotificationBell";
+import HelpLink from "@/components/HelpLink";
 import { MobileSidebarProvider } from "@/components/Sidebar";
 import AppChrome from "@/components/AppChrome";
 import MobileMenuButton from "@/components/MobileMenuButton";
@@ -74,6 +75,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </span>
                 <div className="flex-1" />
                 <SpaceTopBarLinks spaces={spaces} />
+                <HelpLink />
                 <NotificationBell />
                 <UserNav />
               </header>

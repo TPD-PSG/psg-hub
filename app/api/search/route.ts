@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccess, parsePerms } from "@/lib/permissions";
 import { companyLimit } from "@/lib/companyScope";
+import { searchHelp } from "@/lib/help";
 
 export const dynamic = "force-dynamic";
 const N = 6;
@@ -50,6 +51,8 @@ export async function GET(req: Request) {
     ...clients.map(c => ({ type: "Clients", label: c.name, line: c.type, href: `/bd?client=${c.id}` })),
     ...deals.map(d => ({ type: "Deals", label: d.title, line: d.stage, href: `/bd?deal=${d.id}` })),
     ...tasks.map(t => ({ type: "Tasks", label: t.title, line: t.status.replace("_", " "), href: `/tasks?highlight=${t.id}` })),
+    // Guides (everyone can read them)
+    ...searchHelp(q).slice(0, 4).map(g => ({ type: "Guides", label: g.title, line: g.summary, href: `/help/${g.slug}` })),
     ...invoices.map(i => ({ type: "Invoices", label: i.reference ?? i.description, line: `${i.type === "sales" ? "Sales" : "Purchase"} · ${i.party}`, href: `/finance${i.type === "purchase" ? "?tab=purchase" : ""}` })),
   ];
   return NextResponse.json({ results });

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -116,6 +117,7 @@ export default function HelpdeskView({ initial, isAdmin }: { initial: HelpdeskIn
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-white">Help Desk</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>Most questions are answered in the <Link href="/help" className="underline">Guides</Link>. Ask here for anything they don&apos;t cover.</p>
           <p className="text-sm mt-0.5" style={{ color: "var(--psg-muted)" }}>
             {showAll ? `${openCount} open ticket${openCount !== 1 ? "s" : ""} across the team` : "Report an issue or request a feature"}
           </p>

@@ -64,3 +64,16 @@ body:has(.tws-shell) { background-color: #f5f2ec !important; }
 .inc-light .text-white { color: var(--tws-ink) !important; }
 .inc-light .text-blue-300 { color: var(--tws-accent-ink) !important; }
 .inc-light [class*="hover:bg-white"]:hover { background-color: var(--tws-ground) !important; }
+
+/* Help guides (content/help, rendered by lib/help) */
+.help-article { line-height: 1.65; max-width: 44rem; color: var(--psg-text); }
+.help-article h2 { margin: 2rem 0 0.5rem; font-size: 1.2rem; font-weight: 700; color: #fff; }
+.help-article h3 { margin: 1.5rem 0 0.4rem; font-weight: 700; color: #fff; }
+.help-article p { margin: 0.75rem 0; }
+.help-article ul, .help-article ol { margin: 0.75rem 0; padding-left: 1.4rem; }
+.help-article ul { list-style: disc; }
+.help-article ol { list-style: decimal; }
+.help-article li { margin: 0.3rem 0; }
+.help-article a { text-decoration: underline; }
+.help-article strong { color: #fff; }
+.help-article code { font-size: 0.9em; background: var(--psg-card-bg); border: 1px solid var(--psg-card-border); border-radius: 4px; padding: 0 0.3em; }

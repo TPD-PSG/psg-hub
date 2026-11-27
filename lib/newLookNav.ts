@@ -44,8 +44,8 @@ const MAP: { label: string | null; items: (NavEntry & { show: (v: Viewer, can: (
       subShow: { "/property": (v, can) => can("property"), "/suppliers": (v, can) => can("suppliers"), "/health-safety": v => staff(v), "/compliance": v => staff(v) } },
     { key: "marketing", label: "Marketing", href: "/marketing", icon: "Share2", match: ["/marketing"],
       subs: [{ label: "Content calendar", href: "/marketing" }, { label: "Post list", href: "/marketing?view=list" }], show: (v, can) => can("marketing") },
-    { key: "help", label: "Help and ideas", href: "/helpdesk", icon: "LifeBuoy", match: ["/roadmap", "/helpdesk", "/ask"],
-      subs: [{ label: "Ideas and roadmap", href: "/roadmap" }, { label: "Help desk", href: "/helpdesk" }, { label: "Ask me anything", href: "/ask" }],
+    { key: "help", label: "Help and ideas", href: "/help", icon: "LifeBuoy", match: ["/help", "/roadmap", "/helpdesk", "/ask"],
+      subs: [{ label: "Guides", href: "/help", keywords: ["how to", "manual", "help"] }, { label: "Help desk", href: "/helpdesk", keywords: ["support", "ticket"] }, { label: "Ideas and roadmap", href: "/roadmap" }, { label: "Ask me anything", href: "/ask" }],
       show: () => true, subShow: { "/roadmap": (v, can) => can("roadmap"), "/ask": (v, can) => can("ask") } },
     // Fun Corner sits under Company (Toby, 28 Nov 2026)
     { key: "fun", label: "Fun Corner", href: "/fun", icon: "PartyPopper", match: ["/fun"], show: (v, can) => can("fun") },

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Icon from "@/components/Icon";
 import NotificationBell from "@/components/NotificationBell";
+import HelpLink from "@/components/HelpLink";
 import UserNav from "@/components/UserNav";
 import { activeKey, navFor, navPages, PRODUCTION_GROUPS, type NavGroup } from "@/lib/newLookNav";
 import { SectionMenu } from "@/components/nl";
@@ -94,7 +95,7 @@ export default function NewShell({ spaces, children }: { spaces: ShellSpace[]; c
             <span className="flex-1 text-sm" style={{ color: "var(--nl-text-muted)" }}>Search productions, venues, people…</span>
             <span className="nl-kbd" aria-hidden="true">⌘K</span>
           </button>
-          <div className="ml-auto flex items-center"><NotificationBell /><UserNav /></div>
+          <div className="ml-auto flex items-center"><HelpLink color="var(--nl-text-muted)" /><NotificationBell /><UserNav /></div>
         </header>
         {/* Phones, inside a production: its sections as a picker under the top strip */}
         {inProduction && (

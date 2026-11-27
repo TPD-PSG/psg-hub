@@ -90,3 +90,26 @@ a.nl-row:hover { background: var(--nl-panel-raised); }
   .nl-home .nl-o-0 { order: 0; } .nl-home .nl-o-1 { order: 1; } .nl-home .nl-o-2 { order: 2; } .nl-home .nl-o-3 { order: 3; }
   .nl-home .nl-o-4 { order: 4; } .nl-home .nl-o-5 { order: 5; } .nl-home .nl-o-7 { order: 7; } .nl-home .nl-o-8 { order: 8; }
 }
+
+/* ── Lists and forms (stage 6): today's pages pick up the new look ──
+   For people with the New look on, the old page colours point at the new tokens, so every list and
+   form page (productions, tasks, finance, venues and the rest) is navy, square and on-brand without
+   a rewrite. The old look is untouched (no data-new-look). */
+:root[data-new-look] {
+  --psg-dark-bg: var(--nl-bg);
+  --psg-navy: var(--nl-nav);
+  --psg-card-bg: var(--nl-panel);
+  --psg-card-border: var(--nl-border);
+  --psg-muted: var(--nl-text-muted);
+  --psg-text: var(--nl-text);
+  --psg-blue: var(--nl-accent);   /* primary buttons, links, active markers */
+}
+/* A primary button is the accent with navy text (the old ones set white text inline) */
+:root[data-new-look] .nl-main [style*="background-color:var(--psg-blue)"],
+:root[data-new-look] .nl-main [style*="background:var(--psg-blue)"] { color: var(--nl-accent-ink) !important; font-weight: 700; }
+:root[data-new-look] .nl-main [style*="background-color:var(--psg-blue)"] *,
+:root[data-new-look] .nl-main [style*="background:var(--psg-blue)"] * { color: inherit !important; }
+/* Square corners throughout (PSG brand); only avatars stay round */
+:root[data-new-look] .nl-main :is(.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl) { border-radius: 0 !important; }
+/* Small-caps section labels in the brand face */
+:root[data-new-look] .nl-main :is(.uppercase.tracking-wide, .uppercase.tracking-wider, .uppercase.tracking-widest) { font-family: var(--nl-caps-font); letter-spacing: 0.18em; }

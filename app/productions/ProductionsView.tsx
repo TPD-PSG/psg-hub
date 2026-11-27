@@ -102,7 +102,7 @@ export default function ProductionsView({ initialProductions }: { initialProduct
         <div className="rounded-lg border divide-y" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }}>
           {displayed.length === 0 && (
             <p className="p-8 text-center" style={{ color: "var(--psg-muted)" }}>
-              {tab === "mine" ? "You're not on any active productions." : "No productions yet."}
+              {tab === "mine" ? "You're not on any active productions. Productions you're on the team for show here." : "No productions yet. Add the first with New production."}
             </p>
           )}
           {displayed.map((p) => (

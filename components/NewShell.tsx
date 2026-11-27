@@ -10,7 +10,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { LucideIcon } from "lucide-react";
 import {
-  BriefcaseBusiness, CalendarDays, CheckSquare, Clapperboard, Hammer, Home, LayoutGrid, LifeBuoy, Megaphone, PoundSterling, Search, Settings, Share2, Star, Wrench, X,
+  BriefcaseBusiness, CalendarDays, CheckSquare, Clapperboard, Hammer, Home, LayoutGrid, LifeBuoy, Megaphone, PartyPopper, PoundSterling, Search, Settings, Share2, Star, Wrench, X,
 } from "lucide-react";
 import Icon from "@/components/Icon";
 import NotificationBell from "@/components/NotificationBell";
@@ -30,7 +30,7 @@ const PRODUCTION_GROUPS = [
   { label: "Work", sections: [{ key: "tasks", label: "Tasks" }, { key: "notes", label: "Notes" }, { key: "meetings", label: "Meetings" }] },
 ];
 
-const ICONS: Record<string, LucideIcon> = { Home, CheckSquare, Star, Clapperboard, CalendarDays, BriefcaseBusiness, Megaphone, PoundSterling, Wrench, Share2, LifeBuoy, Settings, Hammer };
+const ICONS: Record<string, LucideIcon> = { Home, CheckSquare, Star, Clapperboard, CalendarDays, BriefcaseBusiness, Megaphone, PoundSterling, Wrench, Share2, LifeBuoy, PartyPopper, Settings, Hammer };
 type Counts = { tasks: number | null; productions: number | null; deals: number | null; finance: number | null };
 type Hit = { type: string; label: string; line?: string | null; href: string };
 export type ShellSpace = { slug: string; name: string };

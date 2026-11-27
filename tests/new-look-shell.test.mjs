@@ -24,7 +24,7 @@ export default () => run("new-look-shell", async ({ db, users, login, results })
   };
   const far = MAP_ROUTES.filter(r => clicks(r) > 2);
   ok(far.length === 0, `every tile in the navigation map is two clicks or fewer${far.length ? ` (not: ${far.join(", ")})` : ""}`);
-  ok(groups.map(g => `${g.label ?? "top"}:${g.items.length}`).join() === "top:3,Work:4,Money:1,Company:4", "the brief's table: Home, My tasks, My productions, then Work, Money and Company (Spaces added per person)");
+  ok(groups.map(g => `${g.label ?? "top"}:${g.items.length}`).join() === "top:3,Work:4,Money:1,Company:5", "the brief's table: Home, My tasks, My productions, then Work, Money and Company (Spaces added per person)");
   const fl = nav.navFor({ role: "freelancer" }).flatMap(g => g.items.map(i => i.key));
   ok(!fl.includes("finance") && !fl.includes("admin") && !fl.includes("jobs") && fl.includes("home"), "items a role can't use are hidden, not greyed out");
   ok(nav.activeKey(groups, "/productions", "mine=1") === "mine" && nav.activeKey(groups, "/productions", "") === "productions" && nav.activeKey(groups, "/bd/quotes") === "jobs", "the right item is marked for each page");

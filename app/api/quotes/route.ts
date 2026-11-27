@@ -3,7 +3,7 @@
 import { myCompanyLimit, entityWhere, scopedEntityId } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseLines, quoteTotals, type LineInput } from "@/lib/quotes";
+import { parseQuoteLines, quoteTotals, type LineInput, type LineDisplay } from "@/lib/quotes";
 import { QUOTE_INCLUDE, requireStaff, newNumber, quoteFields } from "@/lib/quoteData";
 
 export async function GET(req: Request) {
@@ -25,19 +25,19 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const fields = quoteFields(body);
 
-  let lines: LineInput[] = [];
+  let lines: (LineInput & Partial<LineDisplay>)[] = [];
   let terms: string | null = null;
   if (body.templateId) {
     const t = await prisma.quoteTemplate.findUnique({ where: { id: Number(body.templateId) } });
     if (!t) return NextResponse.json({ error: "Template not found" }, { status: 404 });
-    const parsed = parseLines(JSON.parse(t.lines || "[]"));
+    const parsed = parseQuoteLines(JSON.parse(t.lines || "[]"));
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     lines = parsed.lines;
     terms = t.terms;
     fields.jobType ??= t.jobType;
     fields.entityId ??= t.entityId;
   } else if (body.lines) {
-    const parsed = parseLines(body.lines);
+    const parsed = parseQuoteLines(body.lines);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     lines = parsed.lines;
   }

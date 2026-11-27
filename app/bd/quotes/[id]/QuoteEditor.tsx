@@ -1,5 +1,8 @@
 "use client";
 
+// Workshop quoting (28 Nov 2026): each section is a quote item, a subtotal wrapper with its lines
+// nested under it. Lines are material, labour or misc; each can be hidden on the client's PDF or
+// shown without its price, and a whole item can be left out of the totals and the PDF.
 // Edit a quote: header, line items (our cost and the sell price), live totals and margin,
 // status, PDF for the client, and "Save as template". Workshop feedback (27 Nov 2026): an
 // "Add a line" bar that clears after each line, stock and last-paid-price lookup, units that
@@ -8,14 +11,14 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
-import { JOB_TYPES, quoteTotals } from "@/lib/quotes";
+import { JOB_TYPES, LINE_KINDS, defaultKind, quoteTotals } from "@/lib/quotes";
 import { downloadQuotePDF, quotePdfUrl } from "@/lib/quotePdf";
 import { QUOTE_SECTIONS, unitsFor } from "@/lib/quoteUnits";
 import { fmtDate } from "@/lib/format";
 import { STATUS_STYLE } from "../QuotesView";
 
 export type Option = { id: number; name: string };
-type Line = { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number };
+type Line = { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number; kind?: string | null; hideLine?: boolean; hidePrice?: boolean; leaveOut?: boolean };
 export type QuoteDetail = {
   id: number; number: string; title: string; jobType: string; status: string; vatRate: number;
   validUntil: string | null; terms: string | null; internalNotes: string | null; showSubtotals?: boolean; pdfDetail?: string; createdAt: string; sentAt: string | null; decidedAt: string | null;
@@ -24,15 +27,22 @@ export type QuoteDetail = {
   customerPo?: string | null; paymentTerms?: string | null; dueDate?: string | null; shippingMethod?: string | null; shipTo?: string | null;
   createdBy: Option | null; lines: Line[];
 };
-type Row = { section: string; description: string; quantity: string; unit: string; unitCost: string; unitPrice: string };
+// kind "" = work it out from the unit/section when the line is added
+type Row = { section: string; description: string; quantity: string; unit: string; unitCost: string; unitPrice: string; kind: string; hideLine: boolean; hidePrice: boolean; leaveOut: boolean };
 
 const inp = "w-full rounded px-2 py-1.5 text-sm text-white border focus:outline-none focus:ring-1 focus:ring-blue-500";
 const inpStyle = { backgroundColor: "var(--psg-dark-bg)", borderColor: "var(--psg-card-border)" };
 const card = { backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" };
 const gbp = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
-const toRow = (l: Line): Row => ({ section: l.section ?? "", description: l.description, quantity: String(l.quantity), unit: l.unit ?? "", unitCost: String(l.unitCost), unitPrice: String(l.unitPrice) });
+const toRow = (l: Line): Row => ({ section: l.section ?? "", description: l.description, quantity: String(l.quantity), unit: l.unit ?? "", unitCost: String(l.unitCost), unitPrice: String(l.unitPrice), kind: l.kind ?? defaultKind(l.section, l.unit), hideLine: !!l.hideLine, hidePrice: !!l.hidePrice, leaveOut: !!l.leaveOut });
 const num = (s: string) => (s.trim() === "" ? 0 : Number(s) || 0);
-const BLANK_ROW: Row = { section: "", description: "", quantity: "1", unit: "", unitCost: "", unitPrice: "" };
+const BLANK_ROW: Row = { section: "", description: "", quantity: "1", unit: "", unitCost: "", unitPrice: "", kind: "", hideLine: false, hidePrice: false, leaveOut: false };
+/** Lines of one item kept together, items in the order they first appear (workshop quoting, 28 Nov 2026). */
+const groupRows = (rs: Row[]) => {
+  const order: string[] = [];
+  for (const r of rs) { const k = r.section.trim().toLowerCase(); if (!order.includes(k)) order.push(k); }
+  return order.flatMap(k => rs.filter(r => r.section.trim().toLowerCase() === k));
+};
 type Lookup = {
   labour?: { id: number; name: string; dayRate: number | null }[];
   stock: { id: number; name: string; unit: string; quantity: number; unitCost: number | null; section: string | null; supplier: string | null }[];
@@ -55,7 +65,8 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     customerPo: initial.customerPo ?? "", paymentTerms: initial.paymentTerms ?? "", dueDate: initial.dueDate?.slice(0, 10) ?? "",
     shippingMethod: initial.shippingMethod ?? "", shipTo: initial.shipTo ?? "",
   });
-  const [rows, setRows] = useState<Row[]>(initial.lines.map(toRow));
+  const [rows, setRowsRaw] = useState<Row[]>(() => groupRows(initial.lines.map(toRow)));
+  const setRows = (f: Row[] | ((rs: Row[]) => Row[])) => setRowsRaw(rs => groupRows(typeof f === "function" ? f(rs) : f));
   // The "Add a line" bar: fill it in, press Add (or Enter), it joins the quote and the boxes clear
   const [entry, setEntry] = useState<Row>({ ...BLANK_ROW, section: initial.lines[initial.lines.length - 1]?.section ?? "" });
   const [insertAt, setInsertAt] = useState<number | null>(null); // add the next line below this row instead of at the end
@@ -75,19 +86,23 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     if (j < 0 || j >= rows.length) return;
     const c = [...rows];
     [c[i], c[j]] = [c[j], c[i]];
-    setRows(c); setDirty(true);
+    setRowsRaw(c); setDirty(true);
   };
 
-  const liveLines = rows.filter(r => r.description.trim()).map(r => ({ quantity: num(r.quantity), unitCost: num(r.unitCost), unitPrice: num(r.unitPrice) }));
+  const liveLines = rows.filter(r => r.description.trim()).map(r => ({ quantity: num(r.quantity), unitCost: num(r.unitCost), unitPrice: num(r.unitPrice), leaveOut: r.leaveOut }));
+  const leftOut = rows.filter(r => r.description.trim() && r.leaveOut).reduce((a, r) => a + num(r.quantity) * num(r.unitPrice), 0);
   const t = quoteTotals(liveLines, Number(head.vatRate) || 0);
   const priced = (cost: number) => Math.round(cost * (1 + (Number(markup) || 0) / 100) * 100) / 100;
 
-  // Section subtotals: shown after the last line of each section
-  const sectionNames: string[] = [];
-  for (const r of rows) if (r.description.trim() && !sectionNames.some(x => sameSection(x, r.section))) sectionNames.push(r.section);
-  const subtotal = (sec: string) => rows.filter(r => r.description.trim() && sameSection(r.section, sec))
+  // Quote items: each section is an item (a subtotal wrapper) with its lines nested under it.
+  // Rows are kept grouped by item, so an item's lines are always together.
+  const items: { name: string; idx: number[] }[] = [];
+  rows.forEach((r, i) => { const g = items.find(x => sameSection(x.name, r.section)); if (g) g.idx.push(i); else items.push({ name: r.section, idx: [i] }); });
+  const subtotal = (g: { idx: number[] }) => g.idx.map(i => rows[i]).filter(r => r.description.trim())
     .reduce((a, r) => ({ cost: a.cost + num(r.quantity) * num(r.unitCost), price: a.price + num(r.quantity) * num(r.unitPrice) }), { cost: 0, price: 0 });
-  const lastOfSection = (i: number) => sectionNames.length > 1 && rows[i].description.trim() && !rows.slice(i + 1).some(r => r.description.trim() && sameSection(r.section, rows[i].section));
+  const renameItem = (g: { idx: number[] }, name: string) => { setRowsRaw(rs => rs.map((r, j) => (g.idx.includes(j) ? { ...r, section: name } : r))); setDirty(true); };
+  const setItem = (g: { idx: number[] }, patch: Partial<Row>) => { setRows(rs => rs.map((r, j) => (g.idx.includes(j) ? { ...r, ...patch } : r))); setDirty(true); };
+  const moveInItem = (g: { idx: number[] }, i: number, d: -1 | 1) => { const p = g.idx.indexOf(i), j = g.idx[p + d]; if (j != null) move(i, (j - i) as -1 | 1); };
 
   // Look up stock and last-paid prices as the description is typed
   useEffect(() => {
@@ -101,16 +116,21 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
     return () => { clearTimeout(timer); ctl.abort(); };
   }, [entry.description, head.entityId, searching]);
 
-  function pick(fill: { description: string; unit: string | null; unitCost: number | null; section?: string | null }, stock?: { quantity: number; unit: string }) {
+  function pick(fill: { description: string; unit: string | null; unitCost: number | null; section?: string | null; kind: string }, stock?: { quantity: number; unit: string }) {
     const cost = fill.unitCost ?? 0;
-    setEntry(e => ({ ...e, description: fill.description, unit: fill.unit ?? e.unit, unitCost: cost ? String(cost) : e.unitCost, unitPrice: cost ? String(priced(cost)) : e.unitPrice, section: fill.section || e.section }));
+    // The pick sets the line's type; it only names the item when no item has been chosen yet
+    setEntry(e => ({ ...e, description: fill.description, unit: fill.unit ?? e.unit, unitCost: cost ? String(cost) : e.unitCost, unitPrice: cost ? String(priced(cost)) : e.unitPrice, section: e.section || fill.section || "", kind: fill.kind }));
     setInStock(stock ?? null);
     setFound(null); setSearching(false);
   }
   function addEntry(e?: React.FormEvent) {
     e?.preventDefault();
     if (!entry.description.trim()) { descRef.current?.focus(); return; }
-    const row: Row = { ...entry, unitPrice: entry.unitPrice.trim() === "" && entry.unitCost.trim() !== "" ? String(priced(num(entry.unitCost))) : entry.unitPrice };
+    const row: Row = {
+      ...entry, unitPrice: entry.unitPrice.trim() === "" && entry.unitCost.trim() !== "" ? String(priced(num(entry.unitCost))) : entry.unitPrice,
+      kind: entry.kind || defaultKind(entry.section, entry.unit),
+      leaveOut: rows.some(r => r.leaveOut && r.section.trim() && sameSection(r.section, entry.section)), // joins a left-out item as left out
+    };
     setRows(rs => (insertAt == null ? [...rs, row] : [...rs.slice(0, insertAt + 1), row, ...rs.slice(insertAt + 1)]));
     if (insertAt != null) setInsertAt(insertAt + 1); // keep adding below the line just added
     setDirty(true);
@@ -232,51 +252,84 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
 
       {/* Lines */}
       <div className="rounded-lg border overflow-x-auto" style={card}>
-        <table className="w-full text-sm" style={{ minWidth: 980 }}>
+        <table className="w-full text-sm" style={{ minWidth: 1200 }}>
           <thead>
             <tr className="text-xs" style={{ color: "var(--psg-muted)" }}>
-              <th className="text-left font-medium px-2 py-2 w-36">Section</th><th className="text-left font-medium px-2 py-2">Description *</th>
+              <th className="text-left font-medium px-2 py-2 w-36">Type</th><th className="text-left font-medium px-2 py-2">Description *</th>
               <th className="text-left font-medium px-2 py-2 w-20">Qty</th><th className="text-left font-medium px-2 py-2 w-24">Unit</th>
               <th className="text-left font-medium px-2 py-2 w-28" title="What it costs us (not on the PDF)">Our cost</th><th className="text-left font-medium px-2 py-2 w-28">Price</th>
-              <th className="text-right font-medium px-2 py-2 w-28">Line total</th><th className="text-right font-medium px-2 py-2 w-20">Margin</th><th className="w-16" />
+              <th className="text-right font-medium px-2 py-2 w-28">Line total</th><th className="text-right font-medium px-2 py-2 w-16">Margin</th>
+              <th className="text-left font-medium px-2 py-2 w-40" title="How the line shows on the client's PDF">On the PDF</th><th className="w-16" />
             </tr>
           </thead>
-          <tbody>
-            {rows.map((r, i) => {
-              const total = num(r.quantity) * num(r.unitPrice), cost = num(r.quantity) * num(r.unitCost);
-              const m = total ? Math.round(((total - cost) / total) * 100) : null;
-              const sub = lastOfSection(i) ? subtotal(r.section) : null;
-              return (
-                <Fragment key={i}>
-                <tr className="border-t align-top" style={{ borderColor: "var(--psg-card-border)", ...(insertAt === i ? { boxShadow: "inset 0 -2px 0 #5b8def" } : {}) }}>
-                  <td className="px-2 py-1.5"><input aria-label="Section" list="q-sections" className={inp} style={inpStyle} value={r.section} onChange={e => setRow(i, { section: e.target.value })} /></td>
-                  <td className="px-2 py-1.5"><input aria-label="Description" className={inp} style={inpStyle} value={r.description} onChange={e => setRow(i, { description: e.target.value })} /></td>
-                  <td className="px-2 py-1.5"><input aria-label="Quantity" type="number" step="any" className={inp} style={inpStyle} value={r.quantity} onChange={e => setRow(i, { quantity: e.target.value })} /></td>
-                  <td className="px-2 py-1.5"><input aria-label="Unit" list={`q-units-${i}`} className={inp} style={inpStyle} value={r.unit} onChange={e => setRow(i, { unit: e.target.value })} />
-                    <datalist id={`q-units-${i}`}>{unitsFor(r.section).map(u => <option key={u} value={u} />)}</datalist></td>
-                  <td className="px-2 py-1.5"><input aria-label="Our cost each" type="number" step="any" className={inp} style={inpStyle} value={r.unitCost} onChange={e => setRow(i, { unitCost: e.target.value })} /></td>
-                  <td className="px-2 py-1.5"><input aria-label="Price each" type="number" step="any" className={inp} style={inpStyle} value={r.unitPrice} onChange={e => setRow(i, { unitPrice: e.target.value })} /></td>
-                  <td className="px-2 py-2 text-right text-white tabular-nums">{gbp(total)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums text-xs" style={{ color: m != null && m < 0 ? "#f87171" : "var(--psg-muted)" }}>{m == null ? "—" : `${m}%`}</td>
-                  <td className="px-1 py-2 whitespace-nowrap text-xs">
-                    <button type="button" aria-label="Move up" onClick={() => move(i, -1)} style={{ color: "var(--psg-muted)" }}>↑</button>
-                    <button type="button" aria-label="Move down" onClick={() => move(i, 1)} className="ml-1" style={{ color: "var(--psg-muted)" }}>↓</button>
-                    <button type="button" aria-label="Add a line below this one" title="Add the next line below this one" onClick={() => { setInsertAt(insertAt === i ? null : i); setEntry(en => ({ ...en, section: r.section })); descRef.current?.focus(); }} className="ml-2" style={{ color: insertAt === i ? "#5b8def" : "var(--psg-muted)" }}>＋</button>
-                    <button type="button" aria-label="Remove line" onClick={() => { setRows(rs => rs.filter((_, j) => j !== i)); setInsertAt(null); setDirty(true); }} className="ml-2 text-red-400">×</button>
-                  </td>
-                </tr>
-                {sub && (
-                  <tr className="text-xs" style={{ color: "var(--psg-muted)", backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <td colSpan={4} className="px-2 py-1.5 text-right font-medium">{r.section || "No section"} subtotal</td>
-                    <td className="px-2 py-1.5 tabular-nums">{gbp(sub.cost)}</td><td />
-                    <td className="px-2 py-1.5 text-right tabular-nums text-white font-semibold">{gbp(sub.price)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{sub.price ? `${Math.round(((sub.price - sub.cost) / sub.price) * 100)}%` : "—"}</td><td />
+          {items.map((g, gi) => {
+            const sub = subtotal(g), out = g.idx.some(i => rows[i].leaveOut);
+            const named = !!g.name.trim();
+            return (
+              <tbody key={gi} style={out ? { opacity: 0.55 } : undefined}>
+                {/* The item: its name, subtotal and whether it counts */}
+                {(named || items.length > 1) && (
+                  <tr className="border-t-2" style={{ borderColor: "var(--psg-card-border)", backgroundColor: "rgba(91,141,239,0.08)" }}>
+                    <td colSpan={2} className="px-2 py-1.5">
+                      {named ? (
+                        <input aria-label={`Item name: ${g.name}`} className={`${inp} font-semibold`} style={inpStyle} value={g.name} onChange={e => renameItem(g, e.target.value)} />
+                      ) : <span className="text-xs font-semibold" style={{ color: "var(--psg-muted)" }}>Lines not in an item</span>}
+                    </td>
+                    <td colSpan={2} className="px-2 py-1.5 text-xs" style={{ color: "var(--psg-muted)" }}>{g.idx.length} line{g.idx.length === 1 ? "" : "s"}</td>
+                    <td className="px-2 py-1.5 text-xs tabular-nums" style={{ color: "var(--psg-muted)" }} title="Our cost for this item">{gbp(sub.cost)}</td><td />
+                    <td className="px-2 py-1.5 text-right tabular-nums text-white font-semibold" title="Item subtotal">{gbp(sub.price)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-xs" style={{ color: "var(--psg-muted)" }}>{sub.price ? `${Math.round(((sub.price - sub.cost) / sub.price) * 100)}%` : "—"}</td>
+                    <td className="px-2 py-1.5 text-xs">
+                      {named && <label className="flex items-center gap-1.5 cursor-pointer" title="Leave the whole item out of the totals and the client's PDF (e.g. an option the client hasn't taken)" style={{ color: out ? "#fbbf24" : "var(--psg-muted)" }}>
+                        <input type="checkbox" checked={out} onChange={e => setItem(g, { leaveOut: e.target.checked })} />{out ? "Left out" : "Leave out"}
+                      </label>}
+                    </td>
+                    <td className="px-1 py-1.5 text-xs whitespace-nowrap">
+                      <button type="button" title="Add a line to this item" onClick={() => { setInsertAt(g.idx[g.idx.length - 1]); setEntry(en => ({ ...en, section: g.name })); descRef.current?.focus(); }} style={{ color: "var(--psg-muted)" }}>＋ line</button>
+                    </td>
                   </tr>
                 )}
-                </Fragment>
-              );
-            })}
-          </tbody>
+                {g.idx.map(i => {
+                  const r = rows[i];
+                  const total = num(r.quantity) * num(r.unitPrice), cost = num(r.quantity) * num(r.unitCost);
+                  const m = total ? Math.round(((total - cost) / total) * 100) : null;
+                  const muted = r.hideLine || r.hidePrice;
+                  return (
+                    <tr key={i} className="border-t align-top" style={{ borderColor: "var(--psg-card-border)", ...(insertAt === i ? { boxShadow: "inset 0 -2px 0 #5b8def" } : {}) }}>
+                      <td className={`py-1.5 pr-2 ${named || items.length > 1 ? "pl-5" : "pl-2"}`}>
+                        <select aria-label="Line type" className={inp} style={inpStyle} value={r.kind || "misc"} onChange={e => setRow(i, { kind: e.target.value })}>
+                          {LINE_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+                        </select></td>
+                      <td className="px-2 py-1.5"><input aria-label="Description" className={inp} style={{ ...inpStyle, ...(r.hideLine ? { textDecoration: "line-through" } : {}) }} value={r.description} onChange={e => setRow(i, { description: e.target.value })} /></td>
+                      <td className="px-2 py-1.5"><input aria-label="Quantity" type="number" step="any" className={inp} style={inpStyle} value={r.quantity} onChange={e => setRow(i, { quantity: e.target.value })} /></td>
+                      <td className="px-2 py-1.5"><input aria-label="Unit" list={`q-units-${i}`} className={inp} style={inpStyle} value={r.unit} onChange={e => setRow(i, { unit: e.target.value })} />
+                        <datalist id={`q-units-${i}`}>{unitsFor(r.section, r.kind).map(u => <option key={u} value={u} />)}</datalist></td>
+                      <td className="px-2 py-1.5"><input aria-label="Our cost each" type="number" step="any" className={inp} style={inpStyle} value={r.unitCost} onChange={e => setRow(i, { unitCost: e.target.value })} /></td>
+                      <td className="px-2 py-1.5"><input aria-label="Price each" type="number" step="any" className={inp} style={inpStyle} value={r.unitPrice} onChange={e => setRow(i, { unitPrice: e.target.value })} /></td>
+                      <td className="px-2 py-2 text-right text-white tabular-nums">{gbp(total)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-xs" style={{ color: m != null && m < 0 ? "#f87171" : "var(--psg-muted)" }}>{m == null ? "—" : `${m}%`}</td>
+                      <td className="px-2 py-1.5 text-xs">
+                        {/* Mutes: on the client's PDF only; the line always counts in the item and totals */}
+                        <div className="flex gap-1">
+                          <button type="button" aria-pressed={r.hideLine} title="Hide this line on the client's PDF (it still counts in the item and totals)" onClick={() => setRow(i, { hideLine: !r.hideLine, hidePrice: false })}
+                            className="rounded px-1.5 py-0.5 border whitespace-nowrap" style={r.hideLine ? { backgroundColor: "#fbbf24", borderColor: "#fbbf24", color: "#1a1a1a" } : { borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>Hide line</button>
+                          <button type="button" aria-pressed={r.hidePrice} disabled={r.hideLine} title="Show this line on the client's PDF without its price (it still counts)" onClick={() => setRow(i, { hidePrice: !r.hidePrice })}
+                            className="rounded px-1.5 py-0.5 border whitespace-nowrap disabled:opacity-40" style={r.hidePrice ? { backgroundColor: "#fbbf24", borderColor: "#fbbf24", color: "#1a1a1a" } : { borderColor: "var(--psg-card-border)", color: "var(--psg-muted)" }}>No £</button>
+                        </div>
+                        {muted && <span className="sr-only">{r.hideLine ? "Hidden on the PDF" : "Shown without price"}</span>}
+                      </td>
+                      <td className="px-1 py-2 whitespace-nowrap text-xs">
+                        <button type="button" aria-label="Move up" onClick={() => moveInItem(g, i, -1)} style={{ color: "var(--psg-muted)" }}>↑</button>
+                        <button type="button" aria-label="Move down" onClick={() => moveInItem(g, i, 1)} className="ml-1" style={{ color: "var(--psg-muted)" }}>↓</button>
+                        <button type="button" aria-label="Add a line below this one" title="Add the next line below this one" onClick={() => { setInsertAt(insertAt === i ? null : i); setEntry(en => ({ ...en, section: r.section })); descRef.current?.focus(); }} className="ml-2" style={{ color: insertAt === i ? "#5b8def" : "var(--psg-muted)" }}>＋</button>
+                        <button type="button" aria-label="Remove line" onClick={() => { setRows(rs => rs.filter((_, j) => j !== i)); setInsertAt(null); setDirty(true); }} className="ml-2 text-red-400">×</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            );
+          })}
         </table>
         <datalist id="q-sections">{[...new Set([...rows.map(r => r.section).filter(Boolean), ...QUOTE_SECTIONS])].map(s => <option key={s} value={s} />)}</datalist>
         {rows.length === 0 && <p className="px-3 py-4 text-sm" style={{ color: "var(--psg-muted)" }}>No lines yet. Add the first one below.</p>}
@@ -288,8 +341,12 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
             <label className="text-xs flex items-center gap-1.5" style={{ color: "var(--psg-muted)" }}>Markup on cost
               <input aria-label="Markup percent" type="number" step="any" className={inp} style={{ ...inpStyle, width: 64 }} value={markup} onChange={e => setMarkup(e.target.value)} />%</label>
           </div>
-          <div className="grid gap-2 grid-cols-2 md:grid-cols-[9rem_minmax(0,1fr)_5rem_6rem_7rem_7rem_auto] items-start">
-            <input aria-label="New line section" list="q-sections" placeholder="Section" className={inp} style={inpStyle} value={entry.section} onChange={e => setEntry({ ...entry, section: e.target.value })} />
+          <div className="grid gap-2 grid-cols-2 md:grid-cols-[9rem_7rem_minmax(0,1fr)_5rem_6rem_7rem_7rem_auto] items-start">
+            <input aria-label="New line item" list="q-sections" placeholder="Item, e.g. Coffin refit" className={inp} style={inpStyle} value={entry.section} onChange={e => setEntry({ ...entry, section: e.target.value })} />
+            <select aria-label="New line type" className={inp} style={inpStyle} value={entry.kind} onChange={e => setEntry({ ...entry, kind: e.target.value })}>
+              <option value="">Type: auto</option>
+              {LINE_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+            </select>
             <div className="relative col-span-2 md:col-span-1">
               <input ref={descRef} aria-label="New line description" placeholder="Description: type to search stock and past prices" autoComplete="off" className={inp} style={inpStyle}
                 value={entry.description} onChange={e => { setEntry({ ...entry, description: e.target.value }); setInStock(null); setSearching(true); }}
@@ -298,7 +355,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
                 <div className="absolute z-30 left-0 right-0 mt-1 rounded border shadow-xl max-h-72 overflow-y-auto text-xs" style={{ backgroundColor: "var(--psg-card-bg)", borderColor: "var(--psg-card-border)" }} role="listbox" aria-label="Stock and past prices">
                   {!!found.labour?.length && <div className="px-2 pt-2 pb-1 uppercase tracking-wider text-[10px]" style={{ color: "var(--psg-muted)" }}>Labour</div>}
                   {found.labour?.map(lb => (
-                    <button key={`l${lb.id}`} type="button" role="option" aria-selected={false} onClick={() => pick({ description: lb.name, unit: "days", unitCost: lb.dayRate, section: "Labour" })}
+                    <button key={`l${lb.id}`} type="button" role="option" aria-selected={false} onClick={() => pick({ description: lb.name, unit: "days", unitCost: lb.dayRate, section: "Labour", kind: "labour" })}
                       className="w-full text-left px-2 py-1.5 hover:bg-white/10 flex justify-between gap-3">
                       <span className="text-white truncate">{lb.name}</span>
                       <span className="shrink-0 tabular-nums" style={{ color: "var(--psg-muted)" }}>{lb.dayRate != null ? `${gbp(lb.dayRate)}/day · ${gbp(lb.dayRate / 8)}/hour` : "no day rate yet"}</span>
@@ -306,7 +363,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
                   ))}
                   {found.stock.length > 0 && <div className="px-2 pt-2 pb-1 uppercase tracking-wider text-[10px]" style={{ color: "var(--psg-muted)" }}>In stock</div>}
                   {found.stock.map(st => (
-                    <button key={`s${st.id}`} type="button" role="option" aria-selected={false} onClick={() => pick({ description: st.name, unit: st.unit, unitCost: st.unitCost, section: st.section }, { quantity: st.quantity, unit: st.unit })}
+                    <button key={`s${st.id}`} type="button" role="option" aria-selected={false} onClick={() => pick({ description: st.name, unit: st.unit, unitCost: st.unitCost, section: st.section, kind: "material" }, { quantity: st.quantity, unit: st.unit })}
                       className="w-full text-left px-2 py-1.5 hover:bg-white/10 flex justify-between gap-3">
                       <span className="text-white truncate">{st.name}{st.section ? <span style={{ color: "var(--psg-muted)" }}> · {st.section}</span> : null}</span>
                       <span className="shrink-0 tabular-nums" style={{ color: "var(--psg-muted)" }}>{qtyFmt(st.quantity)} {st.unit} in stock{st.unitCost != null ? ` · ${gbp(st.unitCost)}/${st.unit}` : ""}</span>
@@ -314,7 +371,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
                   ))}
                   {found.recent.length > 0 && <div className="px-2 pt-2 pb-1 uppercase tracking-wider text-[10px]" style={{ color: "var(--psg-muted)" }}>Last paid (purchase orders)</div>}
                   {found.recent.map(rc => (
-                    <button key={`r${rc.poNumber}${rc.description}`} type="button" role="option" aria-selected={false} onClick={() => pick({ description: rc.description, unit: rc.unit, unitCost: rc.unitCost })}
+                    <button key={`r${rc.poNumber}${rc.description}`} type="button" role="option" aria-selected={false} onClick={() => pick({ description: rc.description, unit: rc.unit, unitCost: rc.unitCost, kind: "material" })}
                       className="w-full text-left px-2 py-1.5 hover:bg-white/10 flex justify-between gap-3">
                       <span className="text-white truncate">{rc.description}</span>
                       <span className="shrink-0 tabular-nums" style={{ color: "var(--psg-muted)" }}>{gbp(rc.unitCost)}{rc.unit ? `/${rc.unit}` : ""} · {rc.supplier ?? "supplier"} · {fmtDate(rc.date)}</span>
@@ -327,7 +384,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
             <input aria-label="New line quantity" type="number" step="any" placeholder="Qty" className={inp} style={inpStyle} value={entry.quantity} onChange={e => setEntry({ ...entry, quantity: e.target.value })} />
             <div>
               <input aria-label="New line unit" list="q-entry-units" placeholder="Unit" className={inp} style={inpStyle} value={entry.unit} onChange={e => setEntry({ ...entry, unit: e.target.value })} />
-              <datalist id="q-entry-units">{unitsFor(entry.section).map(u => <option key={u} value={u} />)}</datalist>
+              <datalist id="q-entry-units">{unitsFor(entry.section, entry.kind || null).map(u => <option key={u} value={u} />)}</datalist>
             </div>
             <input aria-label="New line our cost each" type="number" step="any" placeholder="Our cost" className={inp} style={inpStyle} value={entry.unitCost}
               onChange={e => setEntry({ ...entry, unitCost: e.target.value })} />
@@ -336,7 +393,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
             <button type="submit" className="text-white px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap" style={{ backgroundColor: "var(--psg-blue)" }}>Add line</button>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--psg-muted)" }}>
-            {unitsFor(entry.section).length > 0 && entry.section && <span>Units for {entry.section}: {unitsFor(entry.section).join(", ")}</span>}
+            {entry.section && <span>Units: {unitsFor(entry.section, entry.kind || null).join(", ")}</span>}
             {inStock && <span style={{ color: num(entry.quantity) > inStock.quantity ? "#fbbf24" : undefined }}>{qtyFmt(inStock.quantity)} {inStock.unit} in stock{num(entry.quantity) > inStock.quantity ? ": not enough for this quantity" : ""}</span>}
             {entry.unitCost.trim() && !entry.unitPrice.trim() && <span>Price left blank = cost + {Number(markup) || 0}% ({gbp(priced(num(entry.unitCost)))})</span>}
             <span className="ml-auto">&ldquo;Our cost&rdquo; and margin never appear on the PDF. Enter adds the line.</span>
@@ -366,6 +423,7 @@ export default function QuoteEditor({ initial, entities, clients, deals, listHre
             <div key={l as string} className="flex justify-between"><span style={{ color: "var(--psg-muted)" }}>{l}</span><span className="text-white tabular-nums">{gbp(v as number)}</span></div>
           ))}
           <div className="flex justify-between border-t pt-1.5 font-semibold" style={{ borderColor: "var(--psg-card-border)" }}><span className="text-white">Total</span><span className="text-white tabular-nums">{gbp(t.gross)}</span></div>
+          {leftOut > 0 && <div className="flex justify-between text-xs" style={{ color: "#fbbf24" }}><span>Items left out (not in totals)</span><span className="tabular-nums">{gbp(leftOut)}</span></div>}
           <fieldset className="pt-2 text-xs flex flex-col gap-1" style={{ color: "var(--psg-muted)" }}>
             <legend className="mb-1">On the client&apos;s PDF</legend>
             <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="pdf-detail" checked={head.pdfDetail === "items"} onChange={() => setH({ pdfDetail: "items" })} />One price per item (each section)</label>

@@ -18,7 +18,7 @@ export async function workshopDayRate(): Promise<number | null> {
   return s && isFinite(n) && n > 0 ? n : null;
 }
 
-type Line = { section: string; description: string; quantity: number; unit: string; unitCost: number; unitPrice: number };
+type Line = { section: string; description: string; quantity: number; unit: string; unitCost: number; unitPrice: number; kind?: string };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function draftBuildLines(jobId: number, markupPct: number, group: "part" | "type" = "part"): Promise<{ lines: Line[]; notes: string[] }> {
@@ -39,9 +39,9 @@ export async function draftBuildLines(jobId: number, markupPct: number, group: "
     const day = rate ?? 0;
     const who = p.user ? ` (${p.user.name})` : p.labourType ? ` (${p.labourType.name})` : "";
     const lab: Line = p.hours
-      ? { section: "Labour", description: `${p.label}${who}`, quantity: p.hours, unit: "hrs", unitCost: r2(day / HOURS_PER_DAY), unitPrice: up(day / HOURS_PER_DAY) }
-      : { section: "Labour", description: `${p.label}${who}`, quantity: p.days, unit: "days", unitCost: r2(day), unitPrice: up(day) };
-    const pm: Line[] = p.materials.map(m => ({ section: m.section || "Materials", description: m.description, quantity: m.quantity, unit: m.unit ?? "", unitCost: r2(m.unitCost), unitPrice: up(m.unitCost) }));
+      ? { section: "Labour", description: `${p.label}${who}`, quantity: p.hours, unit: "hrs", unitCost: r2(day / HOURS_PER_DAY), unitPrice: up(day / HOURS_PER_DAY), kind: "labour" }
+      : { section: "Labour", description: `${p.label}${who}`, quantity: p.days, unit: "days", unitCost: r2(day), unitPrice: up(day), kind: "labour" };
+    const pm: Line[] = p.materials.map(m => ({ section: m.section || "Materials", description: m.description, quantity: m.quantity, unit: m.unit ?? "", unitCost: r2(m.unitCost), unitPrice: up(m.unitCost), kind: "material" }));
     if (p.materials.some(m => !m.unitCost)) notes.push(`Some materials on "${p.label}" have no cost yet`);
     if (group === "part") {
       lines.push({ ...lab, section: p.label, description: `Labour${who}` }, ...pm.map(m => ({ ...m, section: p.label })));
@@ -53,7 +53,7 @@ export async function draftBuildLines(jobId: number, markupPct: number, group: "
     return { lines, notes };
   }
   for (const po of pos) for (const l of po.lines) {
-    lines.push({ section: "Materials", description: `${l.description} (${po.supplier?.name ?? po.supplierName ?? po.number})`, quantity: l.quantity, unit: l.unit ?? "", unitCost: r2(l.unitCost), unitPrice: up(l.unitCost) });
+    lines.push({ section: "Materials", description: `${l.description} (${po.supplier?.name ?? po.supplierName ?? po.number})`, quantity: l.quantity, unit: l.unit ?? "", unitCost: r2(l.unitCost), unitPrice: up(l.unitCost), kind: "material" });
   }
   // Stock: net quantity per item (book-outs less returns), at the cost when it moved
   const byItem = new Map<number, { name: string; unit: string; qty: number; value: number }>();
@@ -64,7 +64,7 @@ export async function draftBuildLines(jobId: number, markupPct: number, group: "
   }
   for (const s of byItem.values()) if (s.qty > 0) {
     const unitCost = r2(s.value / s.qty);
-    lines.push({ section: "Materials", description: `${s.name} (from stock)`, quantity: r2(s.qty), unit: s.unit, unitCost, unitPrice: up(unitCost) });
+    lines.push({ section: "Materials", description: `${s.name} (from stock)`, quantity: r2(s.qty), unit: s.unit, unitCost, unitPrice: up(unitCost), kind: "material" });
   }
   return { lines, notes };
 }

@@ -5,7 +5,7 @@ import { myCompanyLimit, entityChangeError } from "@/lib/companyScope";
 import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseLines, quoteTotals } from "@/lib/quotes";
+import { parseQuoteLines, quoteTotals } from "@/lib/quotes";
 import { QUOTE_INCLUDE, requireStaff, quoteFields } from "@/lib/quoteData";
 import { confirmPencils } from "@/lib/buildParts";
 
@@ -29,7 +29,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const who = await requireStaff();
   if ("error" in who) return who.error;
   const id = parseInt((await params).id);
-  const existing = await prisma.quote.findUnique({ where: { id }, select: { status: true, vatRate: true, lines: { orderBy: { sortOrder: "asc" }, select: { section: true, description: true, quantity: true, unit: true, unitCost: true, unitPrice: true } } } });
+  const existing = await prisma.quote.findUnique({ where: { id }, select: { status: true, vatRate: true, lines: { orderBy: { sortOrder: "asc" }, select: { section: true, description: true, quantity: true, unit: true, unitCost: true, unitPrice: true, kind: true, hideLine: true, hidePrice: true, leaveOut: true } } } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json().catch(() => ({}));
   const fields = quoteFields(body);
@@ -44,11 +44,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // An accepted quote's price is locked while it stays accepted: changes go through a variation,
   // or the quote is set back first (audit round 2)
   const staysAccepted = existing.status === "accepted" && (!fields.status || fields.status === "accepted");
-  type L = { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number };
-  const key = (ls: L[]) => JSON.stringify(ls.map(l => [l.section ?? null, l.description, l.quantity, l.unit ?? null, l.unitCost, l.unitPrice]));
+  type L = { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number; kind?: string | null; hideLine?: boolean; hidePrice?: boolean; leaveOut?: boolean };
+  const key = (ls: L[]) => JSON.stringify(ls.map(l => [l.section ?? null, l.description, l.quantity, l.unit ?? null, l.unitCost, l.unitPrice, l.kind ?? null, !!l.hideLine, !!l.hidePrice, !!l.leaveOut]));
   const sameLines = (a: L[], b: L[]) => key(a) === key(b);
   if ("lines" in body) {
-    const parsed = parseLines(body.lines);
+    const parsed = parseQuoteLines(body.lines);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     if (staysAccepted && !sameLines(parsed.lines, existing.lines)) return NextResponse.json({ error: "This quote has been accepted, so its lines are locked. Add a variation to the job for changes." }, { status: 409 });
     if (!staysAccepted) lineOps = { lines: { deleteMany: {}, create: parsed.lines.map((l, i) => ({ ...l, sortOrder: i })) } };

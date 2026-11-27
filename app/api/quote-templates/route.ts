@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   if (!name) return NextResponse.json({ error: "Name the template" }, { status: 400 });
   const q = await prisma.quote.findUnique({ where: { id: Number(body.quoteId) }, include: { lines: { orderBy: { sortOrder: "asc" } } } });
   if (!q) return NextResponse.json({ error: "Quote not found" }, { status: 404 });
-  const lines = q.lines.map(({ section, description, quantity, unit, unitCost, unitPrice }) => ({ section, description, quantity, unit, unitCost, unitPrice }));
+  const lines = q.lines.map(({ section, description, quantity, unit, unitCost, unitPrice, kind, hideLine, hidePrice, leaveOut }) => ({ section, description, quantity, unit, unitCost, unitPrice, kind, hideLine, hidePrice, leaveOut }));
   const t = await prisma.quoteTemplate.create({ data: { name: name.slice(0, 100), jobType: q.jobType, entityId: q.entityId, lines: JSON.stringify(lines), terms: q.terms } });
   return NextResponse.json(t, { status: 201 });
 }

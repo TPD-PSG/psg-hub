@@ -26,8 +26,12 @@ const ALL = ["each", "hour", "hours", "day", "days", "week", "weeks", "m", "m²"
 
 export const QUOTE_SECTIONS = ["Labour", "Design", "Timber", "Sheet materials", "Steel & metal", "Paint & finishes", "Fixings & hardware", "Fabric & soft goods", "Consumables", "Tools & kit", "Materials", "Transport", "Pre-production", "Fit-up", "Running", "Get-out"];
 
-/** Units offered for a line in this section (case-insensitive match; anything else gets the full list). */
-export function unitsFor(section: string | null | undefined): string[] {
+/** Units offered for a line in this section (case-insensitive match). A section that's a quote item
+ *  (e.g. "Coffin Refit") falls back to the line's type: labour gets time, material gets material units. */
+export function unitsFor(section: string | null | undefined, kind?: string | null): string[] {
   const key = Object.keys(BY_SECTION).find(k => k.toLowerCase() === (section ?? "").trim().toLowerCase());
-  return key ? BY_SECTION[key] : ALL;
+  if (key) return BY_SECTION[key];
+  if (kind === "labour") return BY_SECTION["Labour"];
+  if (kind === "material") return MATERIAL;
+  return ALL;
 }

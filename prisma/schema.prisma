@@ -1302,6 +1302,12 @@ model QuoteLine {
   unitCost    Float   @default(0) // what it costs us
   unitPrice   Float   @default(0) // what we charge
   sortOrder   Int     @default(0)
+  // Workshop quoting (28 Nov 2026): the section is the quote item (a subtotal wrapper); each line
+  // inside is material, labour or misc, and can be muted on the client's PDF
+  kind        String? // material | labour | misc
+  hideLine    Boolean @default(false) // left off the client PDF; still counted in the item and totals
+  hidePrice   Boolean @default(false) // on the PDF without its price and amount; still counted
+  leaveOut    Boolean @default(false) // the whole item is left out of the totals and the PDF (set on every line of the item)
 
   @@index([quoteId])
 }

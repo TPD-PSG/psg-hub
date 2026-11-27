@@ -38,10 +38,12 @@ export type QuoteForPdf = {
   createdBy?: { name: string } | null;
   job?: { endDate?: string | null; deliveryMethod?: string | null; deliveryNotes?: string | null } | null;
   client: { name: string; billingName: string | null; billingAddress: string | null; address: string | null; billingEmail: string | null } | null;
-  lines: { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number }[];
+  lines: { section: string | null; description: string; quantity: number; unit: string | null; unitCost: number; unitPrice: number; kind?: string | null; hideLine?: boolean; hidePrice?: boolean; leaveOut?: boolean }[];
 };
 
-export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = brandFor(q.entity)): jsPDF {
+export function buildQuotePDF(q0: QuoteForPdf, logo?: LogoAsset, brand: Brand = brandFor(q0.entity)): jsPDF {
+  // Items left out aren't on the client's PDF at all (nor in its totals)
+  const q = { ...q0, lines: q0.lines.filter(l => !l.leaveOut) };
   // A company with its own space (TWS) sends a sales quote in its own letterhead layout
   if (brand.rule) return buildSalesQuotePDF(q, logo, brand);
   const doc = pdfSafe(new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }));
@@ -95,7 +97,11 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
   for (const sec of sections) {
     const ls = q.lines.filter(l => (l.section ?? "") === sec);
     if (sec) body.push([{ content: sec, colSpan: 4, styles: { fontStyle: "bold", fillColor: brand.tint, textColor: brand.accentInk } }]);
-    for (const l of ls) body.push([l.description, `${qty(l.quantity)}${l.unit ? ` ${l.unit}` : ""}`, { content: gbp(l.unitPrice), styles: { halign: "right" } }, { content: gbp(l.quantity * l.unitPrice), styles: { halign: "right" } }]);
+    for (const l of ls) {
+      if (l.hideLine) continue; // muted: counted in the subtotal and totals, not shown
+      const hp = !!l.hidePrice; // shown without its price
+      body.push([l.description, `${qty(l.quantity)}${l.unit ? ` ${l.unit}` : ""}`, { content: hp ? "" : gbp(l.unitPrice), styles: { halign: "right" } }, { content: hp ? "" : gbp(l.quantity * l.unitPrice), styles: { halign: "right" } }]);
+    }
     if (q.showSubtotals && sections.length > 1) {
       const sub = ls.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
       body.push([{ content: `${sec || "Other"} subtotal`, colSpan: 3, styles: { halign: "right", fontStyle: "bold" } }, { content: gbp(sub), styles: { halign: "right", fontStyle: "bold" } }]);
@@ -110,7 +116,7 @@ export function buildQuotePDF(q: QuoteForPdf, logo?: LogoAsset, brand: Brand = b
     for (const sec of sections) {
       const ls = q.lines.filter(l => (l.section ?? "") === sec);
       if (sec) items.push([sec, ls.reduce((s2, l) => s2 + l.quantity * l.unitPrice, 0)]);
-      else for (const l of ls) items.push([l.description, l.quantity * l.unitPrice]);
+      else for (const l of ls) if (!l.hideLine) items.push([l.description, l.quantity * l.unitPrice]);
     }
     autoTable(doc, {
       startY: y,
@@ -207,11 +213,13 @@ export function resourceType(section: string | null, unit?: string | null): stri
   if (["timber", "sheet materials", "steel & metal", "paint & finishes", "fixings & hardware", "fabric & soft goods", "consumables", "materials"].includes(s)) return "Material";
   return byUnit;
 }
+const KIND_LABEL: Record<string, string> = { material: "Material", labour: "Labour", misc: "Misc" };
 const cap = (u: string | null) => (u ? u.charAt(0).toUpperCase() + u.slice(1) : "Each");
 const money = (n: number) => new Intl.NumberFormat("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const SHIPPING: Record<string, string> = { collection: "Client collection", delivery: "Delivered by us" };
 
-export function buildSalesQuotePDF(q: QuoteForPdf, logo: LogoAsset | undefined, brand: Brand): jsPDF {
+export function buildSalesQuotePDF(q0: QuoteForPdf, logo: LogoAsset | undefined, brand: Brand): jsPDF {
+  const q = { ...q0, lines: q0.lines.filter(l => !l.leaveOut) }; // items left out aren't on the PDF
   const doc = pdfSafe(new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }));
   const W = 210, M = 12, ink: Rgb = [25, 25, 28], soft: Rgb = [95, 98, 105], line: Rgb = [70, 72, 78];
   const kind = q.kind === "Variation" ? "Variation" : "Sales Quote";
@@ -288,7 +296,7 @@ export function buildSalesQuotePDF(q: QuoteForPdf, logo: LogoAsset | undefined, 
     // One price per item: each section is one line at its total (the breakdown stays in the Hub)
     for (const sec of sections) {
       const ls = q.lines.filter(l => (l.section ?? "") === sec);
-      const items: [string, number][] = sec ? [[sec, sectionTotal(sec)]] : ls.map(l => [l.description, l.quantity * l.unitPrice]);
+      const items: [string, number][] = sec ? [[sec, sectionTotal(sec)]] : ls.filter(l => !l.hideLine).map(l => [l.description, l.quantity * l.unitPrice]);
       for (const [name, v] of items) {
         body.push([{ content: name, colSpan: 6, styles: { fontStyle: "bold", textColor: brand.accentInk } }]);
         body.push([resourceType(sec || null), "1", name, "Each", R(money(v)), R(money(v))]);
@@ -300,8 +308,10 @@ export function buildSalesQuotePDF(q: QuoteForPdf, logo: LogoAsset | undefined, 
       const ls = q.lines.filter(l => (l.section ?? "") === sec);
       if (sec) body.push([{ content: sec, colSpan: 6, styles: { fontStyle: "bold", textColor: brand.accentInk } }]);
       for (const l of ls) {
+        if (l.hideLine) continue; // muted: counted in the item total, not shown
         const unit = l.unit && !TIME_UNITS.test(l.unit) ? cap(l.unit) : l.unit ? cap(l.unit.replace(/s$/, "")) : "Each";
-        body.push([resourceType(l.section, l.unit), qty(l.quantity), l.description, unit, R(money(l.unitPrice)), R(money(l.quantity * l.unitPrice))]);
+        const type = l.kind ? KIND_LABEL[l.kind] ?? "Misc" : resourceType(l.section, l.unit);
+        body.push([type, qty(l.quantity), l.description, unit, R(l.hidePrice ? "" : money(l.unitPrice)), R(l.hidePrice ? "" : money(l.quantity * l.unitPrice))]);
       }
       if (sec) body.push([{ content: `${sec} Total`, colSpan: 5, styles: { halign: "right", fontStyle: "bold" } }, R(`£${money(sectionTotal(sec))}`, true)]);
     }

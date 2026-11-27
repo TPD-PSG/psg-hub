@@ -57,7 +57,8 @@ export default () => run("server-pages", async ({ db, users, login, anon, result
     ok((await html(a, "/admin/settings")).includes("SSR quick link"), "/admin/settings (admin): settings in the first HTML");
     ok((await html(a, "/marketing")).includes("SSR marketing post"), "/marketing (admin): this month's posts in the first HTML");
     ok(!(await html(f, "/marketing")).includes("SSR marketing post"), "/marketing (freelancer): no posts");
-    if (prod1) ok((await html(anonFetch, "/toolbox-talk/1")).includes(prod1.name.replace(/&/g, "&amp;")), "/toolbox-talk (signed out): production name in the first HTML");
+    const prod2 = await db.production.findUnique({ where: { id: 2 }, select: { name: true, status: true } });
+    if (prod2?.status === "in-production") ok((await html(anonFetch, "/toolbox-talk/2")).includes(prod2.name.replace(/&/g, "&amp;")), "/toolbox-talk (signed out): production name in the first HTML");
   } finally {
     await db.helpTicket.delete({ where: { id: ticket.id } }).catch(() => {});
     await db.task.deleteMany({ where: { id: { in: [task.id, signoff.id] } } }).catch(() => {});

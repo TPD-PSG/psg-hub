@@ -27,6 +27,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false, // don't announce the framework (live security check, 27 Nov 2026)
   images: {
     unoptimized: true,
   },

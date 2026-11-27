@@ -21,7 +21,7 @@ export default () => run("fixes", async ({ db, users, login, anon, check, result
     // upload cap
     await check("admin", "26 MB upload refused", a("/api/productions/1/show-reports/upload-pdf", { method: "POST", body: "x".repeat(26 * 1024 * 1024) }), 413);
     // toolbox sign-off validation (public)
-    const sig = b => anon("/api/productions/1/toolbox-signatures", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+    const sig = b => anon("/api/productions/2/toolbox-signatures", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
     await check("public", "sign-off with no signature", sig({ signeeName: "A", signeeDate: "2026-11-23" }), 400);
     await check("public", "sign-off for unknown production", anon("/api/productions/999999/toolbox-signatures", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }), 404);
     await check("public", "sign-off with another prod's stop", sig({ signeeName: "A", signeeDate: "2026-11-23", signature: "data:image/png;base64,AAAA", tourStopId: 99999999 }), 400);

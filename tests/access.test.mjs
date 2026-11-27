@@ -16,6 +16,7 @@ export default () => run("access", async ({ db, users, login, anon, check, resul
   await check("admin", "add test client to team 2", a("/api/productions/2/team", { method: "POST", body: JSON.stringify({ userId: users[1].id }) }), 201);
   await check("client", "open production 2 once on team", c("/api/productions/2"), 200);
   await check("client", "remove self from team 2", c(`/api/productions/2/team/${users[1].id}`, { method: "DELETE" }), 403);
-  await check("public", "toolbox info (no login)", anon("/api/productions/1/toolbox-info"), 200);
+  await check("public", "toolbox info, old numeric link to a show in production (no login)", anon("/api/productions/2/toolbox-info"), 200);
+  await check("public", "toolbox info for a planning / NDA show by number (no login)", anon("/api/productions/1/toolbox-info"), 404);
   await check("public", "full production (no login)", anon("/api/productions/1"), 307);
 });

@@ -132,6 +132,7 @@ model Production {
   hsDocuments          HSDocument[]
   toolboxSignatures    ToolboxTalkSignature[]
   incidents            Incident[]
+  toolboxToken         String?                   @unique // the toolbox-talk QR link (/toolbox-talk/<token>); old numeric links only work while a show is in production
   hsReportToken        String?                   @unique // the no-login accident/incident form's QR link (/report-incident/<token>)
   performanceSchedule  PerformanceSchedule?
   performanceOverrides PerformanceDateOverride[]

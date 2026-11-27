@@ -100,7 +100,7 @@ export default function HealthSafetyTab({ prod, reload }: TabProps) {
                     <QRCard
                       title={`${stop.venue.name} — sign-off`}
                       qrUrl={`/api/productions/${id}/toolbox-qr?stopId=${stop.id}`}
-                      formUrl={`/toolbox-talk/${id}?stopId=${stop.id}`}
+                      formUrl={`/api/productions/${id}/toolbox-qr?go=1&stopId=${stop.id}`}
                     />
                   </div>
 
@@ -140,7 +140,7 @@ export default function HealthSafetyTab({ prod, reload }: TabProps) {
         <div>
           <h2 className="text-base font-semibold text-white mb-3">CDM Toolbox Talk Sign-off</h2>
           <div className="grid gap-4 mb-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
-            <QRCard title={prod.name} qrUrl={`/api/productions/${id}/toolbox-qr`} formUrl={`/toolbox-talk/${id}`} />
+            <QRCard title={prod.name} qrUrl={`/api/productions/${id}/toolbox-qr`} formUrl={`/api/productions/${id}/toolbox-qr?go=1`} />
           </div>
 
           {/* Sign-off records */}

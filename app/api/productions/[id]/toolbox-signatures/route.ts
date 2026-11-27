@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
+import { toolboxTarget } from "@/lib/toolbox";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,11 +31,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const ip = req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() || "unknown";
   if (tooMany(ip)) return NextResponse.json({ error: "Too many sign-offs from this device. Try again shortly." }, { status: 429 });
 
-  const productionId = Number(id);
-  const production = Number.isInteger(productionId)
-    ? await prisma.production.findUnique({ where: { id: productionId }, select: { archived: true } })
-    : null;
-  if (!production || production.archived) return NextResponse.json({ error: "This sign-off form is no longer active" }, { status: 404 });
+  // [id] is the private toolbox token, or an old numeric link while the show is in production
+  const productionId = await toolboxTarget(id);
+  if (!productionId) return NextResponse.json({ error: "This sign-off form is no longer active" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
   const signeeName = text(body.signeeName, 120);

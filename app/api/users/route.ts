@@ -13,7 +13,7 @@ export async function GET() {
   // enough for pickers (assign task, add to team): no roles or permissions,
   // and clients/freelancers don't see staff email addresses.
   const select = role === "admin"
-    ? { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true, color: true, costDayRate: true, homeEntityId: true, clientId: true, deactivatedAt: true, preferences: true }
+    ? { id: true, name: true, email: true, role: true, permissions: true, createdAt: true, avatarUrl: true, color: true, costDayRate: true, homeEntityId: true, clientId: true, deactivatedAt: true, preferences: true, homeRole: true }
     : role === "member"
       ? { id: true, name: true, email: true, avatarUrl: true, color: true }
       : { id: true, name: true, avatarUrl: true, color: true };

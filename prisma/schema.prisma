@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  homeRole        String? // new look home: director | pm | office (admins set it in Users; none = director for admins, else pm)
   workshopManager Boolean        @default(false) // approves reschedule requests on its workshop's calendar
   stageRequests   StageRequest[] @relation("StageRequestBy")
   stageDecisions  StageRequest[] @relation("StageRequestDecidedBy")

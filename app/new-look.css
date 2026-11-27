@@ -82,3 +82,11 @@ a.nl-row:hover { background: var(--nl-panel-raised); }
   .nl-main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important; }
   .nl-page a, .nl-page button { min-height: 44px; } /* tap targets at least 44 px */
 }
+
+/* ── Home (stage 4): on phones it stacks Needs you, On today, Coming up, role panel, pinned, then
+   space cards and companies last ── */
+@media (max-width: 899px) {
+  .nl-home .nl-contents { display: contents; }
+  .nl-home .nl-o-0 { order: 0; } .nl-home .nl-o-1 { order: 1; } .nl-home .nl-o-2 { order: 2; } .nl-home .nl-o-3 { order: 3; }
+  .nl-home .nl-o-4 { order: 4; } .nl-home .nl-o-5 { order: 5; } .nl-home .nl-o-7 { order: 7; } .nl-home .nl-o-8 { order: 8; }
+}

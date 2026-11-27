@@ -10,6 +10,9 @@ import { homeSpaceFor, spacesFor } from "@/lib/spaces";
 import { visibleWhere } from "@/lib/incidents";
 import { companyLimit } from "@/lib/companyScope";
 import { complianceStatus } from "@/lib/complianceCore";
+import { newLookFor } from "@/lib/newLook";
+import { newHomeData, type CalEvent } from "@/lib/newHome";
+import NewHome from "./NewHome";
 
 const list = <T,>(v: unknown) => (Array.isArray(v) ? (v as T[]) : []);
 
@@ -27,6 +30,16 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const viewer = { id: Number(user.id), name: user.name ?? "", role: user.role ?? "member", permissions: user.permissions ?? null };
 
   const staff = viewer.role === "admin" || viewer.role === "member";
+
+  // New look (beta): the new Home (build brief stage 4), from the same data, scoped the same way
+  if (await newLookFor(viewer.id)) {
+    const [calEvents, entityOverview] = await Promise.all([
+      serverApi("/api/calendar"),
+      staff ? serverApi<{ rows: EntityOverviewRow[] }>("/api/dashboard/entities") : Promise.resolve(null),
+    ]);
+    const data = await newHomeData(viewer, { calEvents: list<CalEvent>(calEvents), entityOverview: entityOverview && Array.isArray(entityOverview.rows) ? entityOverview : null });
+    return <NewHome viewer={viewer} data={data} />;
+  }
   const [tasks, allTasks, productions, property, quickLinks, settings, opportunities, invoices, expenses, salesBrands, salesTasks, calEvents, entityOverview] = await Promise.all([
     serverApi(`/api/tasks?assigneeId=${viewer.id}`),
     viewer.role === "admin" ? serverApi("/api/tasks") : Promise.resolve([]),

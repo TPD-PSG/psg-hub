@@ -1,11 +1,14 @@
 // Hires: checking dates and lines, and what a hire is short of over its dates.
 import { prisma } from "@/lib/prisma";
 import { ownedFor, hiresAround, parseDay, text } from "@/lib/rentalAccess";
-import { lineList } from "@/lib/rentalFields";
-import { shortages, HIRE_STATUS, holdsKit } from "@/lib/rentals";
+import { lineList, type LineIn } from "@/lib/rentalFields";
+import { shortages, HIRE_STATUS, holdsKit, hireTotals } from "@/lib/rentals";
 
 export const HIRE_INCLUDE = {
-  lines: { orderBy: { sortOrder: "asc" as const }, include: { product: { select: { id: true, name: true, category: true, dayRate: true } } } },
+  lines: { orderBy: { sortOrder: "asc" as const }, include: { product: { select: { id: true, name: true, category: true, dayRate: true, weekRate: true } } } },
+  charges: { orderBy: { sortOrder: "asc" as const } },
+  invoice: { select: { id: true, status: true, reference: true, netAmount: true, vatAmount: true, issueDate: true, dueDate: true } },
+  entity: { select: { name: true, hasSpace: true, slug: true, color: true, logoMime: true, updatedAt: true, address: true, phone: true } },
   production: { select: { id: true, name: true } },
   createdBy: { select: { id: true, name: true } },
 };
@@ -47,18 +50,61 @@ export async function hireFields(b: HireBody, entityId: number, creating: boolea
     if (typeof b.status !== "string" || !(b.status in HIRE_STATUS)) return { error: "Status is quote, confirmed, out, returned or cancelled" };
     data.status = b.status;
   }
+  // Pricing and the quote
+  for (const [k, max, msg] of [["chargeDays", 1000, "Days charged is 0 to 1000"], ["discountPct", 100, "The discount is 0 to 100%"], ["vatRate", 100, "VAT is 0 to 100%"]] as const) {
+    if (!(k in b)) continue;
+    if ((b[k] === null || b[k] === "") && k !== "vatRate") { data[k] = null; continue; }
+    const n = Number(b[k]);
+    if (!isFinite(n) || n < 0 || n > max) return { error: msg };
+    data[k] = Math.round(n * 100) / 100;
+  }
+  for (const k of ["paymentTerms", "customerPo"] as const) if (k in b) data[k] = text(b[k], 80);
+  if ("deliveryTo" in b) data.deliveryTo = typeof b.deliveryTo === "string" && b.deliveryTo.trim() ? b.deliveryTo.trim().slice(0, 500) : null;
+  if ("terms" in b) data.terms = typeof b.terms === "string" && b.terms.trim() ? b.terms.trim().slice(0, 4000) : null;
+  if ("delivery" in b) {
+    if (b.delivery != null && b.delivery !== "" && b.delivery !== "collection" && b.delivery !== "delivery") return { error: "Delivery is collection or delivery" };
+    data.delivery = b.delivery || null;
+  }
+  if ("validUntil" in b) {
+    if (b.validUntil == null || b.validUntil === "") data.validUntil = null;
+    else { const d = parseDay(b.validUntil); if (!d) return { error: "Valid until isn't a date" }; data.validUntil = d; }
+  }
+  let charges: { description: string; quantity: number; unitPrice: number; sortOrder: number }[] | null = null;
+  if ("charges" in b) {
+    if (!Array.isArray(b.charges) || b.charges.length > 50) return { error: "Charges must be a list of up to 50" };
+    charges = [];
+    for (const [i, c] of (b.charges as Record<string, unknown>[]).entries()) {
+      const description = text(c?.description, 200);
+      const quantity = Number(c?.quantity ?? 1), unitPrice = Number(c?.unitPrice ?? 0);
+      if (!description) return { error: "Each charge needs a description" };
+      if (!isFinite(quantity) || quantity <= 0 || quantity > 10_000) return { error: "A charge's quantity is more than 0" };
+      if (!isFinite(unitPrice) || Math.abs(unitPrice) > 1e7) return { error: "A charge's price is a number" };
+      charges.push({ description, quantity, unitPrice: Math.round(unitPrice * 100) / 100, sortOrder: i });
+    }
+  }
   let lines: Awaited<ReturnType<typeof lineList>> | null = null;
   if ("lines" in b) {
     lines = await lineList(b.lines, entityId);
     if ("error" in lines) return { error: lines.error };
   }
-  return { data, lines: lines && "list" in lines ? lines.list : null, outDate: outDate!, returnDate: returnDate! };
+  return { data, charges, lines: lines && "list" in lines ? lines.list : null, outDate: outDate!, returnDate: returnDate! };
 }
 
-/** Day rates copied from the products for lines that don't give their own */
-export async function withRates(lines: { productId: number; quantity: number; note: string | null; dayRate?: number | null }[]) {
-  const rates = new Map((await prisma.rentalProduct.findMany({ where: { id: { in: lines.map(l => l.productId) } }, select: { id: true, dayRate: true } })).map(p => [p.id, p.dayRate]));
-  return lines.map((l, i) => ({ productId: l.productId, quantity: l.quantity, note: l.note, dayRate: l.dayRate !== undefined ? l.dayRate : rates.get(l.productId) ?? null, sortOrder: i }));
+/** Day and week rates copied from the products for lines that don't give their own */
+export async function withRates(lines: LineIn[]) {
+  const rates = new Map((await prisma.rentalProduct.findMany({ where: { id: { in: lines.map(l => l.productId) } }, select: { id: true, dayRate: true, weekRate: true } })).map(p => [p.id, p]));
+  return lines.map((l, i) => ({
+    productId: l.productId, quantity: l.quantity, note: l.note, sortOrder: i,
+    dayRate: l.dayRate !== undefined ? l.dayRate : rates.get(l.productId)?.dayRate ?? null,
+    weekRate: l.weekRate !== undefined ? l.weekRate : rates.get(l.productId)?.weekRate ?? null,
+    unitPrice: l.unitPrice ?? null, discountPct: l.discountPct ?? null,
+  }));
+}
+
+type HireForTotals = Parameters<typeof hireTotals>[0];
+/** A hire as the API sends it: with its money and what it's short of */
+export async function hireOut<T extends HireForTotals & { id: number; entityId: number; outDate: Date; returnDate: Date; lines: { productId: number; quantity: number }[] }>(h: T) {
+  return { ...h, totals: hireTotals(h), shortages: await shortFor(h.entityId, h) };
 }
 
 export { holdsKit };

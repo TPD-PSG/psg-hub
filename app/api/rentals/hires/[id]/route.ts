@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { staffForEntity, notFound, bad } from "@/lib/rentalAccess";
-import { hireFields, withRates, HIRE_INCLUDE, shortFor, holdsKit } from "@/lib/rentalHires";
+import { hireFields, withRates, HIRE_INCLUDE, shortFor, holdsKit, hireOut } from "@/lib/rentalHires";
 
 const load = (id: number) => prisma.rentalHire.findUnique({ where: { id }, select: { id: true, entityId: true, status: true, outDate: true, returnDate: true } });
 
@@ -11,8 +11,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!h) return notFound();
   const a = await staffForEntity(h.entityId);
   if ("error" in a) return a.error;
-  const hire = (await prisma.rentalHire.findUnique({ where: { id: h.id }, include: HIRE_INCLUDE }))!;
-  return NextResponse.json({ ...hire, shortages: await shortFor(h.entityId, hire) });
+  return NextResponse.json(await hireOut((await prisma.rentalHire.findUnique({ where: { id: h.id }, include: HIRE_INCLUDE }))!));
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +23,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const f = await hireFields(b, h.entityId, false, h);
   if ("error" in f) return bad(f.error!);
   if (["returned", "cancelled"].includes(h.status) && f.lines) return bad("This hire is closed; reopen it as a quote to change its kit");
+  if (b.quoteSent === true) f.data.quoteSentAt = new Date(); // marked as sent to the client
+  if (b.quoteSent === false) f.data.quoteSentAt = null;
+  if (f.charges) {
+    await prisma.rentalHireCharge.deleteMany({ where: { hireId: h.id } });
+    f.data.charges = { create: f.charges };
+  }
   const status = (f.data.status as string | undefined) ?? h.status;
   // Holding kit (confirming, or changing a confirmed hire) needs it free, unless they'll sub-hire the rest
   if (holdsKit(status)) {
@@ -35,8 +40,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await prisma.rentalHireLine.deleteMany({ where: { hireId: h.id } });
     f.data.lines = { create: await withRates(f.lines) };
   }
-  const hire = await prisma.rentalHire.update({ where: { id: h.id }, data: f.data, include: HIRE_INCLUDE });
-  return NextResponse.json({ ...hire, shortages: await shortFor(h.entityId, hire) });
+  return NextResponse.json(await hireOut(await prisma.rentalHire.update({ where: { id: h.id }, data: f.data, include: HIRE_INCLUDE })));
 }
 
 /** Only quotes and cancelled hires can be deleted; anything that went out stays on record. */
@@ -46,6 +50,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const a = await staffForEntity(h.entityId);
   if ("error" in a) return a.error;
   if (!["quote", "cancelled"].includes(h.status)) return bad("Cancel the hire instead: confirmed and returned hires stay on record");
+  if (await prisma.rentalHire.count({ where: { id: h.id, invoiceId: { not: null } } })) return bad("This hire has an invoice in Finance, so it stays on record");
   await prisma.rentalHire.delete({ where: { id: h.id } });
   return NextResponse.json({ deleted: true });
 }

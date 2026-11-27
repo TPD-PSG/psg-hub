@@ -958,20 +958,21 @@ model ProductionKeyDate {
 }
 
 model CompanyInvoice {
-  id          Int       @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   type        String // sales | purchase
   reference   String?
   description String
   party       String // client (sales) or supplier (purchase)
   production  String? // free-text production name, for context
-  netAmount   Float     @default(0)
-  vatAmount   Float     @default(0)
+  netAmount   Float       @default(0)
+  vatAmount   Float       @default(0)
   issueDate   DateTime?
   dueDate     DateTime?
-  status      String    @default("draft") // draft | sent | received | overdue | paid
+  status      String      @default("draft") // draft | sent | received | overdue | paid
   notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  rentalHire  RentalHire? // raised from a hire (PSG Rentals & Crew)
 }
 
 model ProductionExpense {
@@ -2340,23 +2341,37 @@ model RentalPackageItem {
 // A hire: quote → confirmed → out → returned (or cancelled). Confirmed and out hires hold their
 // kit from outDate to returnDate; quotes show as pencilled and hold nothing.
 model RentalHire {
-  id           Int              @id @default(autoincrement())
+  id           Int                @id @default(autoincrement())
   entityId     Int
-  entity       Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  number       String           @unique // H-2026-001
+  entity       Entity             @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  number       String             @unique // H-2026-001
   title        String
   clientName   String?
   clientEmail  String?
   productionId Int?
-  production   Production?      @relation(fields: [productionId], references: [id], onDelete: SetNull)
-  status       String           @default("quote") // quote | confirmed | out | returned | cancelled
+  production   Production?        @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  status       String             @default("quote") // quote | confirmed | out | returned | cancelled
   outDate      DateTime // kit leaves (prep day included)
   returnDate   DateTime // kit back in
-  notes        String?
+  notes        String? // internal, never on the client's PDF
+  // Pricing and the quote (stage 2, 27 Nov 2026)
+  chargeDays   Float? // days charged; null = every day it's away
+  discountPct  Float? // off the kit, for the whole hire
+  vatRate      Float              @default(20)
+  paymentTerms String?
+  customerPo   String?
+  delivery     String? // collection | delivery
+  deliveryTo   String? // where we deliver to
+  validUntil   DateTime?
+  terms        String? // shown on the quote PDF
+  quoteSentAt  DateTime?
+  invoiceId    Int?               @unique // the sales invoice raised for it, in Finance
+  invoice      CompanyInvoice?    @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  charges      RentalHireCharge[]
   createdById  Int?
-  createdBy    User?            @relation("RentalHireBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdBy    User?              @relation("RentalHireBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
   lines        RentalHireLine[]
 
   @@index([entityId, outDate])
@@ -2364,16 +2379,32 @@ model RentalHire {
 }
 
 model RentalHireLine {
-  id        Int           @id @default(autoincrement())
-  hireId    Int
-  hire      RentalHire    @relation(fields: [hireId], references: [id], onDelete: Cascade)
-  productId Int
-  product   RentalProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
-  quantity  Int           @default(1)
-  dayRate   Float? // copied from the product when added; editable on the quote (stage 2)
-  note      String?
-  sortOrder Int           @default(0)
+  id          Int           @id @default(autoincrement())
+  hireId      Int
+  hire        RentalHire    @relation(fields: [hireId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     RentalProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity    Int           @default(1)
+  dayRate     Float? // copied from the product when added; editable on the quote
+  weekRate    Float? // copied from the product too: 7 days cost this, not 7 day rates
+  unitPrice   Float? // our own price per unit for the whole hire, instead of the rates
+  discountPct Float? // off this line
+  note        String?
+  sortOrder   Int           @default(0)
 
   @@index([hireId])
   @@index([productId])
+}
+
+// Charges on a hire that aren't kit: transport, labour, consumables, damage…
+model RentalHireCharge {
+  id          Int        @id @default(autoincrement())
+  hireId      Int
+  hire        RentalHire @relation(fields: [hireId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float      @default(1)
+  unitPrice   Float      @default(0) // ex VAT
+  sortOrder   Int        @default(0)
+
+  @@index([hireId])
 }

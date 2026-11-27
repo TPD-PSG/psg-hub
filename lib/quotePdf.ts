@@ -213,7 +213,8 @@ export function resourceType(section: string | null, unit?: string | null): stri
   if (["timber", "sheet materials", "steel & metal", "paint & finishes", "fixings & hardware", "fabric & soft goods", "consumables", "materials"].includes(s)) return "Material";
   return byUnit;
 }
-const KIND_LABEL: Record<string, string> = { material: "Material", labour: "Labour", misc: "Misc" };
+// kit, discount, transport and charge are used by hire quotes (PSG Rentals & Crew)
+const KIND_LABEL: Record<string, string> = { material: "Material", labour: "Labour", misc: "Misc", kit: "Kit", discount: "Discount", transport: "Transport", charge: "Charge" };
 const cap = (u: string | null) => (u ? u.charAt(0).toUpperCase() + u.slice(1) : "Each");
 const money = (n: number) => new Intl.NumberFormat("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const SHIPPING: Record<string, string> = { collection: "Client collection", delivery: "Delivered by us" };
@@ -222,7 +223,8 @@ export function buildSalesQuotePDF(q0: QuoteForPdf, logo: LogoAsset | undefined,
   const q = { ...q0, lines: q0.lines.filter(l => !l.leaveOut) }; // items left out aren't on the PDF
   const doc = pdfSafe(new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }));
   const W = 210, M = 12, ink: Rgb = [25, 25, 28], soft: Rgb = [95, 98, 105], line: Rgb = [70, 72, 78];
-  const kind = q.kind === "Variation" ? "Variation" : "Sales Quote";
+  // A variation, a hire quote or hire confirmation says so; anything else is a sales quote
+  const kind = q.kind && q.kind !== "Quote" ? q.kind : "Sales Quote";
 
   // Letterhead: logo, then the company's address and phone
   let x = M;

@@ -11,6 +11,7 @@ export type Pkg = { id: number; name: string; description: string | null; items:
 export type HireRow = {
   id: number; number: string; title: string; clientName: string | null; clientEmail: string | null; status: string;
   outDate: string; returnDate: string; notes: string | null; items: number; productionId: number | null; production: { id: number; name: string } | null;
+  net?: number; invoice?: { id: number; status: string } | null;
 };
 export type RentalsData = { space: SpaceTheme; isAdmin: boolean; products: Product[]; packages: Pkg[]; hires: HireRow[]; productions: { id: number; name: string }[] };
 

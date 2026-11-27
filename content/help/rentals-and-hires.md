@@ -1,6 +1,6 @@
 ---
 title: Rentals & Crew: kit, hires and availability
-summary: Adding rental kit with a barcode on every unit, cases, packages, taking hires and checking what's free
+summary: Rental kit with a barcode on every unit, packages, hires and their prices, quote PDFs, invoicing and availability
 section: Rentals & Crew
 order: 1
 paths: /spaces/*/kit, /spaces/*/hires, /spaces/*/availability, /spaces/*/packages
@@ -63,7 +63,35 @@ You can **cancel** a confirmed hire, which frees its kit. Only quotes and cancel
 
 While you edit a hire, each line shows **how many are free** over its dates, counting every other confirmed hire. If there aren't enough, the line shows **Short**. Confirming a hire that's short stops and tells you what's free; you can **Confirm anyway** if you'll sub-hire the rest. Changing the dates or kit of a confirmed hire is checked the same way.
 
-Prices on the quote, the quote PDF and invoicing come in the next stage.
+## Prices
+
+Each kit line costs its **day rate** for every **day charged**. If the product has a **week rate**, each full week costs the week rate, and the days left over cost their day rates but never more than another week. For example, at £85 a day and £255 a week, 9 days cost £255 + £170 = £425.
+
+- **Days charged** starts as every day the kit is away. Type a smaller number to charge fewer days, for example 1 day for a weekend hire.
+- **£ each** on a line: type your own price per unit for the whole hire, instead of the rates.
+- **% off** on a line takes a discount off that line.
+- **Hire discount %** comes off all the kit (not other charges).
+- **Other charges**: anything that isn't kit, such as delivery and collection, a technician's day or damage. Charges can still be added after a hire comes back.
+- **VAT %** is 20 unless you change it.
+
+The totals under the lines update as you type: kit, discounts, other charges, subtotal, VAT and total. Each hire's value (before VAT) also shows in the hire list.
+
+## The quote and confirmation PDF
+
+Open **On the quote** to fill in the payment terms, the client's PO number, whether they collect or we deliver (and where to), and the terms printed on the PDF. **Notes** are just for us and never go on the PDF.
+
+Once a hire is saved:
+
+- **Preview PDF** shows it on screen. **Download quote PDF** saves it. Each one saves the hire first.
+- While it's a quote, the PDF is a **Hire Quote** with its **Valid until** date. Once confirmed it's a **Hire Confirmation**.
+- It's in the company's letterhead, like the workshop's sales quotes. The kit is grouped by category with a total for each, then transport and other charges. The dates out and back and the days charged are under the totals.
+- **Mark quote as sent** records when it went to the client.
+
+## Invoicing
+
+On a confirmed, out or returned hire, click **Raise invoice**. This puts a **draft sales invoice** in **Finance** for the hire's total, with the hire number as its reference. It's due on the payment terms: "30 days" (or any number of days) after today, "In advance" by the day the kit goes out, otherwise 30 days.
+
+If the hire changes while the invoice is still a draft, click **Update the draft invoice** to bring it into line. Once the invoice has been sent or paid, the hire leaves it alone; change it in Finance if you need to. A hire with an invoice can't be deleted.
 
 ## Availability
 

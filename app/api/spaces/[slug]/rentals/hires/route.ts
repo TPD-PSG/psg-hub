@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { staffInRentals, bad } from "@/lib/rentalAccess";
-import { hireFields, withRates, HIRE_INCLUDE, shortFor } from "@/lib/rentalHires";
+import { hireFields, withRates, HIRE_INCLUDE, hireOut } from "@/lib/rentalHires";
 import { nextHireNumber } from "@/lib/rentals";
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -17,10 +17,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const existing = (await prisma.rentalHire.findMany({ where: { number: { startsWith: `H-${year}-` } }, select: { number: true } })).map(h => h.number);
     try {
       const hire = await prisma.rentalHire.create({
-        data: { ...(f.data as { title: string; outDate: Date; returnDate: Date }), entityId: s.space.id, number: nextHireNumber(year, existing), createdById: s.user.userId, lines: { create: lines } },
+        data: { ...(f.data as { title: string; outDate: Date; returnDate: Date }), entityId: s.space.id, number: nextHireNumber(year, existing), createdById: s.user.userId, lines: { create: lines }, ...(f.charges ? { charges: { create: f.charges } } : {}) },
         include: HIRE_INCLUDE,
       });
-      return NextResponse.json({ ...hire, shortages: await shortFor(s.space.id, hire) }, { status: 201 });
+      return NextResponse.json(await hireOut(hire), { status: 201 });
     } catch (e) {
       if ((e as { code?: string }).code !== "P2002") throw e; // number taken at the same moment: try the next
     }

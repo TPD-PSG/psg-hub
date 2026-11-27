@@ -134,3 +134,56 @@ export function groupByCategory<T extends { category: string | null; name: strin
   return [...groups.entries()].sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0]))
     .map(([category, list]) => ({ category, items: list.sort((a, b) => a.name.localeCompare(b.name)) }));
 }
+
+// ── Pricing (stage 2) ─────────────────────────────────────────────────────────────────────────
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * What one unit costs for a number of charged days. With a week rate, each full week costs the
+ * week rate, and the days left over cost their day rates but never more than another week.
+ */
+export function rateFor(days: number, dayRate: number | null, weekRate: number | null) {
+  const d = Math.max(0, days);
+  const day = dayRate ?? 0;
+  if (weekRate == null || weekRate <= 0) return r2(d * day);
+  const weeks = Math.floor(d / 7), rest = d - weeks * 7;
+  return r2(weeks * weekRate + Math.min(rest * day, weekRate));
+}
+
+export type PricedLine = { quantity: number; dayRate: number | null; weekRate?: number | null; unitPrice?: number | null; discountPct?: number | null };
+/** A kit line: its price per unit for the hire (our own price, else the rates) and its amount after its discount. */
+export function linePrice(l: PricedLine, chargeDays: number) {
+  const each = l.unitPrice != null ? r2(l.unitPrice) : rateFor(chargeDays, l.dayRate, l.weekRate ?? null);
+  const gross = r2(each * l.quantity);
+  const off = l.discountPct ? r2((gross * Math.min(100, Math.max(0, l.discountPct))) / 100) : 0;
+  return { each, gross, off, amount: r2(gross - off) };
+}
+
+/** Days charged: as set on the hire, else every day it's away. */
+export const chargedDays = (h: { chargeDays?: number | null; outDate: Date | string; returnDate: Date | string }) =>
+  h.chargeDays != null && h.chargeDays >= 0 ? h.chargeDays : hireDays(h.outDate, h.returnDate);
+
+/** A hire's money: kit (after line discounts, then the hire's discount), other charges, VAT. */
+export function hireTotals(h: {
+  chargeDays?: number | null; outDate: Date | string; returnDate: Date | string; discountPct?: number | null; vatRate: number;
+  lines: PricedLine[]; charges: { quantity: number; unitPrice: number }[];
+}) {
+  const days = chargedDays(h);
+  const priced = h.lines.map(l => linePrice(l, days));
+  const kit = r2(priced.reduce((a, p) => a + p.amount, 0));
+  const lineDiscounts = r2(priced.reduce((a, p) => a + p.off, 0));
+  const hireDiscount = h.discountPct ? r2((kit * Math.min(100, Math.max(0, h.discountPct))) / 100) : 0;
+  const charges = r2(h.charges.reduce((a, c) => a + c.quantity * c.unitPrice, 0));
+  const net = r2(kit - hireDiscount + charges);
+  const vat = r2((net * h.vatRate) / 100);
+  return { days, priced, kit, lineDiscounts, hireDiscount, charges, net, vat, gross: r2(net + vat) };
+}
+
+/** When the invoice is due, from the payment terms: "30 days" → 30 days after issue; "In advance" → the day it goes out. */
+export function invoiceDue(terms: string | null | undefined, issued: Date, outDate: Date) {
+  const t = (terms ?? "").toLowerCase();
+  const m = /(\d{1,3})\s*days?/.exec(t);
+  if (m) return new Date(issued.getTime() + Number(m[1]) * DAY);
+  if (/advance|on order|before/.test(t)) return outDate < issued ? issued : outDate;
+  return new Date(issued.getTime() + 30 * DAY);
+}

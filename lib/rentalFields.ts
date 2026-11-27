@@ -83,7 +83,14 @@ export async function unitBarcodes(b: Record<string, unknown>, prefixFrom: strin
 }
 
 /** Package or hire lines: [{ productId, quantity }], each product from this company's kit. */
-export async function lineList(raw: unknown, entityId: number, max = 300): Promise<{ list: { productId: number; quantity: number; note: string | null; dayRate?: number | null }[] } | { error: string }> {
+export type LineIn = { productId: number; quantity: number; note: string | null; dayRate?: number | null; weekRate?: number | null; unitPrice?: number | null; discountPct?: number | null };
+const optNum = (l: Record<string, unknown>, k: string, max: number): number | null | undefined | "bad" => {
+  if (!l || !(k in l)) return undefined;
+  if (l[k] === null || l[k] === "") return null;
+  const n = Number(l[k]);
+  return isFinite(n) && n >= 0 && n <= max ? Math.round(n * 100) / 100 : "bad";
+};
+export async function lineList(raw: unknown, entityId: number, max = 300): Promise<{ list: LineIn[] } | { error: string }> {
   if (!Array.isArray(raw)) return { error: "Lines must be a list" };
   if (raw.length > max) return { error: `Up to ${max} lines` };
   const list = [];
@@ -91,9 +98,13 @@ export async function lineList(raw: unknown, entityId: number, max = 300): Promi
     const productId = Number(l?.productId), quantity = Number(l?.quantity ?? 1);
     if (!Number.isInteger(productId)) return { error: "Each line needs a product" };
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10_000) return { error: "Quantities are whole numbers from 1" };
-    const rate = l && "dayRate" in l ? (l.dayRate === null || l.dayRate === "" ? null : Number(l.dayRate)) : undefined;
-    if (rate != null && (!isFinite(rate) || rate < 0)) return { error: "Day rates are 0 or more" };
-    list.push({ productId, quantity, note: typeof l.note === "string" && l.note.trim() ? l.note.trim().slice(0, 200) : null, ...(rate !== undefined ? { dayRate: rate } : {}) });
+    const extra: Partial<LineIn> = {};
+    for (const [k, mx, msg] of [["dayRate", 1e6, "Day rates are 0 or more"], ["weekRate", 1e6, "Week rates are 0 or more"], ["unitPrice", 1e7, "Prices are 0 or more"], ["discountPct", 100, "Discounts are 0 to 100%"]] as const) {
+      const v = optNum(l, k, mx);
+      if (v === "bad") return { error: msg };
+      if (v !== undefined) extra[k] = v;
+    }
+    list.push({ productId, quantity, note: typeof l.note === "string" && l.note.trim() ? l.note.trim().slice(0, 200) : null, ...extra });
   }
   const ids = [...new Set(list.map(l => l.productId))];
   const found = await prisma.rentalProduct.count({ where: { id: { in: ids }, entityId } });

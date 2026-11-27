@@ -1,14 +1,19 @@
 "use client";
 // Product lines with quantities, for packages and hires. Shows what's free when `free` is given.
 import { input } from "@/lib/twsUi";
-import type { Product, Pkg } from "./format";
+import { linePrice } from "@/lib/rentals";
+import { gbp, type Product, type Pkg } from "./format";
 
-export type EditLine = { productId: number; quantity: number; dayRate?: number | null; note?: string | null };
+export type EditLine = { productId: number; quantity: number; dayRate?: number | null; weekRate?: number | null; unitPrice?: number | null; discountPct?: number | null; note?: string | null };
 
-export default function LineEditor({ products, packages, lines, onChange, free, label = "Kit" }: {
+/** pricing: the hire's charged days. Each line then shows its price for the hire, which can be
+ *  replaced by our own price per unit, and a discount. */
+export default function LineEditor({ products, packages, lines, onChange, free, label = "Kit", pricing }: {
   products: Product[]; packages?: Pkg[]; lines: EditLine[]; onChange: (l: EditLine[]) => void;
-  free?: Map<number, number> | null; label?: string;
+  free?: Map<number, number> | null; label?: string; pricing?: { days: number } | null;
 }) {
+  const prod = (id: number) => products.find(p => p.id === id);
+  const numOrNull = (v: string) => (v.trim() === "" ? null : Math.max(0, Number(v) || 0));
   const name = (id: number) => products.find(p => p.id === id)?.name ?? "Product";
   const need = new Map<number, number>();
   for (const l of lines) need.set(l.productId, (need.get(l.productId) ?? 0) + l.quantity);
@@ -38,6 +43,21 @@ export default function LineEditor({ products, packages, lines, onChange, free, 
             <input aria-label={`Quantity of ${name(l.productId)}`} style={{ ...input, width: 70 }} inputMode="numeric" value={l.quantity}
               onChange={e => { const n = parseInt(e.target.value) || 0; onChange(lines.map((x, j) => (j === i ? { ...x, quantity: Math.max(0, Math.min(10_000, n)) } : x))); }} />
             <span className="flex-1 min-w-[140px] text-sm font-semibold">{name(l.productId)}</span>
+            {pricing && (() => {
+              const rates = { quantity: l.quantity, dayRate: l.dayRate !== undefined ? l.dayRate : prod(l.productId)?.dayRate ?? null, weekRate: l.weekRate !== undefined ? l.weekRate : prod(l.productId)?.weekRate ?? null };
+              const listEach = linePrice(rates, pricing.days).each;
+              const p = linePrice({ ...rates, unitPrice: l.unitPrice, discountPct: l.discountPct }, pricing.days);
+              const set = (k: "unitPrice" | "discountPct", v: string) => onChange(lines.map((x, j) => (j === i ? { ...x, [k]: k === "discountPct" && v.trim() !== "" ? Math.min(100, Math.max(0, Number(v) || 0)) : numOrNull(v) } : x)));
+              return (<>
+                <label className="flex items-center gap-1 text-xs" style={{ color: "var(--tws-muted)" }}>£ each
+                  <input aria-label={`Price each for ${name(l.productId)}`} style={{ ...input, width: 84, padding: "5px 6px" }} inputMode="decimal" placeholder={listEach.toFixed(2)}
+                    value={l.unitPrice ?? ""} onChange={e => set("unitPrice", e.target.value)} /></label>
+                <label className="flex items-center gap-1 text-xs" style={{ color: "var(--tws-muted)" }}>% off
+                  <input aria-label={`Discount on ${name(l.productId)}`} style={{ ...input, width: 52, padding: "5px 6px" }} inputMode="decimal" placeholder="0"
+                    value={l.discountPct ?? ""} onChange={e => set("discountPct", e.target.value)} /></label>
+                <span className="text-sm font-bold w-20 text-right">{gbp(p.amount)}</span>
+              </>);
+            })()}
             {f != null && <span className="text-xs font-bold px-2 py-1" style={short ? { background: "var(--tws-bad-bg, #fde8e8)", color: "var(--tws-bad-ink)" } : { background: "var(--tws-tint)", color: "var(--tws-ink)" }}>
               {short ? `Short: ${Math.max(0, f)} free` : `${f} free`}</span>}
             <button type="button" aria-label={`Remove ${name(l.productId)}`} onClick={() => onChange(lines.filter((_, j) => j !== i))} className="text-xs font-semibold px-1" style={{ color: "var(--tws-bad-ink)" }}>Remove</button>

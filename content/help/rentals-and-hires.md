@@ -3,7 +3,7 @@ title: Rentals & Crew: kit, hires and availability
 summary: Rental kit with a barcode on every unit, packages, hires and their prices, quote PDFs, invoicing and availability
 section: Rentals & Crew
 order: 1
-paths: /spaces/*/kit, /spaces/*/hires, /spaces/*/availability, /spaces/*/packages
+paths: /spaces/*/kit, /spaces/*/hires, /spaces/*/availability, /spaces/*/packages, /spaces/*/warehouse
 ---
 ## What this space is for
 
@@ -14,6 +14,7 @@ The space's menu has:
 - **Home**: what goes out this week, what's out now, open quotes and kit in repair.
 - **Hires**: every quote and hire.
 - **Availability**: how many of each product are free, day by day.
+- **Warehouse**: prep hires by scanning their kit out, and check it back in.
 - **Kit**: every product and every unit.
 - **Packages**: ready-made groups of kit.
 
@@ -43,7 +44,7 @@ Tick **This is a case or rack** on a product (for example "MegaPointe 2-way case
 
 ## Finding a unit by its barcode
 
-The search box on **Kit** finds products by name. It also takes a barcode: scan it with a handheld scanner (which types the code and presses Enter), or type it and press **Find**. The unit's product opens with that unit highlighted. Phone-camera scanning comes with the warehouse stage.
+The search box on **Kit** finds products by name. It also takes a barcode: scan it with a handheld scanner (which types the code and presses Enter), or type it and press **Find**. The unit's product opens with that unit highlighted. If a unit is out on a hire, Kit says which one.
 
 ## Packages
 
@@ -62,6 +63,14 @@ A hire moves through these steps:
 You can **cancel** a confirmed hire, which frees its kit. Only quotes and cancelled hires can be deleted; anything that went out stays on record. A returned or cancelled hire can be reopened as a quote.
 
 While you edit a hire, each line shows **how many are free** over its dates, counting every other confirmed hire. If there aren't enough, the line shows **Short**. Confirming a hire that's short stops and tells you what's free; you can **Confirm anyway** if you'll sub-hire the rest. Changing the dates or kit of a confirmed hire is checked the same way.
+
+## Sub-hires
+
+When we're short, hire the rest in from another company. On a saved hire, click **Sub-hire what's short** in the warning (this adds one sub-hire for each short product), or **+ Add a sub-hire** and choose the product, how many, who from and what it costs us.
+
+- A sub-hire covers that much of the hire, so the hire stops being short and confirms normally. It also stops holding that much of our own kit on Availability.
+- Move each sub-hire along as it happens: **Needed**, **Ordered**, **Received**, **Sent back**. The Warehouse list shows hires whose sub-hires haven't arrived yet.
+- Sub-hired kit isn't on the warehouse pick list: only what comes from our shelves is scanned.
 
 ## Prices
 
@@ -92,6 +101,34 @@ Once a hire is saved:
 On a confirmed, out or returned hire, click **Raise invoice**. This puts a **draft sales invoice** in **Finance** for the hire's total, with the hire number as its reference. It's due on the payment terms: "30 days" (or any number of days) after today, "In advance" by the day the kit goes out, otherwise 30 days.
 
 If the hire changes while the invoice is still a draft, click **Update the draft invoice** to bring it into line. Once the invoice has been sent or paid, the hire leaves it alone; change it in Finance if you need to. A hire with an invoice can't be deleted.
+
+## Warehouse: prepping and scanning out
+
+**Warehouse** lists the hires **to prep** (confirmed, going out in the next two weeks) and the hires **out now**. Click one to open it.
+
+Scan with any of these:
+
+- **A handheld scanner**: it types the barcode into the box and presses Enter. The box stays ready for the next scan.
+- **The phone's camera**: click **Scan with the camera** and hold the barcode inside the box. The first time, your phone asks to let the Hub use the camera.
+- **Typing** the barcode and pressing **Out**.
+
+In **Prep: scan out**:
+
+- The **pick list** shows each product, how many are needed from our kit, how many are scanned, and which **shelves** to find the rest on.
+- Each scan is checked. A unit that isn't on the hire, is in repair or lost, is still out on another hire, or is one more than needed is refused, with a red message saying why.
+- **Scanning a case scans everything packed in it.** Cases ride along without being on the hire.
+- The first scan marks the hire **Out**.
+- **Take off** removes a unit scanned by mistake.
+
+## Checking kit back in
+
+Open a hire from **Out now** and choose **Check in**, then scan each unit as it comes off the truck. Scanning a case checks in what's packed in it. If a unit was out on a different hire, it's checked in on that one and the message says so. To check something in without finding its hire first, use **Check something in** at the top of Warehouse.
+
+- **Damaged…**: say what's wrong. The unit goes **into repair** on Kit, so it can't go out until it's fixed. Add a charge if the client is paying for it; it's added to the hire's other charges. Damage found later can be reported from **Back in** with **Found damage…**.
+- **Missing…**: the unit is marked **lost**, with a charge if you like (it starts at the replacement cost). If it turns up, click **Turned up OK** to put it back in service.
+- **Mark the rest missing** marks everything still out as missing in one go.
+
+When every unit is back (or marked missing), the hire is marked **Returned** automatically. A hire can't be marked returned or cancelled while units are still out.
 
 ## Availability
 

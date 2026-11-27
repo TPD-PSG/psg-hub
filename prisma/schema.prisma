@@ -8,30 +8,32 @@ datasource db {
 }
 
 model User {
-  rentalHires     RentalHire[]   @relation("RentalHireBy")
+  rentalOuts      RentalHireUnit[] @relation("RentalUnitOut")
+  rentalBacks     RentalHireUnit[] @relation("RentalUnitBack")
+  rentalHires     RentalHire[]     @relation("RentalHireBy")
   homeRole        String? // new look home: director | pm | office (admins set it in Users; none = director for admins, else pm)
-  workshopManager Boolean        @default(false) // approves reschedule requests on its workshop's calendar
-  stageRequests   StageRequest[] @relation("StageRequestBy")
-  stageDecisions  StageRequest[] @relation("StageRequestDecidedBy")
-  partStages      PartStage[]    @relation("PartStageUser")
-  id              Int            @id @default(autoincrement())
+  workshopManager Boolean          @default(false) // approves reschedule requests on its workshop's calendar
+  stageRequests   StageRequest[]   @relation("StageRequestBy")
+  stageDecisions  StageRequest[]   @relation("StageRequestDecidedBy")
+  partStages      PartStage[]      @relation("PartStageUser")
+  id              Int              @id @default(autoincrement())
   name            String
-  email           String         @unique
+  email           String           @unique
   passwordHash    String
-  role            String         @default("member") // admin | member | client | freelancer
+  role            String           @default("member") // admin | member | client | freelancer
   preferences     String? // JSON: { widgets: string[] }
   permissions     String? // JSON: { modules: string[], allProductions: boolean }
   avatarUrl       String?
   color           String? // hex colour for schedule grid badge
   costDayRate     Float? // internal cost per day, for job costing (admins set it)
   homeEntityId    Int? // the company this person works for; its space (if any) is their home page
-  homeEntity      Entity?        @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
-  clockEntries    ClockEntry[]   @relation("ClockEntryUser")
+  homeEntity      Entity?          @relation("UserHomeEntity", fields: [homeEntityId], references: [id], onDelete: SetNull)
+  clockEntries    ClockEntry[]     @relation("ClockEntryUser")
   deactivatedAt   DateTime? // can't sign in any more; their history (days logged, inductions…) is kept
   clientId        Int? // client accounts: the client company whose builds they see and sign off
-  client          Client?        @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  client          Client?          @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   tasksAssigned       Task[]               @relation("TaskAssignee")
   tasksSignoff        Task[]               @relation("TaskSignoff")
@@ -1111,6 +1113,7 @@ model Supplier {
   updatedAt      DateTime        @updatedAt
   stockItems     StockItem[]
   purchaseOrders PurchaseOrder[]
+  rentalSubHires RentalSubHire[]
 }
 
 model InvoiceTodo {
@@ -2286,27 +2289,29 @@ model RentalProduct {
   units           RentalUnit[]
   packageItems    RentalPackageItem[]
   hireLines       RentalHireLine[]
+  subHires        RentalSubHire[]
 
   @@index([entityId])
 }
 
 // One physical item. Its barcode is the one on the sticker (kept from Flex where there is one).
 model RentalUnit {
-  id           Int           @id @default(autoincrement())
+  id           Int              @id @default(autoincrement())
   productId    Int
-  product      RentalProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
-  barcode      String        @unique
+  product      RentalProduct    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  barcode      String           @unique
   serial       String? // maker's serial number
-  status       String        @default("available") // available | repair | lost | retired (out on a hire comes from the hire)
+  status       String           @default("available") // available | repair | lost | retired (out on a hire comes from the hire)
   containerId  Int? // the case it lives in
-  container    RentalUnit?   @relation("UnitCase", fields: [containerId], references: [id], onDelete: SetNull)
-  contents     RentalUnit[]  @relation("UnitCase")
+  container    RentalUnit?      @relation("UnitCase", fields: [containerId], references: [id], onDelete: SetNull)
+  contents     RentalUnit[]     @relation("UnitCase")
+  hireUnits    RentalHireUnit[]
   location     String? // warehouse bay or shelf
   purchasedAt  DateTime?
   purchaseCost Float?
   notes        String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   @@index([productId])
   @@index([containerId])
@@ -2368,6 +2373,8 @@ model RentalHire {
   invoiceId    Int?               @unique // the sales invoice raised for it, in Finance
   invoice      CompanyInvoice?    @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   charges      RentalHireCharge[]
+  units        RentalHireUnit[] // scanned out and back (stage 3)
+  subHires     RentalSubHire[]
   createdById  Int?
   createdBy    User?              @relation("RentalHireBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt    DateTime           @default(now())
@@ -2405,6 +2412,48 @@ model RentalHireCharge {
   quantity    Float      @default(1)
   unitPrice   Float      @default(0) // ex VAT
   sortOrder   Int        @default(0)
+
+  @@index([hireId])
+}
+
+// ── Warehouse (stage 3) ──────────────────────────────────────────────────────────────────────
+// Each unit scanned out on a hire, and how it came back. Out on a hire = backAt is empty.
+model RentalHireUnit {
+  id        Int        @id @default(autoincrement())
+  hireId    Int
+  hire      RentalHire @relation(fields: [hireId], references: [id], onDelete: Cascade)
+  unitId    Int
+  unit      RentalUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  outAt     DateTime   @default(now())
+  outById   Int?
+  outBy     User?      @relation("RentalUnitOut", fields: [outById], references: [id], onDelete: SetNull)
+  backAt    DateTime?
+  backById  Int?
+  backBy    User?      @relation("RentalUnitBack", fields: [backById], references: [id], onDelete: SetNull)
+  condition String? // ok | damaged | missing, once it's checked in (or given up on)
+  note      String?
+
+  @@unique([hireId, unitId])
+  @@index([unitId, backAt])
+}
+
+// Kit hired in from another company to cover what we're short of on a hire
+model RentalSubHire {
+  id           Int            @id @default(autoincrement())
+  hireId       Int
+  hire         RentalHire     @relation(fields: [hireId], references: [id], onDelete: Cascade)
+  productId    Int? // the product it stands in for (counts against the hire's shortage)
+  product      RentalProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  description  String
+  quantity     Int            @default(1)
+  supplierId   Int?
+  supplier     Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierName String?
+  cost         Float? // what it costs us in total, ex VAT
+  status       String         @default("needed") // needed | ordered | received | returned
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   @@index([hireId])
 }

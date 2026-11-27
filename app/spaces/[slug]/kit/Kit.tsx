@@ -11,7 +11,8 @@ import { RentalsHeader, Chip, api, th, td } from "@/components/rentals/shared";
 import { gbp, day, HIRE_TONE, HIRE_LABEL, type RentalsData, type Product } from "@/components/rentals/format";
 
 type Unit = { id: number; barcode: string; serial: string | null; status: string; location: string | null; notes: string | null; containerId: number | null;
-  container: { id: number; barcode: string; product: { name: string } } | null; contents: { id: number; barcode: string; product: { name: string } }[] };
+  container: { id: number; barcode: string; product: { name: string } } | null; contents: { id: number; barcode: string; product: { name: string } }[];
+  hireUnits?: { hire: { id: number; number: string; title: string } }[] };
 type Detail = Product & { units: Unit[]; hireLines: { id: number; quantity: number; hire: { id: number; number: string; title: string; status: string; outDate: string; returnDate: string } }[] };
 type Form = { id?: number; name: string; category: string; manufacturer: string; model: string; dayRate: string; weekRate: string; replacementCost: string; weightKg: string; powerW: string; isCase: boolean; notes: string; count: string; barcodes: string };
 
@@ -182,7 +183,8 @@ export default function Kit({ initial, openId, q: q0 }: { initial: RentalsData; 
                     <tr key={u.id} style={hit === u.barcode ? { background: "var(--tws-accent-light)" } : undefined}>
                       <td style={{ ...td, fontFamily: "ui-monospace, monospace", fontWeight: 700 }}>{u.barcode}</td>
                       <td style={td}><select aria-label={`Status of ${u.barcode}`} style={{ ...input, padding: "4px 6px", width: "auto" }} value={u.status} onChange={e => unit(u, { status: e.target.value })}>
-                        {Object.entries(UNIT_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
+                        {Object.entries(UNIT_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                        {u.hireUnits?.[0] && <a href={`/spaces/${space.slug}/hires?hire=${u.hireUnits[0].hire.id}`} className="block text-xs font-bold mt-1" style={{ color: "var(--tws-accent-ink)" }}>Out on {u.hireUnits[0].hire.number}</a>}</td>
                       <td style={td}>
                         <input aria-label={`Serial of ${u.barcode}`} style={{ ...input, padding: "4px 6px" }} defaultValue={u.serial ?? ""} placeholder="Serial" onBlur={e => e.target.value !== (u.serial ?? "") && unit(u, { serial: e.target.value })} />
                         <input aria-label={`Shelf of ${u.barcode}`} style={{ ...input, padding: "4px 6px", marginTop: 4 }} defaultValue={u.location ?? ""} placeholder="Shelf" onBlur={e => e.target.value !== (u.location ?? "") && unit(u, { location: e.target.value })} />

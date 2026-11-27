@@ -111,3 +111,44 @@ export async function lineList(raw: unknown, entityId: number, max = 300): Promi
   if (found !== ids.length) return { error: "A line's product isn't in this company's kit" };
   return { list };
 }
+
+/** A sub-hire: what it stands in for, from whom, how many, what it costs us, and where it's got to. */
+export async function subHireFields(b: Record<string, unknown>, entityId: number, creating: boolean): Promise<{ data: Record<string, unknown> } | { error: string }> {
+  const d: Record<string, unknown> = {};
+  if ("productId" in b) {
+    if (b.productId == null || b.productId === "") d.productId = null;
+    else {
+      const p = await prisma.rentalProduct.findFirst({ where: { id: Number(b.productId), entityId }, select: { id: true, name: true } });
+      if (!p) return { error: "That product isn't in this company's kit" };
+      d.productId = p.id;
+      if (!text(b.description, 200)) d.description = p.name; // defaults to the product's name
+    }
+  }
+  if ("description" in b && text(b.description, 200)) d.description = text(b.description, 200);
+  if (creating && !d.description) return { error: "Say what's being sub-hired" };
+  if (creating || "quantity" in b) {
+    const q = Number(b.quantity ?? 1);
+    if (!Number.isInteger(q) || q < 1 || q > 10_000) return { error: "The quantity is a whole number from 1" };
+    d.quantity = q;
+  }
+  if ("supplierId" in b) {
+    if (b.supplierId == null || b.supplierId === "") d.supplierId = null;
+    else {
+      const s = await prisma.supplier.findUnique({ where: { id: Number(b.supplierId) }, select: { id: true } });
+      if (!s) return { error: "No such supplier" };
+      d.supplierId = s.id;
+    }
+  }
+  if ("supplierName" in b) d.supplierName = text(b.supplierName, 120);
+  if ("cost" in b) {
+    const n = money(b.cost);
+    if (Number.isNaN(n)) return { error: "The cost is a number of 0 or more" };
+    d.cost = n;
+  }
+  if ("status" in b) {
+    if (typeof b.status !== "string" || !["needed", "ordered", "received", "returned"].includes(b.status)) return { error: "Status is needed, ordered, received or returned" };
+    d.status = b.status;
+  }
+  if ("notes" in b) d.notes = typeof b.notes === "string" && b.notes.trim() ? b.notes.trim().slice(0, 1000) : null;
+  return { data: d };
+}

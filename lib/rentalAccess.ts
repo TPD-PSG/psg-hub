@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { staffInSpace } from "@/lib/spaceAccess";
 import { canSeeCompanyRecord } from "@/lib/spaces";
 import { requirePoUser, type PoUser } from "@/lib/purchaseOrders";
-import { inService, holdsKit, isPencil, type HireForAvailability } from "@/lib/rentals";
+import { inService, holdsKit, isPencil, ourShare, type HireForAvailability } from "@/lib/rentals";
 
 const notRentals = () => NextResponse.json({ error: "This space doesn't hold rental kit" }, { status: 404 });
 
@@ -41,9 +41,10 @@ export async function ownedFor(entityId: number) {
 export async function hiresAround(entityId: number, from: Date, to: Date): Promise<HireForAvailability[]> {
   const hires = await prisma.rentalHire.findMany({
     where: { entityId, status: { in: ["quote", "confirmed", "out"] }, outDate: { lte: to }, returnDate: { gte: from } },
-    select: { id: true, number: true, title: true, status: true, outDate: true, returnDate: true, lines: { select: { productId: true, quantity: true } } },
+    select: { id: true, number: true, title: true, status: true, outDate: true, returnDate: true, lines: { select: { productId: true, quantity: true } }, subHires: { select: { productId: true, quantity: true } } },
   });
-  return hires.filter(h => holdsKit(h.status) || isPencil(h.status));
+  // A hire holds only what our own kit covers: what's sub-hired for it comes from elsewhere
+  return hires.filter(h => holdsKit(h.status) || isPencil(h.status)).map(({ subHires, ...h }) => ({ ...h, lines: ourShare(h.lines, subHires) }));
 }
 
 /** The date given as YYYY-MM-DD (or an ISO date), as midnight UTC; null if it isn't one. */

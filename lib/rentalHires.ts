@@ -2,20 +2,25 @@
 import { prisma } from "@/lib/prisma";
 import { ownedFor, hiresAround, parseDay, text } from "@/lib/rentalAccess";
 import { lineList, type LineIn } from "@/lib/rentalFields";
-import { shortages, HIRE_STATUS, holdsKit, hireTotals } from "@/lib/rentals";
+import { shortages, HIRE_STATUS, holdsKit, hireTotals, ourShare } from "@/lib/rentals";
 
 export const HIRE_INCLUDE = {
   lines: { orderBy: { sortOrder: "asc" as const }, include: { product: { select: { id: true, name: true, category: true, dayRate: true, weekRate: true } } } },
   charges: { orderBy: { sortOrder: "asc" as const } },
   invoice: { select: { id: true, status: true, reference: true, netAmount: true, vatAmount: true, issueDate: true, dueDate: true } },
+  subHires: { orderBy: { createdAt: "asc" as const }, include: { product: { select: { id: true, name: true } }, supplier: { select: { id: true, name: true } } } },
   entity: { select: { name: true, hasSpace: true, slug: true, color: true, logoMime: true, updatedAt: true, address: true, phone: true } },
   production: { select: { id: true, name: true } },
   createdBy: { select: { id: true, name: true } },
 };
 
+/** What a hire is short of over its dates, after what's sub-hired for it. */
 export async function shortFor(entityId: number, hire: { id?: number; outDate: Date; returnDate: Date; lines: { productId: number; quantity: number }[] }) {
-  const [owned, others] = await Promise.all([ownedFor(entityId), hiresAround(entityId, hire.outDate, hire.returnDate)]);
-  const short = shortages(hire, owned, others);
+  const [owned, others, subs] = await Promise.all([
+    ownedFor(entityId), hiresAround(entityId, hire.outDate, hire.returnDate),
+    hire.id ? prisma.rentalSubHire.findMany({ where: { hireId: hire.id }, select: { productId: true, quantity: true } }) : [],
+  ]);
+  const short = shortages({ ...hire, lines: ourShare(hire.lines, subs) }, owned, others);
   if (!short.length) return [];
   const names = new Map((await prisma.rentalProduct.findMany({ where: { id: { in: short.map(s => s.productId) } }, select: { id: true, name: true } })).map(p => [p.id, p.name]));
   return short.map(s => ({ ...s, name: names.get(s.productId) ?? "Product" }));

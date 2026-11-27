@@ -15,7 +15,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const product = await prisma.rentalProduct.findUnique({
     where: { id: p.id },
     include: {
-      units: { orderBy: { barcode: "asc" }, include: { container: { select: { id: true, barcode: true, product: { select: { name: true } } } }, contents: { select: { id: true, barcode: true, product: { select: { name: true } } } } } },
+      units: { orderBy: { barcode: "asc" }, include: {
+        container: { select: { id: true, barcode: true, product: { select: { name: true } } } }, contents: { select: { id: true, barcode: true, product: { select: { name: true } } } },
+        hireUnits: { where: { backAt: null }, select: { hire: { select: { id: true, number: true, title: true } } } }, // out on a hire right now
+      } },
       hireLines: { where: { hire: { returnDate: { gte: today }, status: { in: ["quote", "confirmed", "out"] } } }, include: { hire: { select: { id: true, number: true, title: true, status: true, outDate: true, returnDate: true } } } },
     },
   });
@@ -40,7 +43,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!p) return notFound();
   const a = await staffForEntity(p.entityId);
   if ("error" in a) return a.error;
-  if (await prisma.rentalHireLine.count({ where: { productId: p.id } })) {
+  if (await prisma.rentalHireLine.count({ where: { productId: p.id } }) || await prisma.rentalHireUnit.count({ where: { unit: { productId: p.id } } })) {
     await prisma.rentalProduct.update({ where: { id: p.id }, data: { archived: true } });
     return NextResponse.json({ archived: true });
   }

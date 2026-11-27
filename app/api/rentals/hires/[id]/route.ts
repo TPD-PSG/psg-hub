@@ -30,6 +30,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     f.data.charges = { create: f.charges };
   }
   const status = (f.data.status as string | undefined) ?? h.status;
+  // Leaving "out" while units are still out would strand them: check them in (or mark them missing) first
+  if (h.status === "out" && status !== "out") {
+    const still = await prisma.rentalHireUnit.count({ where: { hireId: h.id, backAt: null } });
+    if (still) return bad(`${still} unit${still === 1 ? " is" : "s are"} still out on this hire. Check ${still === 1 ? "it" : "them"} in on Warehouse, or mark ${still === 1 ? "it" : "them"} missing, first.`, 409);
+  }
   // Holding kit (confirming, or changing a confirmed hire) needs it free, unless they'll sub-hire the rest
   if (holdsKit(status)) {
     const lines = f.lines ?? (await prisma.rentalHireLine.findMany({ where: { hireId: h.id }, select: { productId: true, quantity: true } }));

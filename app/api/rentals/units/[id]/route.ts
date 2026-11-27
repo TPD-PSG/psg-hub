@@ -42,6 +42,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!u) return notFound();
   const a = await staffForEntity(u.product.entityId);
   if ("error" in a) return a.error;
+  if (await prisma.rentalHireUnit.count({ where: { unitId: u.id } })) return bad("This unit has been out on hires, so it stays on record. Mark it retired or lost instead.");
   await prisma.rentalUnit.updateMany({ where: { containerId: u.id }, data: { containerId: null } });
   await prisma.rentalUnit.delete({ where: { id: u.id } });
   return NextResponse.json({ deleted: true });

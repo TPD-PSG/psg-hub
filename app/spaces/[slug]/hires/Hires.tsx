@@ -15,7 +15,10 @@ import LineEditor, { type EditLine } from "@/components/rentals/LineEditor";
 
 type Short = { productId: number; name: string; wanted: number; free: number; short: number };
 type Full = HireRow & Omit<HireForPdf, "lines"> & { lines: (HireForPdf["lines"][number] & { productId: number })[]; shortages: Short[]; totals?: { net: number; gross: number };
-  invoice: { id: number; status: string; reference: string | null; netAmount: number; vatAmount: number; dueDate: string | null } | null };
+  invoice: { id: number; status: string; reference: string | null; netAmount: number; vatAmount: number; dueDate: string | null } | null;
+  subHires: SubHire[] };
+type SubHire = { id: number; description: string; quantity: number; status: string; supplierName: string | null; cost: number | null; product: { id: number; name: string } | null };
+const SUB_STATUS: Record<string, string> = { needed: "Needed", ordered: "Ordered", received: "Received", returned: "Sent back" };
 type Charge = { description: string; quantity: string; unitPrice: string };
 type Form = { id?: number; status: string; title: string; clientName: string; clientEmail: string; productionId: string; outDate: string; returnDate: string; notes: string; lines: EditLine[];
   chargeDays: string; discountPct: string; vatRate: string; paymentTerms: string; customerPo: string; delivery: string; deliveryTo: string; validUntil: string; terms: string; charges: Charge[] };
@@ -35,6 +38,7 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
   const [busy, setBusy] = useState(false);
   const [full, setFull] = useState<Full | null>(null); // the hire as last saved (for its PDF and invoice)
   const [preview, setPreview] = useState<string | null>(null);
+  const [subForm, setSubForm] = useState<{ productId: string; quantity: string; supplierName: string; cost: string } | null>(null);
 
   const reload = async () => { const d = await api<RentalsData>(S); if (d) setData(d); };
   const open = async (id: number) => {
@@ -134,6 +138,27 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
     const h = await api<Full>(`/api/rentals/hires/${form.id}/invoice`, "POST");
     if (h) { loaded(h); reload(); await alertDialog(full?.invoice ? "The draft invoice in Finance now matches the hire." : `Draft invoice raised in Finance for ${gbp(h.totals?.net ?? 0)} + VAT. Check it there before it goes to the client.`); }
   }
+  // Sub-hires save straight away; the hire's shortages are worked out again after each change
+  async function refreshSubs() {
+    if (!form?.id) return;
+    const h = await api<Full>(`/api/rentals/hires/${form.id}`);
+    if (h) { setFull(h); setShorts(h.shortages); }
+  }
+  async function addSub(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form?.id || !subForm) return;
+    if (await api(`/api/rentals/hires/${form.id}/subhires`, "POST", { productId: subForm.productId || null, description: subForm.productId ? undefined : "Sub-hire", quantity: subForm.quantity, supplierName: subForm.supplierName, cost: subForm.cost })) { setSubForm(null); refreshSubs(); }
+  }
+  async function subShort() {
+    if (!form?.id) return;
+    for (const s of shorts) await api(`/api/rentals/hires/${form.id}/subhires`, "POST", { productId: s.productId, quantity: s.short });
+    refreshSubs();
+  }
+  async function subStatus(sh: SubHire, status: string) { if (await api(`/api/rentals/subhires/${sh.id}`, "PATCH", { status })) refreshSubs(); }
+  async function subRemove(sh: SubHire) {
+    if (!(await confirmDialog(`Remove the sub-hire of ${sh.quantity} × ${sh.product?.name ?? sh.description}?`, { confirmLabel: "Remove" }))) return;
+    if (await api(`/api/rentals/subhires/${sh.id}`, "DELETE")) refreshSubs();
+  }
   async function remove() {
     if (!form?.id) return;
     if (!(await confirmDialog(`Delete ${form.title}? This can't be undone.`, { danger: true, confirmLabel: "Delete" }))) return;
@@ -199,6 +224,30 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
             {shorts.length > 0 && (
               <div role="status" className="px-3 py-2 text-sm" style={{ background: "var(--tws-warn-bg)", border: "1px solid var(--tws-warn-line)", color: "var(--tws-warn-ink)" }}>
                 <strong>Short for these dates:</strong> {shorts.map(s => `${s.name} (${s.short} more than the ${s.free} free)`).join("; ")}. Sub-hire the rest, or change the dates.
+                {form.id && <button type="button" className="ml-2 font-semibold underline" onClick={subShort}>Sub-hire what&apos;s short</button>}
+              </div>
+            )}
+            {form.id && (
+              <div className="flex flex-col gap-2" aria-label="Sub-hires">
+                <span className="text-sm font-semibold">Sub-hires <span className="font-normal" style={muted}>· kit hired in from elsewhere to cover what we&apos;re short of</span></span>
+                {(full?.subHires ?? []).map(sh => (
+                  <div key={sh.id} className="flex gap-2 items-center flex-wrap text-sm">
+                    <span className="flex-1 min-w-[160px]"><strong>{sh.quantity} × {sh.product?.name ?? sh.description}</strong>{sh.supplierName ? ` from ${sh.supplierName}` : ""}{sh.cost != null ? ` · costs us ${gbp(sh.cost)}` : ""}</span>
+                    <select aria-label="Sub-hire status" style={{ ...input, width: "auto", padding: "4px 6px" }} value={sh.status} onChange={e => subStatus(sh, e.target.value)}>
+                      {Object.entries(SUB_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                    <button type="button" className="text-xs font-semibold" style={{ color: "var(--tws-bad-ink)" }} onClick={() => subRemove(sh)}>Remove</button>
+                  </div>
+                ))}
+                {subForm ? (
+                  <div className="flex gap-2 items-end flex-wrap p-3" style={{ background: "var(--tws-tint)" }}>
+                    <div><label style={lbl} htmlFor="sh-p">Product</label><select id="sh-p" style={{ ...input, width: "auto" }} value={subForm.productId} onChange={e => setSubForm({ ...subForm, productId: e.target.value })}>
+                      {[...new Set(form.lines.map(l => l.productId))].map(id => <option key={id} value={id}>{products.find(p => p.id === id)?.name}</option>)}</select></div>
+                    <div><label style={lbl} htmlFor="sh-q">How many</label><input id="sh-q" style={{ ...input, width: 70 }} inputMode="numeric" value={subForm.quantity} onChange={e => setSubForm({ ...subForm, quantity: e.target.value })} /></div>
+                    <div><label style={lbl} htmlFor="sh-s">From</label><input id="sh-s" style={{ ...input, width: 180 }} maxLength={120} value={subForm.supplierName} onChange={e => setSubForm({ ...subForm, supplierName: e.target.value })} placeholder="Supplier" /></div>
+                    <div><label style={lbl} htmlFor="sh-c">Costs us £</label><input id="sh-c" style={{ ...input, width: 100 }} inputMode="decimal" value={subForm.cost} onChange={e => setSubForm({ ...subForm, cost: e.target.value })} /></div>
+                    <button type="button" style={btnSolid} onClick={addSub}>Add</button><button type="button" style={btnLine} onClick={() => setSubForm(null)}>Cancel</button>
+                  </div>
+                ) : form.lines.length > 0 && <button type="button" className="self-start text-sm font-semibold" style={{ color: "var(--tws-accent-ink)" }} onClick={() => setSubForm({ productId: String(form.lines[0].productId), quantity: "1", supplierName: "", cost: "" })}>+ Add a sub-hire</button>}
               </div>
             )}
             <div className="flex flex-col gap-2">
@@ -239,6 +288,7 @@ export default function Hires({ initial, openId, startNew }: { initial: RentalsD
 
             {form.id && (
               <div className="flex gap-x-4 gap-y-2 flex-wrap items-center text-sm p-3" style={{ background: "var(--tws-tint)" }}>
+                {["confirmed", "out"].includes(form.status) && <a href={`/spaces/${space.slug}/warehouse?hire=${form.id}&mode=${form.status === "out" ? "in" : "out"}`} className="font-semibold" style={{ color: "var(--tws-accent-ink)" }}>{form.status === "out" ? "Check in on Warehouse" : "Prep on Warehouse"}</a>}
                 <button type="button" disabled={busy} className="font-semibold" style={{ color: "var(--tws-accent-ink)" }} onClick={() => pdf(true)}>Preview PDF</button>
                 <button type="button" disabled={busy} className="font-semibold" style={{ color: "var(--tws-accent-ink)" }} onClick={() => pdf(false)}>Download {form.status === "quote" ? "quote" : "confirmation"} PDF</button>
                 {form.status === "quote" && (full?.quoteSentAt

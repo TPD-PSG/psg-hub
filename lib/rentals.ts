@@ -187,3 +187,43 @@ export function invoiceDue(terms: string | null | undefined, issued: Date, outDa
   if (/advance|on order|before/.test(t)) return outDate < issued ? issued : outDate;
   return new Date(issued.getTime() + 30 * DAY);
 }
+
+// ── Warehouse (stage 3) ───────────────────────────────────────────────────────────────────────
+export const SUBHIRE_STATUS = { needed: "Needed", ordered: "Ordered", received: "Received", returned: "Sent back" } as const;
+export const CONDITION = { ok: "Back OK", damaged: "Damaged", missing: "Missing" } as const;
+
+/**
+ * Prep progress for a hire: for each product, how many it wants, how many are covered by
+ * sub-hires, how many of our units are scanned out, and how many are still to scan.
+ * Units of products that aren't on the hire (cases, or things packed in them) are "extra".
+ */
+export function prepProgress(
+  lines: { productId: number; quantity: number }[],
+  subHires: { productId: number | null; quantity: number }[],
+  scanned: { productId: number; back: boolean }[],
+) {
+  const want = new Map<number, number>(), sub = new Map<number, number>(), out = new Map<number, number>(), back = new Map<number, number>();
+  for (const l of lines) want.set(l.productId, (want.get(l.productId) ?? 0) + l.quantity);
+  for (const s of subHires) if (s.productId != null) sub.set(s.productId, (sub.get(s.productId) ?? 0) + s.quantity);
+  for (const u of scanned) { out.set(u.productId, (out.get(u.productId) ?? 0) + 1); if (u.back) back.set(u.productId, (back.get(u.productId) ?? 0) + 1); }
+  const rows = [...want].map(([productId, wanted]) => {
+    const fromUs = Math.max(0, wanted - (sub.get(productId) ?? 0));
+    const sc = out.get(productId) ?? 0;
+    return { productId, wanted, subHired: Math.min(wanted, sub.get(productId) ?? 0), fromUs, scanned: sc, toScan: Math.max(0, fromUs - sc), back: back.get(productId) ?? 0 };
+  });
+  const extra = [...out].filter(([pid]) => !want.has(pid)).map(([productId, n]) => ({ productId, scanned: n, back: back.get(productId) ?? 0 }));
+  const toScan = rows.reduce((a, r) => a + r.toScan, 0);
+  const outNow = scanned.filter(u => !u.back).length;
+  return { rows, extra, toScan, ready: toScan === 0, outNow, allBack: scanned.length > 0 && outNow === 0 };
+}
+
+/** A hire's lines less what's sub-hired for it: what our own kit has to cover. */
+export function ourShare(lines: { productId: number; quantity: number }[], subHires: { productId: number | null; quantity: number }[]) {
+  const sub = new Map<number, number>();
+  for (const s of subHires) if (s.productId != null) sub.set(s.productId, (sub.get(s.productId) ?? 0) + s.quantity);
+  return lines.map(l => {
+    const take = Math.min(l.quantity, sub.get(l.productId) ?? 0);
+    sub.set(l.productId, (sub.get(l.productId) ?? 0) - take);
+    return { productId: l.productId, quantity: l.quantity - take };
+  }).filter(l => l.quantity > 0);
+}

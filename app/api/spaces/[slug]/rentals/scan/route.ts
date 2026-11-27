@@ -11,7 +11,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   if (!code) return notFound();
   const unit = await prisma.rentalUnit.findFirst({
     where: { barcode: code, product: { entityId: s.space.id } },
-    include: { product: { select: { id: true, name: true, category: true, isCase: true } }, container: { select: { barcode: true } }, contents: { select: { barcode: true, product: { select: { name: true } } } } },
+    include: { product: { select: { id: true, name: true, category: true, isCase: true } }, container: { select: { barcode: true } }, contents: { select: { barcode: true, product: { select: { name: true } } } },
+      hireUnits: { where: { backAt: null }, select: { hire: { select: { id: true, number: true, title: true } } } } },
   });
   return unit ? NextResponse.json(unit) : NextResponse.json({ error: `Nothing here has the barcode ${code}` }, { status: 404 });
 }

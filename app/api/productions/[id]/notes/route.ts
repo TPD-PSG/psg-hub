@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
 
@@ -32,6 +33,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (access.role !== "admin" && access.role !== "member") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const userId = access.userId;
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { title: "Give the note a title" });
+  if (bad) return bad;
   const note = await prisma.productionNote.create({
     data: {
       productionId: Number(id),

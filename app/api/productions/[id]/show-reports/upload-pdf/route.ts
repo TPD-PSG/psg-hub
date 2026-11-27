@@ -20,7 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const production = await prisma.production.findUnique({ where: { id: productionId }, select: { id: true, name: true } });
   if (!production) return NextResponse.json({ error: "Production not found" }, { status: 404 });
 
-  const formData = await req.formData();
+  const formData = await req.formData().catch(() => null);
+  if (!formData) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const file = formData.get("pdf") as File | null;
   if (!file) return NextResponse.json({ error: "No PDF file provided" }, { status: 400 });
   if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {

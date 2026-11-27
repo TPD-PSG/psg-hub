@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { money, toDate } from "@/lib/parse";
@@ -9,6 +10,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if ((session.user as any).role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { description: "The description can't be blank", party: "Who it's with can't be blank" });
+  if (blank) return blank;
   const invoice = await prisma.companyInvoice.update({
     where: { id: Number(id) },
     data: {

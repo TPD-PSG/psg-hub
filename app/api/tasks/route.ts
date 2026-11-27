@@ -1,5 +1,6 @@
 import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/companyScope";
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireProductionAccess } from "@/lib/access";
@@ -60,6 +61,8 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { title: "Give the task a title" });
+  if (bad) return bad;
   if (body.productionId) {
     const access = await requireProductionAccess(body.productionId, "tasks");
     if ("error" in access) return access.error;

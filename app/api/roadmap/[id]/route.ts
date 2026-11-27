@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ROADMAP_INCLUDE } from "@/lib/roadmap";
@@ -17,6 +18,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { title: "The title can't be blank" });
+  if (blank) return blank;
   const item = await prisma.roadmapItem.update({
     where: { id: Number(id) },
     data: {

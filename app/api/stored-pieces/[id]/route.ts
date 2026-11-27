@@ -2,6 +2,7 @@
 // out: delivered, collected, scrapped; a note says where) · back (back into store) · edit (name,
 // quantity, notes, build). DELETE: entered by mistake (whoever added it, or an admin).
 import { NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { memberOfEntity } from "@/lib/spaceBoard";
 import { storageFor, locationIn, nameOf, PIECE_INCLUDE } from "@/lib/setStorage";
@@ -43,6 +44,8 @@ export async function PATCH(req: Request, p: P) {
   if ("error" in r) return r.error;
   const { m, piece } = r;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { name: "The name can't be blank" });
+  if (blank) return blank;
   const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
   const by = await nameOf(m.userId);
   const bad = (error: string) => NextResponse.json({ error }, { status: 400 });

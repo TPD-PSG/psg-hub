@@ -1,5 +1,6 @@
 // Rename a storage location, or retire / restore it (staff of its space). Retiring needs it empty.
 import { NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { memberOfEntity } from "@/lib/spaceBoard";
 import { storageFor } from "@/lib/setStorage";
@@ -11,6 +12,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if ("error" in m) return m.error;
   if (!m.staff) return NextResponse.json({ error: "Only staff can change locations" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { name: "The name can't be blank" });
+  if (blank) return blank;
   const data: Record<string, unknown> = {};
   if (typeof body.name === "string") {
     const name = body.name.trim().replace(/\s+/g, " ").slice(0, 60);

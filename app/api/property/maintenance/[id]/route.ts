@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { money } from "@/lib/parse";
@@ -8,6 +9,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { title: "The title can't be blank" });
+  if (blank) return blank;
   const item = await prisma.propertyMaintenance.update({
     where: { id: Number(id) },
     data: {

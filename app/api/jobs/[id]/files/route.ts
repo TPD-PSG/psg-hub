@@ -16,7 +16,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const a = await jobAccess((await params).id);
   if ("error" in a) return a.error;
-  const form = await req.formData();
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const kind = String(form.get("kind") ?? "design") as keyof typeof FILE_KINDS;
   if (!(kind in FILE_KINDS)) return NextResponse.json({ error: "Drawings or model box photos" }, { status: 400 });
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0).slice(0, 12);

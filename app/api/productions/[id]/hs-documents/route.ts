@@ -20,7 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const access = await requireProductionAccess(id, "hs");
   if ("error" in access) return access.error;
-  const fd = await req.formData();
+  const fd = await req.formData().catch(() => null);
+  if (!fd) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const file = fd.get("file") as File | null;
   const folder = (fd.get("folder") as string) || "General";
   const tourStopId = fd.get("tourStopId") ? Number(fd.get("tourStopId")) : null;

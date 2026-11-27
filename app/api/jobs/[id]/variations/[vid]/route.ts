@@ -2,6 +2,7 @@
 // · withdraw (back to draft) · record (admins: the client's decision given by email or phone).
 // DELETE: drafts and declined ones (whoever made it, or an admin).
 import { NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { parseLines } from "@/lib/quotes";
 import { notify } from "@/lib/clientPortal";
@@ -30,6 +31,8 @@ export async function PATCH(req: Request, p: P) {
   if ("error" in r) return r.error;
   const v = r.variation;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { title: "The title can't be blank" });
+  if (blank) return blank;
   const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
   switch (body.action) {
     case "edit": {

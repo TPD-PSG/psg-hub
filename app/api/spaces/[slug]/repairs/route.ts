@@ -22,7 +22,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const m = await spaceMember((await params).slug);
   if ("error" in m) return m.error;
   if (!m.staff) return NextResponse.json({ error: "Staff only" }, { status: 403 });
-  const r = await readReport(await req.formData(), { entityId: m.space.id });
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: "Fill in the report" }, { status: 400 });
+  const r = await readReport(form, { entityId: m.space.id });
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: 400 });
   const by = (await nameOf(m.userId)) ?? "PSG";
   const repair = await prisma.repair.create({ data: { ...r.data, reportedById: m.userId, reportedByName: by }, select: REPAIR_SELECT });

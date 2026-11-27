@@ -14,7 +14,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const a = await jobAccess((await params).id);
   if ("error" in a) return a.error;
-  const form = await req.formData();
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const text = (k: string, max: number) => String(form.get(k) ?? "").trim().slice(0, max) || null;
   const title = text("title", 150);
   const file = form.get("file");

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
 
@@ -17,7 +18,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const access = await requireProductionAccess(id);
   if ("error" in access) return access.error;
-  const { name } = await req.json().catch(() => ({}));
+  const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { name: "Give the list a name" });
+  if (bad) return bad;
+  const { name } = body;
   const count = await prisma.taskList.count({ where: { productionId: Number(id) } });
   const list = await prisma.taskList.create({
     data: { productionId: Number(id), name, position: count },

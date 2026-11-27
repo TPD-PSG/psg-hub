@@ -1,6 +1,7 @@
 // Change a machine or other item of kit: name, where it is, refresher period, notes, trainers,
 // category, asset tag, out of use, or retire it. Workshop staff.
 import { NextRequest, NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { matrix } from "@/lib/inductions";
 import { equipmentList } from "@/lib/equipment";
@@ -12,6 +13,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if ("error" in x) return x.error;
   if (!x.v.staff) return NextResponse.json({ error: "Only the workshop's staff can change machines" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { name: "The name can't be blank" });
+  if (blank) return blank;
   const data: Record<string, unknown> = {};
   if (typeof body.name === "string" && body.name.trim()) data.name = body.name.trim().slice(0, 80);
   if ("location" in body) data.location = typeof body.location === "string" ? body.location.trim().slice(0, 80) || null : null;

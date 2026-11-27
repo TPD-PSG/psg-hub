@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { ENTITY_SELECT, checkSlug, checkColor } from "@/lib/entities";
@@ -9,6 +10,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if ((session?.user as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = parseInt((await params).id);
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { name: "The name can't be blank" });
+  if (blank) return blank;
   const data: { name?: string; archived?: boolean; sortOrder?: number; hasSpace?: boolean; slug?: string | null; shortName?: string | null; color?: string | null } = {};
   if (typeof body.name === "string") {
     const name = body.name.trim();

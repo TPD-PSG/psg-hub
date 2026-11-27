@@ -1,5 +1,6 @@
 import { denyOutOfScope } from "@/lib/companyScope";
 import { NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
@@ -11,6 +12,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const data = await req.json().catch(() => ({}));
+  const bad = missing(data, { description: "Say what needs doing" });
+  if (bad) return bad;
   const task = await prisma.bDTask.create({
     data: {
       opportunityId: parseInt(id),

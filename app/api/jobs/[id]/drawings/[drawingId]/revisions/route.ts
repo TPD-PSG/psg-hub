@@ -11,7 +11,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("error" in a) return a.error;
   const drawing = await prisma.drawing.findFirst({ where: { id: parseInt((await params).drawingId), jobId: a.id }, include: { revisions: { select: { id: true, rev: true } } } });
   if (!drawing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const form = await req.formData();
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const file = form.get("file");
   const note = String(form.get("note") ?? "").trim().slice(0, 500) || null;
   if (!(file instanceof File) || !file.size) return NextResponse.json({ error: "Choose the drawing file" }, { status: 400 });

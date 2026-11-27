@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
   const userId = (session?.user as any)?.id ? Number((session!.user as any).id) : null;
   if (!userId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
-  const formData = await req.formData();
+  const formData = await req.formData().catch(() => null);
+  if (!formData) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const title = formData.get("title") as string;
   const story = formData.get("story") as string;
   const files = formData.getAll("media") as File[];

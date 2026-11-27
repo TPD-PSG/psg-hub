@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { money, toDate } from "@/lib/parse";
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = Number((session.user as any).id);
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { description: "Say what the expense was for" });
+  if (bad) return bad;
 
   const expense = await prisma.productionExpense.create({
     data: {

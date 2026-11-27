@@ -32,7 +32,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in a) return a.error;
   const id = a.expenseId;
 
-  const formData = await req.formData();
+  const formData = await req.formData().catch(() => null);
+  if (!formData) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const file = formData.get("file") as File | null;
   const type = (formData.get("type") as string) ?? "receipt";
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ROADMAP_INCLUDE } from "@/lib/roadmap";
@@ -20,6 +21,8 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = Number((session.user as any).id);
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { title: "Give the item a title" });
+  if (bad) return bad;
   const item = await prisma.roadmapItem.create({
     data: {
       title: body.title,

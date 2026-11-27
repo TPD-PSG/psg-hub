@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireProductionAccess } from "@/lib/access";
@@ -19,6 +20,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { name: "The name can't be blank" });
+  if (blank) return blank;
   const production = await prisma.production.update({
     where: { id: Number(id) },
     data: {

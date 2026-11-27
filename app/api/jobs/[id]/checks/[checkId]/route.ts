@@ -1,5 +1,6 @@
 // Tick, untick, reword or remove a build check. PSG staff.
 import { NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { requireJobViewer } from "@/lib/jobData";
 import { denyOutOfScope } from "@/lib/companyScope";
@@ -19,6 +20,8 @@ export async function PATCH(req: Request, { params }: P) {
   const c = await find(params);
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { text: "The text can't be blank" });
+  if (blank) return blank;
   const data: Record<string, unknown> = {};
   if (typeof body.done === "boolean" && body.done !== c.done) Object.assign(data, body.done ? { done: true, doneById: v.userId, doneAt: new Date() } : { done: false, doneById: null, doneAt: null });
   if (typeof body.text === "string" && body.text.trim()) data.text = body.text.trim().slice(0, 300);

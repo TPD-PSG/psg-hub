@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { money } from "@/lib/parse";
@@ -10,6 +11,8 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { title: "Give the job a title" });
+  if (bad) return bad;
   const item = await prisma.propertyMaintenance.create({
     data: {
       propertyId: PROPERTY_ID,

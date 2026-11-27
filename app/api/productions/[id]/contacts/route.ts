@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
 
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const access = await requireProductionAccess(id, "contacts");
   if ("error" in access) return access.error;
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { name: "Add the contact's name" });
+  if (bad) return bad;
   const contact = await prisma.productionContact.create({
     data: {
       productionId: Number(id),

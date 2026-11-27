@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { title: "Give the task a title" });
+  if (bad) return bad;
   const task = await prisma.salesTask.create({
     data: {
       title: body.title,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
@@ -7,6 +8,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const data = await req.json().catch(() => ({}));
+  const blank = blanked(data, { name: "The name can't be blank" });
+  if (blank) return blank;
   const contact = await prisma.contact.update({
     where: { id: parseInt(id) },
     data: { name: data.name, role: data.role ?? null, email: data.email ?? null, phone: data.phone ?? null, notes: data.notes ?? null },

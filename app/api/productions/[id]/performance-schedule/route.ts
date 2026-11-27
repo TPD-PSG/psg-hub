@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { requireProductionAccess } from "@/lib/access";
 
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in access) return access.error;
   const productionId = Number(id);
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { date: "Pick a date", type: "Say what kind of day it is" });
+  if (bad) return bad;
 
   // Toggle: if override exists remove it, otherwise create it
   const existing = await prisma.performanceDateOverride.findFirst({

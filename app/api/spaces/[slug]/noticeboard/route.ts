@@ -22,7 +22,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const m = await spaceMember((await params).slug);
   if ("error" in m) return m.error;
-  const form = await req.formData();
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const kind = String(form.get("kind") ?? "notice");
   if (!KINDS.includes(kind)) return NextResponse.json({ error: "Notice, photo or showcase" }, { status: 400 });
   const title = String(form.get("title") ?? "").trim().slice(0, 140) || null;

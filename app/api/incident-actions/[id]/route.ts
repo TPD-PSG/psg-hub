@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { INCIDENT_INCLUDE, incidentAccess } from "@/lib/incidents";
 import { incidentFor } from "@/lib/incidentRoute";
@@ -17,6 +18,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const x = await actionFor((await params).id);
   if ("error" in x) return x.error;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { text: "The text can't be blank" });
+  if (blank) return blank;
   const data: Record<string, unknown> = {};
   if ("done" in body) data.doneAt = body.done ? new Date() : null;
   if (typeof body.text === "string" && body.text.trim()) data.text = body.text.trim().slice(0, 1000);

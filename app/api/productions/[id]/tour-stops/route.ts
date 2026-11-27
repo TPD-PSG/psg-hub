@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { requireProductionAccess } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
@@ -24,6 +25,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("error" in access) return access.error;
   const productionId = Number(id);
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { venueId: "Pick a venue" });
+  if (bad) return bad;
 
   // Auto-assign next stop number
   const last = await prisma.tourStop.findFirst({

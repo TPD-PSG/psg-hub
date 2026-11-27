@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = Number((session.user as any).id);
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { title: "Give the ticket a title" });
+  if (bad) return bad;
 
   const ticket = await prisma.helpTicket.create({
     data: {

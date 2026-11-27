@@ -1,5 +1,6 @@
 import { companyLimit, scopedEntityId } from "@/lib/companyScope";
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { loadProductionsForViewer } from "@/lib/productionList";
@@ -16,6 +17,8 @@ export async function POST(req: NextRequest) {
   const role = (session?.user as any)?.role;
   if (role !== "admin" && role !== "member") return NextResponse.json({ error: "Only PSG staff can create productions" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { name: "Give the production a name" });
+  if (bad) return bad;
   // Someone limited to certain companies creates productions within them (else they'd lose sight of it)
   const limit = role === "admin" ? null : await companyLimit(Number((session?.user as { id?: string } | undefined)?.id));
   const ent = scopedEntityId(limit, body.entityId ? Number(body.entityId) : null);

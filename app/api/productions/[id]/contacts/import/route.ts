@@ -19,7 +19,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const productionId = Number(id);
 
-  const formData = await req.formData();
+  const formData = await req.formData().catch(() => null);
+  if (!formData) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const file = formData.get("file") as File | null;
 
   // Bulk import from pre-parsed contacts (from preview step)

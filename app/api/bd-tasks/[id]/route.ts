@@ -1,6 +1,7 @@
 // Change or remove a follow-up task on a BD deal: only on deals in a company the person can see
 // (the same check as the rest of BD; audit round 2).
 import { NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { denyOutOfScope } from "@/lib/companyScope";
@@ -20,6 +21,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const f = await findTask((await params).id);
   if ("error" in f) return f.error;
   const data = await req.json().catch(() => ({}));
+  const blank = blanked(data, { description: "The description can't be blank" });
+  if (blank) return blank;
   const task = await prisma.bDTask.update({
     where: { id: f.task.id },
     data: {

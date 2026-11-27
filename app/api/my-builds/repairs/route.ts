@@ -7,7 +7,9 @@ import { readReport, tellWorkshop } from "@/lib/repairs";
 export async function POST(req: Request) {
   const v = await clientViewer();
   if ("error" in v) return v.error;
-  const r = await readReport(await req.formData(), { clientId: v.clientId });
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: "Fill in the report" }, { status: 400 });
+  const r = await readReport(form, { clientId: v.clientId });
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: 400 });
   await prisma.repair.create({ data: { ...r.data, fromClient: true, reportedById: v.userId, reportedByName: `${v.name} (${v.clientName})` } });
   await tellWorkshop(r.job, r.data.title, `${v.name}, ${v.clientName}`, r.data.urgency);

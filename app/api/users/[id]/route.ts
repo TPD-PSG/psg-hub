@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -13,6 +14,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!await requireAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { name: "The name can't be blank", email: "The email address can't be blank" });
+  if (blank) return blank;
   const data: Record<string, unknown> = { name: body.name, email: body.email, role: body.role };
   if (body.password) data.passwordHash = await hash(body.password, 12);
   if (body.permissions !== undefined) data.permissions = JSON.stringify(body.permissions);

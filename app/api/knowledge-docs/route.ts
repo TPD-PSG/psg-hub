@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
   const role = (session.user as any).role;
   if (role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const fd = await req.formData();
+  const fd = await req.formData().catch(() => null);
+  if (!fd) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const file = fd.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
   if (!ALLOWED_MIME.includes(file.type)) return NextResponse.json({ error: "Invalid file type" }, { status: 400 });

@@ -25,7 +25,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!job?.entityId) return NextResponse.json({ error: "Only builds for a company with a space can have photos" }, { status: 404 });
   const m = await memberOfEntity(job.entityId);
   if ("error" in m) return m.error;
-  const form = await req.formData();
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const files = form.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0).slice(0, 12);
   if (!files.length) return NextResponse.json({ error: "Add a photo" }, { status: 400 });
   const caption = String(form.get("caption") ?? "").trim().slice(0, 200) || null;

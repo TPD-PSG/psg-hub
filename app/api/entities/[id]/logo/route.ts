@@ -14,7 +14,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const id = parseInt((await params).id);
   const existing = await prisma.entity.findUnique({ where: { id }, select: { logoKey: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const file = (await req.formData()).get("logo");
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
+  const file = form.get("logo");
   if (!(file instanceof File)) return NextResponse.json({ error: "No file" }, { status: 400 });
   if (!TYPES.includes(file.type)) return NextResponse.json({ error: "Logo must be PNG, JPEG or WebP" }, { status: 400 });
   if (file.size > MAX) return NextResponse.json({ error: "Logo must be under 1 MB" }, { status: 400 });

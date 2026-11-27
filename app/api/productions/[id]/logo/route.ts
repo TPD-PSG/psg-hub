@@ -16,7 +16,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("error" in access) return access.error;
   const productionId = Number(id);
 
-  const formData = await req.formData();
+  const formData = await req.formData().catch(() => null);
+  if (!formData) return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
   const file = formData.get("logo") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 

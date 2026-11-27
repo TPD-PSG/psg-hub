@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
@@ -11,6 +12,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const rec = await requireRecordAccess("budgetLine", id);
   if ("error" in rec) return rec.error;
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { description: "Say what the expense was for" });
+  if (bad) return bad;
   const expense = await prisma.expense.create({
     data: {
       budgetLineId:     Number(id),

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
@@ -11,6 +12,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const rec = await requireRecordAccess("haulage", id);
   if ("error" in rec) return rec.error;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { haulageCompany: "The haulage company can't be blank", fromLocation: "Where it's from can't be blank", toLocation: "Where it's going can't be blank" });
+  if (blank) return blank;
   const movement = await prisma.haulageMovement.update({
     where: { id: Number(id) },
     data: {

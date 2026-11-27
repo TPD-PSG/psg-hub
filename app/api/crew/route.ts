@@ -1,5 +1,6 @@
 import { myCompanyLimit, productionWhere, optionalProductionWhere } from "@/lib/companyScope";
 import { NextRequest, NextResponse } from "next/server";
+import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
+  const bad = missing(body, { name: "Add their name", discipline: "Pick their department" });
+  if (bad) return bad;
   const member = await prisma.crew.create({
     data: {
       name:                body.name,

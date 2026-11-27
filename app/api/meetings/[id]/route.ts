@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
 import { recordingUrl } from "@/lib/transcript";
 import { auth } from "@/auth";
@@ -14,6 +15,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const rec = await requireRecordAccess("meeting", id);
   if ("error" in rec) return rec.error;
   const body = await req.json().catch(() => ({}));
+  const blank = blanked(body, { title: "The title can't be blank" });
+  if (blank) return blank;
   const meeting = await prisma.meeting.update({
     where: { id: Number(id) },
     data: {

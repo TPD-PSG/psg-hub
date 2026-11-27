@@ -3,6 +3,9 @@ import { run, BASE } from "./lib.mjs";
 export default () => run("fixes", async ({ db, users, login, anon, check, results }) => {
   const f = await login(users[0].email), c = await login(users[1].email), m = await login(users[2].email), a = await login(users[3].email);
   const made = [];
+  const p2 = await db.production.findUnique({ where: { id: 2 }, select: { status: true, announcementStatus: true, archived: true } });
+  await db.production.update({ where: { id: 2 }, data: { status: "in-production", announcementStatus: "open", archived: false } }); // old numeric toolbox links only open live shows
+  const restoreP2 = () => db.production.update({ where: { id: 2 }, data: p2 }).catch(() => {});
   try {
     // money and dates
     let r = await a("/api/productions/1/budget", { method: "POST", body: JSON.stringify({ department: "Test", description: "money test", budgeted: "£1,200.50" }) });
@@ -33,6 +36,7 @@ export default () => run("fixes", async ({ db, users, login, anon, check, result
     // sidebar endpoint + prefs
     await check("admin", "preferences read", a("/api/me/preferences"), 200);
   } finally {
+    await restoreP2();
     for (const [model, id] of made) await db[model].delete({ where: { id } }).catch(() => {});
   }
 });

@@ -8,6 +8,7 @@ import TasksPanel from "@/components/TasksPanel";
 import { parsePerms } from "@/lib/permissions";
 import { confirmDialog } from "@/components/Dialogs";
 import { F, Modal, Btns, NoAccess, inp, inpStyle, fmtDate, sendJson, STATUS_OPTS, STATUS_COLORS, ANN_COLORS, ANN_LABELS, ANN_OPTS, type Production, type TabKey, type TabProps, type VenueRef } from "./shared";
+import OverviewTab from "./tabs/Overview";
 import ScheduleTab from "./tabs/Schedule";
 import BudgetTab from "./tabs/Budget";
 import CrewTab from "./tabs/Crew";
@@ -41,7 +42,7 @@ function formFromProd(data: Production) {
   };
 }
 
-function ProductionPageInner({ id, initialProd }: { id: string; initialProd: Production }) {
+function ProductionPageInner({ id, initialProd, newLook = false }: { id: string; initialProd: Production; newLook?: boolean }) {
   const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = (session?.user as { id?: string; role?: string; permissions?: string | null } | undefined)?.role === "admin";
@@ -52,7 +53,8 @@ function ProductionPageInner({ id, initialProd }: { id: string; initialProd: Pro
   const hiddenSections = new Set<string>(isAdmin ? [] : (userPermsHidden.hiddenSections ?? DEFAULT_HIDDEN[userRole] ?? []));
   const searchParams = useSearchParams();
   const [prod, setProd] = useState<Production | null>(initialProd);
-  const tab: TabKey = (searchParams.get("section") as TabKey) ?? "schedule";
+  // The new look opens a production on its Overview (build brief stage 5); the old look on Schedule
+  const tab: TabKey = (searchParams.get("section") as TabKey) ?? (newLook ? "overview" : "schedule");
   const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   const [showTeamPicker, setShowTeamPicker] = useState(false);
   useEffect(() => { fetch("/api/users").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setAllUsers(d); }); }, []);
@@ -237,6 +239,7 @@ function ProductionPageInner({ id, initialProd }: { id: string; initialProd: Pro
         )}
       </div>
 
+      {tab === "overview" && <OverviewTab prodId={prod.id} color={prod.color} isTour={prod.isTour} />}
       {tab === "schedule" && <ScheduleTab {...tabProps} />}
       {tab === "budget" && gated("budget", <BudgetTab {...tabProps} isAdmin={isAdmin} userRole={userRole} />)}
       {tab === "crew" && gated("crew", <CrewTab {...tabProps} />)}
@@ -348,10 +351,10 @@ function ProductionPageInner({ id, initialProd }: { id: string; initialProd: Pro
   );
 }
 
-export default function ProductionView({ id, initialProd }: { id: string; initialProd: Production }) {
+export default function ProductionView({ id, initialProd, newLook = false }: { id: string; initialProd: Production; newLook?: boolean }) {
   return (
     <Suspense>
-      <ProductionPageInner id={id} initialProd={initialProd} />
+      <ProductionPageInner id={id} initialProd={initialProd} newLook={newLook} />
     </Suspense>
   );
 }

@@ -155,7 +155,7 @@ export type Production = {
   team: TeamMember[];
 };
 
-export type TabKey = "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour" | "notes" | "meetings";
+export type TabKey = "overview" | "schedule" | "budget" | "crew" | "accommodation" | "haulage" | "callsheets" | "advancing" | "contacts" | "documents" | "links" | "hs" | "reports" | "tasks" | "tour" | "notes" | "meetings";
 
 /** What every tab gets from the page: the production, and a way to refetch it after a change. */
 export type TabProps = {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { missing } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
+import { afterBudgetChange, productionOfLine } from "@/lib/budgetAlerts";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { money, toDate } from "@/lib/parse";
@@ -35,5 +36,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       paymentMethod:    body.paymentMethod || null,
     },
   });
+  await afterBudgetChange(await productionOfLine(Number(id)));
   return NextResponse.json(expense, { status: 201 });
 }

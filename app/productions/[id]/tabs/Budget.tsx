@@ -7,6 +7,7 @@ import PmFeePanel from "@/components/PmFeePanel";
 import { useSession } from "next-auth/react";
 import { exportBudgetPDF, exportBudgetXLSX, exportClientBudgetPDF } from "@/lib/budgetExport";
 import { buildBudgetReport, type ReportVariation } from "@/lib/budgetReport";
+import { budgetWarnings } from "@/lib/budgetAlertsCore";
 import { confirmDialog } from "@/components/Dialogs";
 import NotesPeek from "@/components/NotesPeek";
 import { F, Modal, Btns, inp, inpStyle, fmt, fmtDate, fmtShortDate, sendJson, useList, toggled, type BudgetLine, type Expense, type HaulageMovement, type TabProps, type TourStop } from "../shared";
@@ -148,6 +149,9 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
   const { pm: haulageEstimated, net: haulageActual } = report.unlinkedHaulage;
   const { pm: contraEstimateTotal, net: contraActualTotal } = report.contra;
   const rechargeables = prod.haulageMovements.filter((m) => m.rechargeable);
+  // Lines (and the whole budget) nearly spent or over: the same rule the alerts use
+  const warnings = useMemo(() => budgetWarnings([...report.lineById.values()], report.totals), [report]);
+  const [showAllWarnings, setShowAllWarnings] = useState(false);
   const lineTotals = (line: BudgetLine) => {
     const l = report.lineById.get(line.id)!;
     return { movements: l.movements as HaulageMovement[], est: l.pm, com: l.net, spt: l.gross };
@@ -199,6 +203,32 @@ export default function BudgetTab({ prod, reload, isAdmin, userRole }: TabProps 
           </div>
         ))}
       </div>
+      {warnings.length > 0 && (
+        <div role="status" className="rounded-lg border px-4 py-3 text-sm" style={{ borderColor: warnings.some(w => w.level === 100) ? "rgba(248,113,113,0.5)" : "rgba(250,204,21,0.45)", backgroundColor: warnings.some(w => w.level === 100) ? "rgba(248,113,113,0.08)" : "rgba(250,204,21,0.07)" }}>
+          <p className="font-medium text-white">
+            {(() => {
+              const over = warnings.filter(w => w.level === 100 && w.lineId !== null).length, nearly = warnings.filter(w => w.level === 90 && w.lineId !== null).length;
+              return [over && `${over} line${over === 1 ? "" : "s"} over budget`, nearly && `${nearly} nearly spent`].filter(Boolean).join(" · ") || "The whole budget needs a look";
+            })()}
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {(showAllWarnings ? warnings : warnings.slice(0, 5)).map(w => (
+              <li key={w.lineId ?? "total"} className="flex flex-wrap justify-between gap-x-4">
+                <span className={w.level === 100 ? "text-red-400" : "text-yellow-300"}>{w.level === 100 ? "Over" : "Nearly spent"}: {w.label}</span>
+                <span style={{ color: "var(--psg-muted)" }}>
+                  {fmt(w.net)} of {fmt(w.allocation)}{w.level === 100 ? ` · ${fmt(w.net - w.allocation)} over` : w.allocation > 0 ? ` · ${Math.round((w.net / w.allocation) * 100)}%` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {warnings.length > 5 && (
+            <button type="button" onClick={() => setShowAllWarnings(v => !v)} className="mt-1 text-xs underline" style={{ color: "var(--psg-muted)" }}>
+              {showAllWarnings ? "Show fewer" : `Show all ${warnings.length}`}
+            </button>
+          )}
+          <p className="mt-1.5 text-xs" style={{ color: "var(--psg-muted)" }}>Measured on Net Cost. The show&apos;s team gets a Hub notification when a line reaches 90% or goes over.</p>
+        </div>
+      )}
       <div className="space-y-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex gap-1 rounded-lg overflow-hidden border text-xs" style={{ borderColor: "var(--psg-card-border)" }}>

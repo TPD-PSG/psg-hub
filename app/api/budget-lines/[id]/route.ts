@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
+import { afterBudgetChange } from "@/lib/budgetAlerts";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { money } from "@/lib/parse";
@@ -30,6 +31,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       notes: body.notes || null,
     },
   });
+  await afterBudgetChange(line.productionId);
   return NextResponse.json(line);
 }
 
@@ -46,7 +48,8 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in rec) return rec.error;
   // Its expenses and their receipts go with it; note the R2 files first
   const docs = await prisma.spendDocument.findMany({ where: { expense: { budgetLineId: Number(id) } }, select: { fileKey: true } });
-  await prisma.budgetLine.delete({ where: { id: Number(id) } });
+  const gone = await prisma.budgetLine.delete({ where: { id: Number(id) }, select: { productionId: true } });
+  await afterBudgetChange(gone.productionId);
   for (const d of docs) await removeFile(d.fileKey);
   return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
+import { afterBudgetChange } from "@/lib/budgetAlerts";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { money, toDate } from "@/lib/parse";
@@ -32,6 +33,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       budgetLineId:   body.budgetLineId ? Number(body.budgetLineId) : null,
     },
   });
+  await afterBudgetChange(movement.productionId);
   return NextResponse.json(movement);
 }
 
@@ -57,6 +59,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const rec = await requireRecordAccess("haulage", id);
   if ("error" in rec) return rec.error;
-  await prisma.haulageMovement.delete({ where: { id: Number(id) } });
+  const gone = await prisma.haulageMovement.delete({ where: { id: Number(id) }, select: { productionId: true } });
+  await afterBudgetChange(gone.productionId);
   return NextResponse.json({ ok: true });
 }

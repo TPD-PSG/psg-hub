@@ -96,6 +96,7 @@ model Production {
   reportEmail         String?
   sharepointUrl       String?
   haulageBudgetLineId Int?
+  budgetAlertLevel    Int          @default(0) // whole-budget overspend alert last sent (as BudgetLine.alertLevel)
   advancingStatus     String       @default("triage")
   contraEstimate      Float?
   contraActual        Float?
@@ -234,6 +235,7 @@ model BudgetLine {
   nominalCode  String?
   budgeted     Float
   notes        String?
+  alertLevel   Int        @default(0) // overspend alert last sent: 0 none, 90 nearly spent, 100 over
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 

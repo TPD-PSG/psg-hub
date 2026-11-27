@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { afterBudgetChange } from "@/lib/budgetAlerts";
 import { requireRecordAccess } from "@/lib/access";
 import { toDate } from "@/lib/parse"; // a bad date counts as blank, not a server error (audit round 2)
 
@@ -30,6 +31,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     },
     include: { venue: { select: { id: true, name: true, city: true } } },
   });
+  if (body.contraActual !== undefined) await afterBudgetChange(stop.productionId);
   return NextResponse.json(stop);
 }
 
@@ -39,6 +41,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const rec = await requireRecordAccess("tourStop", id);
   if ("error" in rec) return rec.error;
-  await prisma.tourStop.delete({ where: { id: Number(id) } });
+  const gone = await prisma.tourStop.delete({ where: { id: Number(id) }, select: { productionId: true } });
+  await afterBudgetChange(gone.productionId);
   return NextResponse.json({ ok: true });
 }

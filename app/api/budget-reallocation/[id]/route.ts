@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { afterBudgetChange } from "@/lib/budgetAlerts";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 
@@ -57,6 +58,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     return v;
   });
+  if (updated.status !== existing.status) await afterBudgetChange(existing.productionId);
 
   return NextResponse.json(updated);
 }
@@ -68,13 +70,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const rec = await requireRecordAccess("budgetVariation", id);
   if ("error" in rec) return rec.error;
   // Deleting an approved variation takes its amounts back off the budget lines (audit round 2)
-  await prisma.$transaction(async tx => {
-    const v = await tx.budgetVariation.findUnique({ where: { id: Number(id) }, select: { id: true, status: true, items: { select: { budgetLineId: true, amount: true } } } });
-    if (!v) return;
+  const pid = await prisma.$transaction(async tx => {
+    const v = await tx.budgetVariation.findUnique({ where: { id: Number(id) }, select: { id: true, productionId: true, status: true, items: { select: { budgetLineId: true, amount: true } } } });
+    if (!v) return null;
     await tx.budgetVariation.delete({ where: { id: v.id } });
     if (v.status === "approved") {
       for (const item of v.items) await tx.budgetLine.update({ where: { id: item.budgetLineId }, data: { budgeted: { decrement: item.amount } } });
     }
+    return v.status === "approved" ? v.productionId : null;
   });
+  await afterBudgetChange(pid);
   return NextResponse.json({ ok: true });
 }

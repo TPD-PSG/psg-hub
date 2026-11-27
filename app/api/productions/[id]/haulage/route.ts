@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { afterBudgetChange } from "@/lib/budgetAlerts";
 import { requireProductionAccess } from "@/lib/access";
 import { missingDates, money, toDate } from "@/lib/parse";
 
@@ -28,5 +29,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       budgetLineId:   body.budgetLineId ? Number(body.budgetLineId) : null,
     },
   });
+  await afterBudgetChange(movement.productionId);
   return NextResponse.json(movement, { status: 201 });
 }

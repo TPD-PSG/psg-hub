@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { blanked } from "@/lib/required";
 import { prisma } from "@/lib/prisma";
+import { afterBudgetChange, productionOfLine } from "@/lib/budgetAlerts";
 import { auth } from "@/auth";
 import { requireRecordAccess } from "@/lib/access";
 import { money, toDate } from "@/lib/parse";
@@ -41,6 +42,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       paymentMethod:    body.paymentMethod || null,
     },
   });
+  await afterBudgetChange(await productionOfLine(expense.budgetLineId));
   return NextResponse.json(expense);
 }
 
@@ -73,7 +75,8 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in rec) return rec.error;
   // Its receipts go with it; note the R2 files first
   const docs = await prisma.spendDocument.findMany({ where: { expenseId: Number(id) }, select: { fileKey: true } });
-  await prisma.expense.delete({ where: { id: Number(id) } });
+  const gone = await prisma.expense.delete({ where: { id: Number(id) }, select: { budgetLineId: true } });
   for (const d of docs) await removeFile(d.fileKey);
+  await afterBudgetChange(await productionOfLine(gone.budgetLineId)); // back under: it can alert again later
   return NextResponse.json({ ok: true });
 }

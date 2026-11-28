@@ -27,6 +27,8 @@ Home shows what needs you, what is on today and where to go next. It only shows 
 
 Things waiting for you, newest first. Click a line to go where it is done. It can include expenses and purchase invoices to approve (if you have Finance), your tasks due today or overdue, sales tasks due, over-budget lines on your shows, and show reports that didn't import (admins). If nothing needs you, the panel is not shown.
 
+To clear a line you don't need to see, click the **×** at its end. This only hides it from your own Home: the expense isn't approved and the task isn't done. A hidden line comes back by itself if it changes, for example if a task gets a new due date. The panel shows how many you've hidden; click **Show them again** to bring them all back.
+
 ### Space cards
 
 A card for Production Solutions Group with its live shows, and one for each company space you can see with its builds in the workshop.

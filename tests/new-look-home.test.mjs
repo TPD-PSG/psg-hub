@@ -34,6 +34,29 @@ export default () => run("new-look-home", async ({ db, users, login, results }) 
     task = await db.task.create({ data: { title: "NLH overdue task", assigneeUserId: admin.id, dueDate: new Date(Date.now() - 2 * 86400e3) } });
     h = await home(a);
     ok(h.includes('aria-label="Needs you"') && h.includes("Task overdue: NLH overdue task"), "an overdue task puts Needs you back, linking to the task");
+    ok(h.includes("Hide from Needs you: Task overdue: NLH overdue task"), "each line has a hide button");
+
+    // ── Hiding things from Needs you ─────────────────────────────────────────
+    const key = `task:${task.id}`, version = `${task.dueDate.toISOString()}:late`;
+    ok((await a("/api/me/needs", { method: "PUT", body: JSON.stringify({ key: "<script>", version }) })).status === 400, "only real item keys can be hidden");
+    ok((await a("/api/me/needs", { method: "PUT", body: JSON.stringify({ key, version: "" }) })).status === 400, "…with the version of it that was seen");
+    ok((await a("/api/me/needs", { method: "PUT", body: JSON.stringify({ key, version }) })).status === 200, "a person hides the overdue task");
+    h = await home(a);
+    ok(!h.includes("Task overdue: NLH overdue task") && /1 hidden/.test(h) && h.includes("Show them again"), "it's gone from Needs you, with '1 hidden' and a way to show it again");
+    ok((await db.task.findUnique({ where: { id: task.id } })).status !== "done", "hiding doesn't complete the task");
+    await db.task.update({ where: { id: task.id }, data: { dueDate: new Date(Date.now() - 1 * 86400e3) } });
+    h = await home(a);
+    ok(h.includes("Task overdue: NLH overdue task"), "it comes back by itself when it changes (a new due date)");
+    const v2 = `${(await db.task.findUnique({ where: { id: task.id } })).dueDate.toISOString()}:late`;
+    await a("/api/me/needs", { method: "PUT", body: JSON.stringify({ key, version: v2 }) });
+    ok((await a("/api/me/needs", { method: "DELETE" })).status === 200 && (await home(a)).includes("Task overdue: NLH overdue task"), "'Show them again' brings everything back");
+    const anonStatus = (await fetch(new URL("/api/me/needs", (await import("./lib.mjs")).BASE), { method: "DELETE", redirect: "manual" })).status;
+    ok(anonStatus === 401 || anonStatus === 307, "signed-out people can't (sent to sign in)");
+    await a("/api/me/needs", { method: "PUT", body: JSON.stringify({ key, version: v2 }) });
+    await db.task.delete({ where: { id: task.id } }); task = null;
+    await home(a);
+    const left = JSON.parse((await db.user.findUnique({ where: { id: admin.id } })).preferences).needsHidden;
+    ok(!left || !(key in left), "once the thing's gone, the hidden note is forgotten too");
 
     ok((await m("/api/me/pinned", { method: "PUT", body: JSON.stringify({ hrefs: ["https://evil.example/x"] }) })).status === 400, "pins are the Hub's own pages only");
     ok((await m("/api/me/pinned", { method: "PUT", body: JSON.stringify({ hrefs: ["/a", "/b", "/c", "/d", "/e", "/f", "/g"] }) })).status === 400, "six pins at most");

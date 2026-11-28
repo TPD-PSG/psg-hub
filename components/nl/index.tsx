@@ -6,7 +6,7 @@
 // Square corners throughout; only avatars are round.
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { ChevronRight, Search as SearchIcon } from "lucide-react";
+import { ChevronRight, Search as SearchIcon, X } from "lucide-react";
 import Icon from "@/components/Icon";
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -169,22 +169,40 @@ export function ListRow({ href, dot, title, line, chip, end }: { href?: string; 
 }
 
 /** "Needs you": the amber strip of things waiting for this person. Renders nothing when empty. */
-export function NeedsYou({ items }: { items: { href: string; text: React.ReactNode; when?: string }[] }) {
-  if (!items.length) return null;
+export function NeedsYou({ items, onHide, hidden = 0, onShowHidden }: {
+  items: { href: string; text: React.ReactNode; when?: string; label?: string }[];
+  /** Give this to let people hide a line (it isn't done, just off their Home) */
+  onHide?: (index: number) => void;
+  /** How many the person has hidden, with a way to show them again */
+  hidden?: number; onShowHidden?: () => void;
+}) {
+  if (!items.length && !hidden) return null;
   return (
     <section aria-label="Needs you" style={{ background: "var(--nl-warn-bg)", border: "1px solid var(--nl-warn-border)" }}>
       <h2 className="nl-caps m-0 px-4 pt-3 pb-1" style={{ color: "var(--nl-warn)" }}>Needs you · {items.length}</h2>
-      <ul className="m-0 p-0 list-none">
+      {items.length > 0 && <ul className="m-0 p-0 list-none">
         {items.map((it, i) => (
-          <li key={i}>
-            <Link href={it.href} className="nl-row nl-focus" style={{ borderTopColor: "rgba(201,154,58,0.35)", color: "var(--nl-warn)" }}>
+          <li key={i} className="flex items-stretch" style={{ borderTop: "1px solid rgba(201,154,58,0.35)" }}>
+            <Link href={it.href} className="nl-row nl-focus flex-1 min-w-0" style={{ borderTopColor: "transparent", color: "var(--nl-warn)" }}>
               <span className="min-w-0 truncate font-semibold">{it.text}</span>
               {it.when && <span className="ml-auto text-xs shrink-0">{it.when}</span>}
               <Icon icon={ChevronRight} size={16} className="shrink-0" />
             </Link>
+            {onHide && (
+              <button type="button" onClick={() => onHide(i)} className="nl-focus shrink-0 px-3 flex items-center" style={{ color: "var(--nl-warn)", background: "none", border: "none", cursor: "pointer", borderLeft: "1px solid rgba(201,154,58,0.35)" }}
+                aria-label={`Hide from Needs you: ${it.label ?? (typeof it.text === "string" ? it.text : "this item")}`} title="Hide from here (it comes back if it changes)">
+                <Icon icon={X} size={16} />
+              </button>
+            )}
           </li>
         ))}
-      </ul>
+      </ul>}
+      {hidden > 0 && (
+        <p className="m-0 px-4 py-2 text-xs flex gap-2 flex-wrap items-center" style={{ color: "var(--nl-warn)", borderTop: items.length ? "1px solid rgba(201,154,58,0.35)" : undefined }}>
+          {items.length === 0 ? "Nothing else needs you. " : ""}{hidden} hidden
+          {onShowHidden && <button type="button" onClick={onShowHidden} className="nl-focus font-semibold underline" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>Show them again</button>}
+        </p>
+      )}
     </section>
   );
 }

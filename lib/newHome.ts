@@ -6,12 +6,14 @@ import { canAccess, parsePerms, hiddenSectionsFor } from "./permissions";
 import { companyLimit } from "./companyScope";
 import { readAttention } from "./importAttention";
 import { visibleWhere } from "./incidents";
-import { homeRoleOf, pinsFor, PIN_DEFAULTS, type HomeRole } from "./newLook";
+import { homeRoleOf, pinsFor, PIN_DEFAULTS, hiddenNeedsFor, setHiddenNeeds, type HomeRole } from "./newLook";
+import { createHash } from "crypto";
 import type { EntityOverviewRow } from "./entityOverview";
 
 const DAY = 86_400_000;
 export type CalEvent = { id: string; type: string; kdType?: string; title: string; production: string | null; productionId: number | null; startDate: string; endDate?: string | null; color: string; href?: string; venue?: string };
-export type NeedsItem = { href: string; text: string; when: string; at: string };
+/** key: what it is (e.g. expense:12); version: changes when the thing does, so a hidden item comes back */
+export type NeedsItem = { key: string; version: string; href: string; text: string; when: string; at: string };
 export type HomeData = Awaited<ReturnType<typeof newHomeData>>;
 
 const ago = (d: Date, now: Date) => {
@@ -46,17 +48,24 @@ export async function newHomeData(viewer: { id: number; name: string; role: stri
   ]);
 
   // ── Needs you: one line each, newest first, each linking to where it's done ─────────────
-  const needs: NeedsItem[] = [
-    ...expenses.map(e => ({ href: "/finance?tab=expenses", text: `Approve expense: ${e.description}${e.submittedByUser ? ` (${e.submittedByUser.name})` : ""}${e.productionLink ? ` · ${e.productionLink.name}` : ""}`, at: e.createdAt.toISOString(), when: ago(e.createdAt, now) })),
-    ...purchases.map(p => ({ href: "/finance?tab=purchase", text: `Approve purchase invoice: ${p.party}${p.reference ? ` ${p.reference}` : ""}`, at: p.createdAt.toISOString(), when: ago(p.createdAt, now) })),
+  const short = (s: string) => createHash("sha1").update(s).digest("hex").slice(0, 12);
+  const all: NeedsItem[] = [
+    ...expenses.map(e => ({ key: `expense:${e.id}`, version: e.createdAt.toISOString(), href: "/finance?tab=expenses", text: `Approve expense: ${e.description}${e.submittedByUser ? ` (${e.submittedByUser.name})` : ""}${e.productionLink ? ` · ${e.productionLink.name}` : ""}`, at: e.createdAt.toISOString(), when: ago(e.createdAt, now) })),
+    ...purchases.map(p => ({ key: `purchase:${p.id}`, version: p.createdAt.toISOString(), href: "/finance?tab=purchase", text: `Approve purchase invoice: ${p.party}${p.reference ? ` ${p.reference}` : ""}`, at: p.createdAt.toISOString(), when: ago(p.createdAt, now) })),
     ...myTasks.filter(t => t.dueDate && t.dueDate <= endOfToday).map(t => {
       const overdue = t.dueDate! < new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      return { href: `/tasks?highlight=${t.id}`, text: `${overdue ? "Task overdue" : "Task due today"}: ${t.title}${t.production ? ` · ${t.production.name}` : ""}`, at: t.dueDate!.toISOString(), when: ago(t.dueDate!, now) };
+      return { key: `task:${t.id}`, version: `${t.dueDate!.toISOString()}${overdue ? ":late" : ""}`, href: `/tasks?highlight=${t.id}`, text: `${overdue ? "Task overdue" : "Task due today"}: ${t.title}${t.production ? ` · ${t.production.name}` : ""}`, at: t.dueDate!.toISOString(), when: ago(t.dueDate!, now) };
     }),
-    ...salesTasks.map(t => ({ href: "/sales?tab=tasks", text: `Sales task: ${t.title}`, at: (t.dueDate ?? now).toISOString(), when: t.dueDate ? ago(t.dueDate, now) : "" })),
-    ...overBudget.map(b => ({ href: `/productions/${b.production.id}?section=budget`, text: `Over budget: ${b.department}: ${b.description} · ${b.production.name}`, at: b.updatedAt.toISOString(), when: ago(b.updatedAt, now) })),
-    ...(attention?.items ?? []).map(i => ({ href: "/admin/settings", text: `Show report didn't import: ${i.subject}`, at: i.receivedAt ?? attention!.at, when: ago(new Date(i.receivedAt ?? attention!.at), now) })),
+    ...salesTasks.map(t => ({ key: `sales:${t.id}`, version: (t.dueDate ?? now).toISOString(), href: "/sales?tab=tasks", text: `Sales task: ${t.title}`, at: (t.dueDate ?? now).toISOString(), when: t.dueDate ? ago(t.dueDate, now) : "" })),
+    ...overBudget.map(b => ({ key: `budget:${b.id}`, version: b.updatedAt.toISOString(), href: `/productions/${b.production.id}?section=budget`, text: `Over budget: ${b.department}: ${b.description} · ${b.production.name}`, at: b.updatedAt.toISOString(), when: ago(b.updatedAt, now) })),
+    ...(attention?.items ?? []).map(i => ({ key: `import:${short(`${i.subject}|${i.receivedAt ?? ""}`)}`, version: attention!.at, href: "/admin/settings", text: `Show report didn't import: ${i.subject}`, at: i.receivedAt ?? attention!.at, when: ago(new Date(i.receivedAt ?? attention!.at), now) })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1));
+  // What the person has hidden stays hidden until it changes. Hidden things that have gone are forgotten.
+  const hidden = await hiddenNeedsFor(viewer.id);
+  const needs = all.filter(n => hidden[n.key] !== n.version);
+  const hiddenNeeds = all.length - needs.length;
+  const current = new Set(all.map(n => n.key));
+  if (Object.keys(hidden).some(k => !current.has(k))) await setHiddenNeeds(viewer.id, {}, current).catch(() => null);
 
   // ── On today and coming up (schedule and key dates) ──────────────────────────────────────
   const start = new Date(now); start.setHours(0, 0, 0, 0);
@@ -116,7 +125,7 @@ export async function newHomeData(viewer: { id: number; name: string; role: stri
   }));
 
   return {
-    homeRole, needs, today, comingUp, showsToday, director, mine, office, companies, spaces,
+    homeRole, needs, hiddenNeeds, today, comingUp, showsToday, director, mine, office, companies, spaces,
     tasks: myTasks.slice(0, 8).map(t => ({ ...t, dueDate: t.dueDate?.toISOString() ?? null })),
     pins: (await pinsFor(viewer.id)) ?? PIN_DEFAULTS[homeRole],
     seeFinance: can("finance"), seeBd: can("bd"),

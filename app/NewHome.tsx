@@ -24,11 +24,22 @@ export default function NewHome({ viewer, data }: { viewer: { name: string; role
   const pages = useMemo(() => navPages(groups), [groups]);
   const [pins, setPins] = useState(data.pins);
   const [editing, setEditing] = useState(false);
+  // Needs you: hiding a line takes it off Home (not done, just hidden) until it changes
+  const [needs, setNeeds] = useState(data.needs);
+  const [hiddenNeeds, setHiddenNeeds] = useState(data.hiddenNeeds);
+  const hideNeed = async (i: number) => {
+    const n = needs[i];
+    if (!n) return;
+    setNeeds(ns => ns.filter(x => x.key !== n.key)); setHiddenNeeds(h => h + 1);
+    const res = await fetch("/api/me/needs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: n.key, version: n.version }) }).catch(() => null);
+    if (!res?.ok) { setNeeds(data.needs.filter(x => x.key === n.key || needs.some(y => y.key === x.key))); setHiddenNeeds(h => h - 1); }
+  };
+  const showHidden = async () => { const res = await fetch("/api/me/needs", { method: "DELETE" }).catch(() => null); if (res?.ok) window.location.reload(); };
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const first = viewer.name.split(" ")[0] ?? "";
-  const countLine = [data.showsToday ? `${plural(data.showsToday, "show")} on today` : "No shows on today", data.needs.length ? `${plural(data.needs.length, "thing")} need${data.needs.length === 1 ? "s" : ""} you` : null].filter(Boolean).join(" · ");
+  const countLine = [data.showsToday ? `${plural(data.showsToday, "show")} on today` : "No shows on today", needs.length ? `${plural(needs.length, "thing")} need${needs.length === 1 ? "s" : ""} you` : null].filter(Boolean).join(" · ");
   const openSearch = () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
 
   // A pin's label and icon come from the menu (only pages this person can open are offered)
@@ -57,8 +68,8 @@ export default function NewHome({ viewer, data }: { viewer: { name: string; role
         <div className="w-full sm:w-80"><SearchField placeholder="Search the Hub" onFocus={openSearch} /></div>
       </div>
 
-      {/* 2. Needs you (hidden completely when nothing needs the person) */}
-      <div className="nl-o-1"><NeedsYou items={data.needs.slice(0, 8).map(n => ({ href: n.href, text: n.text, when: n.when }))} /></div>
+      {/* 2. Needs you (hidden completely when nothing needs the person and nothing's hidden) */}
+      <div className="nl-o-1"><NeedsYou items={needs.slice(0, 8).map(n => ({ href: n.href, text: n.text, when: n.when }))} onHide={hideNeed} hidden={hiddenNeeds} onShowHidden={showHidden} /></div>
 
       {/* 3. Space cards */}
       <div className="nl-o-7 grid gap-3 md:grid-cols-3">

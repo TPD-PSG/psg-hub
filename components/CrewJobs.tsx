@@ -3,16 +3,19 @@
 // Crew jobs on a hire or a production (crew offers, 27 Nov 2026). Add a job (role, day, times,
 // how many people, pay, and on a hire what the client is charged), ask people from the crew
 // directory if they're free, see their answers, and book who you want. Each person gets a private
-// link (emailed if they have an address); copy it to send by text or WhatsApp.
+// link (emailed if they have an address); copy it to send by text or WhatsApp. On a hire, picking
+// one of the space's crew rates fills in the role, pay and charge.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { alertDialog, confirmDialog } from "@/components/Dialogs";
+import { jobFromRate, rateLabel, type CrewRateLike } from "@/lib/crewRates";
 
 type Offer = { id: number; status: string; reply: string | null; token: string; emailedTo: string | null; sentAt: string; respondedAt: string | null;
   crew: { id: number; name: string; discipline: string; email: string | null; phone: string | null } };
 type Job = { id: number; role: string; date: string; callTime: string | null; endTime: string | null; places: number; payRate: number | null; payUnit: string; hours: number | null; chargeRate: number | null; location: string | null; notes: string | null;
   offers: Offer[]; summary: { booked: number; open: number; full: boolean; available: number; waiting: number; payTotal: number | null; chargeTotal: number | null } };
 type CrewPick = { id: number; name: string; discipline: string; email: string | null };
-type Form = { id?: number; role: string; date: string; callTime: string; endTime: string; places: string; payRate: string; payUnit: string; hours: string; chargeRate: string; location: string; notes: string };
+type Form = { id?: number; role: string; date: string; callTime: string; endTime: string; places: string; payRate: string; payUnit: string; hours: string; chargeRate: string; location: string; notes: string; rateId?: number };
+type Rate = CrewRateLike & { id: number };
 
 const STATUS: Record<string, string> = { offered: "Asked", available: "Available", unavailable: "Can't do it", booked: "Booked", released: "Released" };
 const gbp = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
@@ -35,6 +38,7 @@ export default function CrewJobs({ hireId, productionId, look = "space", default
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<number | null>(null);
+  const [rates, setRates] = useState<Rate[] | null>(null); // the hire's space's crew rates, loaded when the form first opens
 
   const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: L.input, color: L.ink, border: `1px solid ${L.line}`, padding: "7px 9px", fontSize: 14, borderRadius: look === "hub" ? 6 : 0 };
   const lbl: React.CSSProperties = { display: "block", fontSize: 12, fontWeight: 600, color: L.muted, marginBottom: 3 };
@@ -52,6 +56,25 @@ export default function CrewJobs({ hireId, productionId, look = "space", default
   useEffect(() => { load(); }, [load]);
   // Bookings change the hire's charges or the production's crew, so the page around us reloads too
   const put = (job: Job) => { setJobs(js => (js ?? []).map(j => (j.id === job.id ? job : j))); onChange?.(); };
+
+  const openForm = async (f: Form) => {
+    setForm(f);
+    if (hireId && rates === null) { const r = await fetch(`/api/rentals/hires/${hireId}/crew-rates`); setRates(r.ok ? (await r.json()).rates : []); }
+  };
+  const num = (v: string) => (v.trim() === "" || !isFinite(Number(v)) ? null : Number(v));
+  /** Fill the job in from a crew rate */
+  const applyRate = (f: Form, id: number) => {
+    const rate = rates?.find(r => r.id === id);
+    if (!rate) return setForm({ ...f, rateId: undefined });
+    const j = jobFromRate(rate, f.payUnit === "hour" ? num(f.hours) : null);
+    setForm({ ...f, rateId: id, role: j.role, payRate: str(j.payRate), payUnit: j.payUnit, hours: str(j.hours), chargeRate: str(j.chargeRate) });
+  };
+  /** By the hour, a job filled from a rate keeps its charge in step with the hours */
+  const setHours = (f: Form, hours: string) => {
+    const rate = f.rateId ? rates?.find(r => r.id === f.rateId) : undefined;
+    if (rate && rate.unit === "hour" && f.payUnit === "hour") return setForm({ ...f, hours, chargeRate: str(jobFromRate(rate, num(hours)).chargeRate) });
+    setForm({ ...f, hours });
+  };
 
   const blank = (): Form => ({ role: "", date: defaultDate ?? new Date().toISOString().slice(0, 10), callTime: "08:00", endTime: "", places: "1", payRate: "", payUnit: "day", hours: "", chargeRate: "", location: "", notes: "" });
   const str = (n: number | null) => (n == null ? "" : String(n));
@@ -109,7 +132,7 @@ export default function CrewJobs({ hireId, productionId, look = "space", default
     <div className="flex flex-col gap-3" aria-label="Crew jobs" style={{ color: L.ink }}>
       <div className="flex justify-between items-baseline gap-2 flex-wrap">
         <span className="text-sm font-semibold">Crew <span className="font-normal" style={{ color: L.muted }}>· ask people from the crew directory, then book who you want</span></span>
-        {!form && <button type="button" style={linkBtn()} onClick={() => setForm(blank())}>+ Add a crew job</button>}
+        {!form && <button type="button" style={linkBtn()} onClick={() => openForm(blank())}>+ Add a crew job</button>}
       </div>
       {jobs === null ? <p className="text-sm" style={{ color: L.muted }}>Loading…</p> : jobs.length === 0 && !form ? <p className="text-sm" style={{ color: L.muted }}>No crew jobs yet.</p> : null}
 
@@ -127,7 +150,7 @@ export default function CrewJobs({ hireId, productionId, look = "space", default
             </div>
             <div className="flex gap-3 shrink-0">
               {!j.summary.full && <button type="button" style={linkBtn()} onClick={() => openAsk(j)}>Ask people</button>}
-              <button type="button" style={linkBtn()} onClick={() => setForm({ id: j.id, role: j.role, date: j.date.slice(0, 10), callTime: j.callTime ?? "", endTime: j.endTime ?? "", places: String(j.places), payRate: str(j.payRate), payUnit: j.payUnit, hours: str(j.hours), chargeRate: str(j.chargeRate), location: j.location ?? "", notes: j.notes ?? "" })}>Edit</button>
+              <button type="button" style={linkBtn()} onClick={() => openForm({ id: j.id, role: j.role, date: j.date.slice(0, 10), callTime: j.callTime ?? "", endTime: j.endTime ?? "", places: String(j.places), payRate: str(j.payRate), payUnit: j.payUnit, hours: str(j.hours), chargeRate: str(j.chargeRate), location: j.location ?? "", notes: j.notes ?? "" })}>Edit</button>
               <button type="button" style={linkBtn(L.bad)} onClick={() => removeJob(j)}>Remove</button>
             </div>
           </div>
@@ -179,6 +202,14 @@ export default function CrewJobs({ hireId, productionId, look = "space", default
       {form && (
         <form onSubmit={save} className="flex flex-col gap-3 p-3" style={{ border: `2px solid ${L.btn}`, background: L.card, borderRadius: look === "hub" ? 8 : 0 }} aria-label={form.id ? "Edit crew job" : "Add a crew job"}>
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+            {hireId && !form.id && rates && rates.length > 0 && (
+              <div className="col-span-2 sm:col-span-4"><label style={lbl} htmlFor="cj-rate">Crew rate</label>
+                <select id="cj-rate" style={input} value={form.rateId ?? ""} onChange={e => applyRate(form, Number(e.target.value))}>
+                  <option value="">Choose a role to fill in the pay and charge…</option>
+                  {rates.map(r => <option key={r.id} value={r.id}>{r.role}{r.payRate != null ? ` · pay ${rateLabel(r.payRate, r.unit, r.hours)}` : ""}{r.chargeRate != null ? ` · charge ${rateLabel(r.chargeRate, r.unit, r.hours)}` : ""}</option>)}
+                </select></div>
+            )}
+            {hireId && !form.id && rates && rates.length === 0 && <p className="col-span-2 sm:col-span-4 text-xs" style={{ color: L.muted }}>Tip: set up crew rates on the Crew page, under Rates, and picking a role here fills in the pay and charge.</p>}
             <div className="col-span-2"><label style={lbl} htmlFor="cj-role">Job</label><input id="cj-role" style={input} required maxLength={80} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} placeholder="e.g. Lighting technician" /></div>
             <div><label style={lbl} htmlFor="cj-date">Day</label><input id="cj-date" type="date" style={input} required value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
             <div><label style={lbl} htmlFor="cj-places">People</label><input id="cj-places" style={input} inputMode="numeric" value={form.places} onChange={e => setForm({ ...form, places: e.target.value })} /></div>
@@ -187,10 +218,11 @@ export default function CrewJobs({ hireId, productionId, look = "space", default
             <div className="col-span-2"><label style={lbl} htmlFor="cj-loc">Where</label><input id="cj-loc" style={input} maxLength={200} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} /></div>
             <div><label style={lbl} htmlFor="cj-pay">Pay £ (each)</label><input id="cj-pay" style={input} inputMode="decimal" value={form.payRate} onChange={e => setForm({ ...form, payRate: e.target.value })} /></div>
             <div><label style={lbl} htmlFor="cj-unit">Per</label><select id="cj-unit" style={input} value={form.payUnit} onChange={e => setForm({ ...form, payUnit: e.target.value })}><option value="day">Day</option><option value="hour">Hour</option><option value="job">Job</option></select></div>
-            {form.payUnit === "hour" && <div><label style={lbl} htmlFor="cj-hours">Hours</label><input id="cj-hours" style={input} inputMode="decimal" value={form.hours} onChange={e => setForm({ ...form, hours: e.target.value })} /></div>}
+            {form.payUnit === "hour" && <div><label style={lbl} htmlFor="cj-hours">Hours</label><input id="cj-hours" style={input} inputMode="decimal" value={form.hours} onChange={e => setHours(form, e.target.value)} /></div>}
             {charges && <div><label style={lbl} htmlFor="cj-charge">Charge the client £ (each)</label><input id="cj-charge" style={input} inputMode="decimal" value={form.chargeRate} onChange={e => setForm({ ...form, chargeRate: e.target.value })} /></div>}
             <div className="col-span-2 sm:col-span-4"><label style={lbl} htmlFor="cj-notes">Notes for the crew (what to wear, parking, who to ask for)</label><textarea id="cj-notes" style={input} rows={2} maxLength={2000} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
+          {charges && form.rateId && form.payUnit === "hour" && !form.hours && <p className="text-xs" style={{ color: L.bad }}>Put in the hours: the client charge is the hourly rate × the hours.</p>}
           {charges && <p className="text-xs" style={{ color: L.muted }}>When people are booked, the charge (× how many are booked) is added to the hire&apos;s other charges, and kept up to date.</p>}
           <div className="flex gap-2"><button type="submit" style={btn} disabled={busy}>{form.id ? "Save" : "Add job"}</button><button type="button" style={linkBtn(L.muted)} onClick={() => setForm(null)}>Cancel</button></div>
         </form>

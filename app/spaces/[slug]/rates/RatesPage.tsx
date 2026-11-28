@@ -7,7 +7,7 @@ import { RentalsHeader } from "@/components/rentals/shared";
 export default function RatesPage({ space, card }: { space: SpaceTheme; card: RateCard | null }) {
   return (
     <>
-      <RentalsHeader space={space} title="Rate card" line="Kit with a day or week rate, as client logins see it. Download the PDF to send to anyone." />
+      <RentalsHeader space={space} title="Rate card" line="Kit with a day or week rate, and crew charges marked for the rate card, as client logins see them. Download the PDF to send to anyone." />
       <div className="px-4 sm:px-10 pt-6 pb-10">{card ? <RateCardView data={card} /> : <p className="text-sm">The rate card couldn&apos;t be loaded.</p>}</div>
     </>
   );

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { groupByCategory } from "@/lib/rentals";
 import { downloadRateCardPDF, type RateCard } from "@/lib/rateCardPdf";
+import { rateLabel } from "@/lib/crewRates";
 import { card, muted, btnSolid, input } from "@/lib/twsUi";
 
 const gbp = (n: number | null) => (n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n));
@@ -21,7 +22,7 @@ export default function RateCardView({ data, pick }: { data: RateCard; pick?: { 
         <input id="rc-q" style={{ ...input, flex: 1, minWidth: 180 }} value={q} onChange={e => setQ(e.target.value)} placeholder="Search the rate card" />
         <button type="button" style={btnSolid} disabled={busy} onClick={async () => { setBusy(true); await downloadRateCardPDF(data); setBusy(false); }}>Download PDF</button>
       </div>
-      <p className="text-xs" style={muted}>Prices per item, ex VAT. A week costs the week rate; extra days cost the day rate, never more than another week.</p>
+      <p className="text-xs" style={muted}>Prices per item, ex VAT. A week costs the week rate; extra days cost the day rate, never more than another week.{(data.crew?.length ?? 0) > 0 ? " Crew are priced per person, ex VAT." : ""}</p>
       {data.products.length === 0 ? <p className="text-sm" style={muted}>Nothing on the rate card yet: kit shows here once it has a day or week rate.</p> : (
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
@@ -42,6 +43,19 @@ export default function RateCardView({ data, pick }: { data: RateCard; pick?: { 
                 ))}
               </tbody>
             ))}
+          </table>
+        </div>
+      )}
+      {(data.crew?.length ?? 0) > 0 && (
+        <div className="overflow-x-auto" aria-label="Crew rates">
+          <table className="w-full" style={{ borderCollapse: "collapse" }}>
+            <thead><tr>{["Crew", "", "Each person"].map((h, i) => <th key={i} style={{ textAlign: i === 2 ? "right" : "left", fontSize: 12, color: "var(--tws-muted)", padding: "8px 10px", borderBottom: "2px solid var(--tws-line)" }}>{h}</th>)}</tr></thead>
+            <tbody>{data.crew!.map(c => (
+              <tr key={c.id}>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--tws-line)", fontWeight: 600 }}>{c.role}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--tws-line)", fontSize: 13, color: "var(--tws-muted)" }}>{c.notes}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--tws-line)", textAlign: "right", whiteSpace: "nowrap" }}>{rateLabel(c.chargeRate, c.unit, c.hours)}</td>
+              </tr>))}</tbody>
           </table>
         </div>
       )}

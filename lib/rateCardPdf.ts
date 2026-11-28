@@ -1,12 +1,15 @@
 // The hire rate card as a PDF (PSG Rentals & Crew): PSG's letterhead (logo, navy, PSG blue), then the kit by
-// category with day and week rates, ex VAT. No stock levels or costs.
+// category with day and week rates, ex VAT, then crew by role with what each person costs. No stock
+// levels, costs or crew pay.
 import jsPDF from "jspdf";
 import { autoTable, fetchLogoAsset, pdfSafe } from "@/lib/exports";
 import { groupByCategory } from "@/lib/rentals";
+import { rateLabel } from "@/lib/crewRates";
 
 export type RateCard = {
   company: { name: string; address: string | null; phone: string | null; brand: { color: string | null; logoUrl: string | null } | null };
   products: { id: number; name: string; category: string | null; manufacturer: string | null; model: string | null; dayRate: number | null; weekRate: number | null; weightKg: number | null; powerW: number | null }[];
+  crew?: { id: number; role: string; unit: string; hours: number | null; chargeRate: number; notes: string | null }[];
 };
 
 type Rgb = [number, number, number];
@@ -49,6 +52,18 @@ export function buildRateCardPDF(card: RateCard, logo?: { dataUrl: string; w: nu
     columnStyles: { 2: { cellWidth: 26 }, 3: { cellWidth: 26 } },
     margin: { left: M, right: M, bottom: 16 },
   });
+  if (card.crew?.length) {
+    const lastY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? top + 10;
+    autoTable(doc, {
+      startY: lastY + 8, theme: "plain",
+      head: [["Crew", "", { content: "Each person", styles: { halign: "right" } }]] as never,
+      body: card.crew.map(c => [{ content: c.role, styles: { fontStyle: "bold" } }, c.notes ?? "", { content: rateLabel(c.chargeRate, c.unit, c.hours) ?? "", styles: { halign: "right" } }]) as never,
+      styles: { fontSize: 9, cellPadding: { top: 1.4, bottom: 1.4, left: 1.5, right: 1.5 }, textColor: ink },
+      headStyles: { fontStyle: "bold", textColor: accentInk, fillColor: tint },
+      columnStyles: { 0: { cellWidth: 60 }, 2: { cellWidth: 46 } },
+      margin: { left: M, right: M, bottom: 16 },
+    });
+  }
   const pages = (doc as unknown as { internal: { getNumberOfPages(): number } }).internal.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i); doc.setFontSize(8); doc.setTextColor(...soft);

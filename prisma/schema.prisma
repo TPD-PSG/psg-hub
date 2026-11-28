@@ -508,6 +508,7 @@ model Entity {
   rentalProducts   RentalProduct[]
   rentalPackages   RentalPackage[]
   rentalHires      RentalHire[]
+  crewRates        CrewRate[]
 }
 
 // An entity's revenue target for a calendar year
@@ -2503,6 +2504,28 @@ model CrewJob {
   @@index([hireId])
   @@index([productionId])
   @@index([date])
+}
+
+// A rentals space's standard crew rate for a role (Rentals & Crew, 28 Nov 2026): what we pay each
+// person and what the client is charged, by the day, the hour or the job. Picking it on a hire's
+// crew job fills the job in; the charge can go on the rate card clients see (never the pay).
+model CrewRate {
+  id         Int      @id @default(autoincrement())
+  entityId   Int
+  entity     Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  role       String // e.g. Lighting technician
+  unit       String   @default("day") // day | hour | job: for both pay and charge
+  hours      Float? // usual hours, for hourly rates
+  payRate    Float? // what each person is paid, ex VAT
+  chargeRate Float? // what the client is charged for each person, ex VAT
+  notes      String? // e.g. "10-hour day; overtime at the hourly rate" (shown on the rate card)
+  onRateCard Boolean  @default(true)
+  archived   Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([entityId, role])
 }
 
 model CrewOffer {

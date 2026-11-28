@@ -1,25 +1,28 @@
 "use client";
 
 // Crew: the diary of crew jobs on this space's hires (who's booked, places still open), who's free
-// on a chosen day (anyone not booked on a hire or production that day), and the crew directory.
+// on a chosen day (anyone not booked on a hire or production that day), the crew directory, and the
+// space's crew rates (each role's usual pay and client charge).
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { SpaceTheme } from "@/lib/spaces";
 import { card, h2, muted, input, label as lbl } from "@/lib/twsUi";
 import { RentalsHeader, Chip } from "@/components/rentals/shared";
 import { day, HIRE_TONE, HIRE_LABEL } from "@/components/rentals/format";
+import CrewRates, { type CrewRateRow } from "./CrewRates";
 
 type Person = { id: number; name: string; discipline: string; phone: string | null; email: string | null; company: string | null; insuranceExpiry: string | null; busy: string[] };
 export type CrewData = {
   space: SpaceTheme; date: string;
   diary: { id: number; role: string; date: string; callTime: string | null; endTime: string | null; places: number; location: string | null; hire: { id: number; number: string; title: string; status: string } | null; booked: { id: number; name: string }[]; available: number }[];
   crew: Person[];
+  rates: CrewRateRow[];
 };
 
-export default function CrewPage({ initial }: { initial: CrewData }) {
+export default function CrewPage({ initial, tab }: { initial: CrewData; tab?: string }) {
   const [data, setData] = useState(initial);
   const { space } = data;
-  const [view, setView] = useState<"diary" | "free" | "all">("diary");
+  const [view, setView] = useState<"diary" | "free" | "all" | "rates">(tab === "rates" ? "rates" : "diary");
   const [q, setQ] = useState("");
   const [disc, setDisc] = useState("all");
   const disciplines = useMemo(() => [...new Set(data.crew.map(c => c.discipline).filter(Boolean))].sort(), [data.crew]);
@@ -33,9 +36,9 @@ export default function CrewPage({ initial }: { initial: CrewData }) {
     <>
       <RentalsHeader space={space} title="Crew" line={`${data.diary.length} crew job${data.diary.length === 1 ? "" : "s"} coming up · ${open} place${open === 1 ? "" : "s"} still to fill`} />
       <div className="px-4 sm:px-10 pt-6 pb-10 flex flex-col gap-6">
-        <div className="flex gap-1.5 flex-wrap"><Chip on={view === "diary"} onClick={() => setView("diary")}>Diary</Chip><Chip on={view === "free"} onClick={() => setView("free")}>Who&apos;s free</Chip><Chip on={view === "all"} onClick={() => setView("all")}>Directory</Chip></div>
+        <div className="flex gap-1.5 flex-wrap"><Chip on={view === "diary"} onClick={() => setView("diary")}>Diary</Chip><Chip on={view === "free"} onClick={() => setView("free")}>Who&apos;s free</Chip><Chip on={view === "all"} onClick={() => setView("all")}>Directory</Chip><Chip on={view === "rates"} onClick={() => setView("rates")}>Rates</Chip></div>
 
-        {view === "diary" ? (
+        {view === "rates" ? <CrewRates slug={space.slug} initial={data.rates} /> : view === "diary" ? (
           <section style={card} className="flex flex-col gap-2 min-w-0" aria-label="Crew diary">
             <h2 style={h2}>Crew diary</h2>
             <p className="text-xs" style={muted}>Crew jobs on this space&apos;s hires for the next three months. Ask people and book them from the hire.</p>

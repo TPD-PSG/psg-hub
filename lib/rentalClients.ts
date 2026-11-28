@@ -6,6 +6,7 @@ import { spaceLogoUrl } from "@/lib/entities";
 import { hireTotals } from "@/lib/rentals";
 import { notify } from "@/lib/clientPortal";
 import type { SpaceTheme } from "@/lib/spaces";
+import { forRateCard } from "@/lib/crewRates";
 
 const ENTITY = { id: true, name: true, shortName: true, slug: true, color: true, logoMime: true, updatedAt: true, hasSpace: true, archived: true, address: true, phone: true, spaceKind: true } as const;
 
@@ -56,16 +57,17 @@ export async function tellRentalStaff(hire: { id: number; entityId: number; crea
   await notify([hire.createdById, ...(await rentalStaff(hire.entityId))], { title, body, link: e?.slug ? `/spaces/${e.slug}/hires?hire=${hire.id}` : null });
 }
 
-/** The rate card: kit with a day or week rate, by category (no stock levels, no costs). */
+/** The rate card: kit with a day or week rate, by category, and crew roles with a client charge (no stock levels, no costs, no crew pay). */
 export async function rateCard(entityId: number) {
-  const [entity, products] = await Promise.all([
+  const [entity, products, crew] = await Promise.all([
     prisma.entity.findUnique({ where: { id: entityId }, select: ENTITY }),
     prisma.rentalProduct.findMany({
       where: { entityId, archived: false, OR: [{ dayRate: { not: null } }, { weekRate: { not: null } }], units: { some: { status: "available" } } },
       select: { id: true, name: true, category: true, manufacturer: true, model: true, dayRate: true, weekRate: true, weightKg: true, powerW: true, isCase: true },
       orderBy: { name: "asc" },
     }),
+    prisma.crewRate.findMany({ where: { entityId, onRateCard: true, archived: false, chargeRate: { not: null } }, orderBy: [{ sortOrder: "asc" }, { role: "asc" }] }),
   ]);
   if (!entity) return null;
-  return { company: { id: entity.id, name: entity.name, address: entity.address, phone: entity.phone, brand: brandOf(entity) }, products: products.filter(p => !p.isCase) };
+  return { company: { id: entity.id, name: entity.name, address: entity.address, phone: entity.phone, brand: brandOf(entity) }, products: products.filter(p => !p.isCase), crew: forRateCard(crew) };
 }

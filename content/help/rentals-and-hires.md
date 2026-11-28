@@ -15,7 +15,7 @@ The space's menu has:
 - **Hires**: every quote and hire.
 - **Availability**: how many of each product are free, day by day.
 - **Warehouse**: prep hires by scanning their kit out, and check it back in.
-- **Crew**: the crew diary, who's free on a day, and the crew directory.
+- **Crew**: the crew diary, who's free on a day, the crew directory, and crew rates.
 - **Rate card**: the price list clients see, with a PDF to send out.
 - **Kit**: every product and every unit.
 - **Packages**: ready-made groups of kit.
@@ -108,6 +108,8 @@ If the hire changes while the invoice is still a draft, click **Update the draft
 
 Saved hires have a **Crew** panel: add a crew job (for example 2 technicians going out with the kit), ask people from the crew directory if they're free, and book who you want. It works the same as on a production; see [Crew](/help/crew).
 
+If the space has crew rates (see below), pick one under **Crew rate** when you add the job: it fills in the role, the pay and the client charge. You can still change them for this hire. For an hourly rate, the client charge is the hourly charge × the hours, and it follows the hours if you change them.
+
 On a hire, a crew job also has **Charge the client £ (each)**. When people are booked, a crew line is added to the hire's other charges (the charge × how many are booked), and it's kept up to date as people are booked or released. These crew lines show on the hire, its PDF and its invoice, and aren't edited by hand.
 
 ## Warehouse: prepping and scanning out
@@ -143,10 +145,23 @@ When every unit is back (or marked missing), the hire is marked **Returned** aut
 - **Diary**: every crew job on this space's hires for the next three months, with who's booked and how many places are still to fill. Click a hire to ask people and book them.
 - **Who's free**: pick a day to see everyone in the crew directory who isn't already booked that day, on a hire or a production. It doesn't know about work they have elsewhere, so check with them.
 - **Directory**: the crew list with phone, email and who's booked on the chosen day. Add or change people in the crew directory (it's shared with the rest of the Hub).
+- **Rates**: the space's crew rates (see below).
+
+## Crew rates
+
+Under **Crew → Rates**, set up each role you supply (for example Lighting technician, Sound No.1, Stagehand) with:
+
+- **Priced**: by the day, by the hour (with the usual hours) or for the job.
+- **Pay £ (each)**: what we pay each person, ex VAT.
+- **Charge the client £ (each)**: what the client is charged for each person, ex VAT.
+- **Note for the rate card**, for example "10-hour day; overtime at the hourly rate".
+- **Show the charge on the rate card clients see**: on by default. Clients only ever see the charge, never the pay.
+
+The list shows the margin on each role. A role can only have one rate. Changing or deleting a rate never changes crew jobs already set up from it. **Stop using** hides a rate from the crew job picker and the rate card without deleting it; **Use again** brings it back.
 
 ## The rate card
 
-**Rate card** lists every product that has a day or week rate and at least one unit in service, by category, ex VAT. Cases, unpriced kit and retired kit are left off, and it never shows stock levels or what kit costs us. **Download PDF** makes a rate card in PSG's letterhead to send to anyone. Client logins see the same rate card.
+**Rate card** lists every product that has a day or week rate and at least one unit in service, by category, ex VAT. Cases, unpriced kit and retired kit are left off, and it never shows stock levels or what kit costs us. Below the kit come the crew roles marked for the rate card, with what each person costs the client (never what they're paid). **Download PDF** makes a rate card in PSG's letterhead to send to anyone. Client logins see the same rate card.
 
 ## Client logins
 
